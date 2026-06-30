@@ -1001,7 +1001,15 @@ tr:hover { background: rgba(88,166,255,0.04); }
 	<button class="tab" onclick="switchTab('events')">All Events</button>
 </div>
 
-<div class="panel active" id="panel-models"></div>
+<div class="panel active" id="panel-models">
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <label style="font-size:0.8rem;color:var(--text-secondary);">Provider:</label>
+        <select id="providerFilter" class="refresh-select" onchange="filterModels()">
+            <option value="">All Providers</option>
+        </select>
+    </div>
+    <div id="modelTable"></div>
+</div>
 <div class="panel" id="panel-events"></div>
 
 <script>
@@ -1071,19 +1079,46 @@ function renderCards(data) {
 async function renderModels() {
 	const models = await fetchJSON('/models');
 	if (!models || models.length === 0) {
-		document.getElementById('panel-models').innerHTML = '<div class="empty">No usage data yet for this time range.</div>';
+		document.getElementById('modelTable').innerHTML = '<div class="empty">No usage data yet for this time range.</div>';
 		return;
 	}
 	const maxTokens = Math.max(...models.map(m => m.total_tokens), 1);
-	let html = '<table><thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th></tr></thead><tbody>';
 	for (const m of models) {
 		const pct = Math.max((m.total_tokens / maxTokens) * 100, 1);
-		html += '<tr><td title="' + m.provider + '">' + (m.provider || '').split('-').slice(-2).join('-') + '</td><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
+		html += '<tr data-provider="' + (m.provider || '') + '"><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
 			'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:' + pct + '%%"></div></div>' + formatNum(m.total_tokens) + '</div></td>' +
 			'<td>' + formatNum(m.input_tokens) + '</td><td>' + formatNum(m.output_tokens) + '</td></tr>';
 	}
 	html += '</tbody></table>';
-	document.getElementById('panel-models').innerHTML = html;
+	document.getElementById('modelTable').innerHTML = html;
+	window._allModels = models;
+	buildProviderFilter(models);
+}
+function buildProviderFilter(models) {
+	var sel = document.getElementById('providerFilter');
+	var seen = {};
+	var current = sel.value;
+	sel.innerHTML = '<option value="">All Providers</option>';
+	models.forEach(function(m) {
+		var p = (m.provider || 'Unknown').trim();
+		if (p && !seen[p]) {
+			seen[p] = true;
+			var opt = document.createElement('option');
+			opt.value = p;
+			opt.textContent = p.split('-').slice(-2).join('-');
+			sel.appendChild(opt);
+		}
+	});
+	if (current && seen[current]) sel.value = current;
+}
+
+function filterModels() {
+	var sel = document.getElementById('providerFilter').value;
+	var rows = document.querySelectorAll('#modelTable tr[data-provider]');
+	rows.forEach(function(r) {
+		r.style.display = (!sel || r.getAttribute('data-provider') === sel) ? '' : 'none';
+	});
 }
 
 async function renderEvents() {
