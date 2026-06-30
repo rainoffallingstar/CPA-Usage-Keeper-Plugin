@@ -1058,7 +1058,7 @@ function renderCards(data) {
 		'<div class="card"><div class="card-label">Requests</div><div class="card-value">' + formatNum(data.total_requests) + '</div><div class="card-sub">' + formatNum(data.failed_requests) + ' failed</div></div>' +
 		'<div class="card"><div class="card-label">Tokens</div><div class="card-value">' + formatNum(data.total_tokens) + '</div><div class="card-sub">In: ' + formatNum(data.input_tokens) + ' / Out: ' + formatNum(data.output_tokens) + '</div></div>' +
 		'<div class="card"><div class="card-label">Models</div><div class="card-value">' + formatNum(data.unique_models) + '</div><div class="card-sub">Avg latency ' + formatMs(data.avg_latency_ms) + '</div></div>' +
-		'<div class="card"><div class="card-label">Cache Hit</div><div class="card-value">' + (data.cache_hit_rate || 0).toFixed(1) + '%</div><div class="card-sub">of input tokens</div></div>' +
+		'<div class="card"><div class="card-label">Cache Hit</div><div class="card-value">' + (data.cache_hit_rate || 0).toFixed(1) + '%%</div><div class="card-sub">of input tokens</div></div>' +
 		'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
 }
 
