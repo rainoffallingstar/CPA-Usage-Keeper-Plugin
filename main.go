@@ -152,6 +152,7 @@ type summaryResponse struct {
 }
 
 type modelBreakdown struct {
+	Provider     string `json:"provider"`
 	Model        string `json:"model"`
 	Requests     int64  `json:"requests"`
 	InputTokens  int64  `json:"input_tokens"`
@@ -792,14 +793,14 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 
 	if d != nil {
 		rows, err := d.Query(
-			"SELECT model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM usage_events WHERE timestamp >= ? GROUP BY model ORDER BY SUM(total_tokens) DESC",
+			"SELECT provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM usage_events WHERE timestamp >= ? GROUP BY provider, model ORDER BY provider, SUM(total_tokens) DESC",
 			since,
 		)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var m modelBreakdown
-				if errScan := rows.Scan(&m.Model, &m.Requests, &m.InputTokens, &m.OutputTokens, &m.TotalTokens); errScan == nil {
+				if errScan := rows.Scan(&m.Provider, &m.Model, &m.Requests, &m.InputTokens, &m.OutputTokens, &m.TotalTokens); errScan == nil {
 					models = append(models, m)
 				}
 			}
@@ -1074,10 +1075,10 @@ async function renderModels() {
 		return;
 	}
 	const maxTokens = Math.max(...models.map(m => m.total_tokens), 1);
-	let html = '<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th>Provider</th><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th></tr></thead><tbody>';
 	for (const m of models) {
 		const pct = Math.max((m.total_tokens / maxTokens) * 100, 1);
-		html += '<tr><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
+		html += '<tr><td title="' + m.provider + '">' + (m.provider || '').split('-').slice(-2).join('-') + '</td><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
 			'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:' + pct + '%%"></div></div>' + formatNum(m.total_tokens) + '</div></td>' +
 			'<td>' + formatNum(m.input_tokens) + '</td><td>' + formatNum(m.output_tokens) + '</td></tr>';
 	}
