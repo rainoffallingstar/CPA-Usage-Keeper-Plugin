@@ -147,6 +147,7 @@ type summaryResponse struct {
 	FailedRequests int64   `json:"failed_requests"`
 	UniqueModels   int64   `json:"unique_models"`
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`
+	CacheHitRate   float64 `json:"cache_hit_rate"`
 	RangeHours     int     `json:"range_hours"`
 }
 
@@ -418,6 +419,10 @@ func ensureDB() {
 			panic(fmt.Sprintf("usage-keeper: failed to create tables: %v", errCreate))
 		}
 
+		// Migration: add cache detail columns for existing databases
+		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0")
+		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_creation_tokens INTEGER NOT NULL DEFAULT 0")
+
 		// Load recent events into ring buffer
 		loadRecentIntoRing()
 	})
@@ -440,6 +445,8 @@ func createTables() error {
 			reasoning_tokens INTEGER NOT NULL DEFAULT 0,
 			total_tokens INTEGER NOT NULL DEFAULT 0,
 			cached_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+			cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
 			latency_ms INTEGER NOT NULL DEFAULT 0,
 			ttft_ms INTEGER NOT NULL DEFAULT 0,
 			failed INTEGER NOT NULL DEFAULT 0,
@@ -525,10 +532,10 @@ func handleUsage(raw []byte) ([]byte, error) {
 	// Insert into SQLite
 	result, errInsert := db.Exec(
 		`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key,
-		 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens,
+		 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
 		 latency_ms, ttft_ms, failed, failure_status_code, failure_body,
 		 executor_type, source, service_tier)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.RequestedAt.Format(time.RFC3339),
 		record.Provider,
 		record.Model,
@@ -542,6 +549,8 @@ func handleUsage(raw []byte) ([]byte, error) {
 		record.Detail.ReasoningTokens,
 		record.Detail.TotalTokens,
 		record.Detail.CachedTokens,
+		record.Detail.CacheReadTokens,
+		record.Detail.CacheCreationTokens,
 		record.Latency.Milliseconds(),
 		record.TTFT.Milliseconds(),
 		boolToInt(record.Failed),
@@ -703,15 +712,19 @@ func handleSummary(query map[string][]string) pluginapi.ManagementResponse {
 	dbMu.RUnlock()
 
 	var resp summaryResponse
+	var cacheReadTotal int64
 	resp.RangeHours = rangeHours
 
 	since := time.Now().Add(-time.Duration(rangeHours) * time.Hour).Format(time.RFC3339)
 
 	if d != nil {
 		_ = d.QueryRow(
-			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0) FROM usage_events WHERE timestamp >= ?",
+			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cache_read_tokens),0) FROM usage_events WHERE timestamp >= ?",
 			since,
-		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs)
+		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs, &cacheReadTotal)
+		if resp.InputTokens > 0 {
+			resp.CacheHitRate = float64(cacheReadTotal) / float64(resp.InputTokens) * 100
+		}
 	}
 
 	return jsonResponse(http.StatusOK, resp)
@@ -1045,6 +1058,7 @@ function renderCards(data) {
 		'<div class="card"><div class="card-label">Requests</div><div class="card-value">' + formatNum(data.total_requests) + '</div><div class="card-sub">' + formatNum(data.failed_requests) + ' failed</div></div>' +
 		'<div class="card"><div class="card-label">Tokens</div><div class="card-value">' + formatNum(data.total_tokens) + '</div><div class="card-sub">In: ' + formatNum(data.input_tokens) + ' / Out: ' + formatNum(data.output_tokens) + '</div></div>' +
 		'<div class="card"><div class="card-label">Models</div><div class="card-value">' + formatNum(data.unique_models) + '</div><div class="card-sub">Avg latency ' + formatMs(data.avg_latency_ms) + '</div></div>' +
+		'<div class="card"><div class="card-label">Cache Hit</div><div class="card-value">' + (data.cache_hit_rate || 0).toFixed(1) + '%</div><div class="card-sub">of input tokens</div></div>' +
 		'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
 }
 
