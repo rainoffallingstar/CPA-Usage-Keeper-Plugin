@@ -472,7 +472,7 @@ func loadRecentIntoRing() {
 	ringCount = 0
 
 	rows, err := db.Query(
-		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cache_read_tokens FROM usage_events ORDER BY id DESC LIMIT ?",
+		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY id DESC LIMIT ?",
 		cfg.MaxInMemoryEvents,
 	)
 	if err != nil {
@@ -483,11 +483,11 @@ func loadRecentIntoRing() {
 	var events []usageEvent
 	for rows.Next() {
 		var e usageEvent
-		var crt int64
-		if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &crt); errScan != nil {
+		var cached int64
+		if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &cached); errScan != nil {
 			continue
 		}
-		e.CacheHitRate = cacheHitRate(crt, e.InputTokens)
+		e.CacheHitRate = cacheHitRate(cached, e.InputTokens)
 		events = append(events, e)
 	}
 
@@ -525,7 +525,7 @@ func handleUsage(raw []byte) ([]byte, error) {
 		TotalTokens:  record.Detail.TotalTokens,
 		LatencyMs:    record.Latency.Milliseconds(),
 		Failed:       record.Failed,
-		CacheHitRate: cacheHitRate(record.Detail.CacheReadTokens, record.Detail.InputTokens),
+		CacheHitRate: cacheHitRate(record.Detail.CachedTokens, record.Detail.InputTokens),
 		AuthID:       record.AuthID,
 		ExecutorType: record.ExecutorType,
 	}
@@ -723,7 +723,7 @@ func handleSummary(query map[string][]string) pluginapi.ManagementResponse {
 
 	if d != nil {
 		_ = d.QueryRow(
-			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cache_read_tokens),0) FROM usage_events WHERE timestamp >= ?",
+			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE timestamp >= ?",
 			since,
 		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs, &cacheReadTotal)
 		if resp.InputTokens > 0 {
@@ -840,16 +840,16 @@ func handleEvents(query map[string][]string) pluginapi.ManagementResponse {
 		_ = d.QueryRow("SELECT COUNT(*) FROM usage_events WHERE timestamp >= ?", since).Scan(&resp.Total)
 
 		rows, err := d.Query(
-			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cache_read_tokens FROM usage_events WHERE timestamp >= ? ORDER BY id DESC LIMIT ? OFFSET ?",
+			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events WHERE timestamp >= ? ORDER BY id DESC LIMIT ? OFFSET ?",
 			since, limit, offset,
 		)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var e usageEvent
-				var crtEvt int64
-			if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &crtEvt); errScan == nil {
-				e.CacheHitRate = cacheHitRate(crtEvt, e.InputTokens)
+				var cachedEvt int64
+			if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &cachedEvt); errScan == nil {
+				e.CacheHitRate = cacheHitRate(cachedEvt, e.InputTokens)
 					resp.Events = append(resp.Events, e)
 				}
 			}
