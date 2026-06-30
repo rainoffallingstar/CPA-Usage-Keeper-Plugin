@@ -1,0 +1,57 @@
+# =============================================================================
+# CPA Plugin: Usage Keeper (cpa-plugin-usage-keeper)
+# =============================================================================
+# 
+# This plugin runs inside the CPA process and:
+# 1. Receives every completed request's usage data (tokens, latency, model, auth, etc.)
+#    via the CPA UsagePlugin capability — no external polling needed.
+# 2. Stores usage events persistently in an embedded SQLite database.
+# 3. Exposes a browser dashboard at /v0/resource/plugins/usage-keeper/dashboard
+#    with real-time usage stats, model breakdowns, and event history.
+# 4. Exposes a Quotio-compatible GET /v0/management/usage endpoint aggregating all stored usage data.
+# 5. Exposes JSON API endpoints under /v0/resource/plugins/usage-keeper/api/ for dashboard consumption.
+#
+# Installation:
+#   1. Build:  cd cpa-plugin-usage-keeper && make build
+#   2. Deploy: Copy dist/usage-keeper.dylib (or .so/.dll) to CPA's plugins/<GOOS>/<GOARCH>/
+#   3. Enable in CPA config as shown below.
+#
+# =============================================================================
+
+plugins:
+  enabled: true
+  dir: "./plugins"
+
+  configs:
+    usage-keeper:
+      enabled: true
+      priority: 1
+
+      # -----------------------------------------------------------------------
+      # db_path — Path to the SQLite database file for persistent usage storage.
+      # Default: "usage-keeper.db" (relative to CPA working directory).
+      # -----------------------------------------------------------------------
+      db_path: "./data/usage-keeper.db"
+
+      # -----------------------------------------------------------------------
+      # retention_days — Number of days to retain usage records before automatic
+      # cleanup. Records older than this are deleted when the plugin processes
+      # every ~100th usage event.
+      # Default: 90
+      # -----------------------------------------------------------------------
+      retention_days: 90
+
+      # -----------------------------------------------------------------------
+      # max_in_memory_events — Maximum number of recent events kept in an
+      # in-memory ring buffer for fast dashboard rendering (no DB query needed
+      # for the default view). Capped at 10000.
+      # Default: 1000
+      # -----------------------------------------------------------------------
+      max_in_memory_events: 1000
+
+      # -----------------------------------------------------------------------
+      # refresh_seconds — Dashboard auto-refresh interval in seconds.
+      # Valid range: 0–3600 (0 = off). The dashboard also has a dropdown to change this at runtime.
+      # Default: 0 (auto-refresh disabled)
+      # -----------------------------------------------------------------------
+      refresh_seconds: 0
