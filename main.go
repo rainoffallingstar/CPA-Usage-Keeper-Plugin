@@ -539,7 +539,7 @@ func handleUsage(raw []byte) ([]byte, error) {
 		 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
 		 latency_ms, ttft_ms, failed, failure_status_code, failure_body,
 		 executor_type, source, service_tier)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.RequestedAt.Format(time.RFC3339),
 		record.Provider,
 		record.Model,
