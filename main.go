@@ -168,8 +168,9 @@ type usageEvent struct {
 	OutputTokens     int64  `json:"output_tokens"`
 	TotalTokens      int64  `json:"total_tokens"`
 	LatencyMs        int64  `json:"latency_ms"`
-	Failed           bool   `json:"failed"`
-	FailureBody      string `json:"failure_body,omitempty"`
+	Failed           bool    `json:"failed"`
+	CacheHitRate     float64 `json:"cache_hit_rate"`
+	FailureBody      string  `json:"failure_body,omitempty"`
 	AuthID           string `json:"auth_id"`
 	ExecutorType     string `json:"executor_type"`
 }
@@ -471,7 +472,7 @@ func loadRecentIntoRing() {
 	ringCount = 0
 
 	rows, err := db.Query(
-		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type FROM usage_events ORDER BY id DESC LIMIT ?",
+		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cache_read_tokens FROM usage_events ORDER BY id DESC LIMIT ?",
 		cfg.MaxInMemoryEvents,
 	)
 	if err != nil {
@@ -482,9 +483,11 @@ func loadRecentIntoRing() {
 	var events []usageEvent
 	for rows.Next() {
 		var e usageEvent
-		if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType); errScan != nil {
+		var crt int64
+		if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &crt); errScan != nil {
 			continue
 		}
+		e.CacheHitRate = cacheHitRate(crt, e.InputTokens)
 		events = append(events, e)
 	}
 
@@ -522,6 +525,7 @@ func handleUsage(raw []byte) ([]byte, error) {
 		TotalTokens:  record.Detail.TotalTokens,
 		LatencyMs:    record.Latency.Milliseconds(),
 		Failed:       record.Failed,
+		CacheHitRate: cacheHitRate(record.Detail.CacheReadTokens, record.Detail.InputTokens),
 		AuthID:       record.AuthID,
 		ExecutorType: record.ExecutorType,
 	}
@@ -836,14 +840,16 @@ func handleEvents(query map[string][]string) pluginapi.ManagementResponse {
 		_ = d.QueryRow("SELECT COUNT(*) FROM usage_events WHERE timestamp >= ?", since).Scan(&resp.Total)
 
 		rows, err := d.Query(
-			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type FROM usage_events WHERE timestamp >= ? ORDER BY id DESC LIMIT ? OFFSET ?",
+			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cache_read_tokens FROM usage_events WHERE timestamp >= ? ORDER BY id DESC LIMIT ? OFFSET ?",
 			since, limit, offset,
 		)
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var e usageEvent
-				if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType); errScan == nil {
+				var crtEvt int64
+			if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &crtEvt); errScan == nil {
+				e.CacheHitRate = cacheHitRate(crtEvt, e.InputTokens)
 					resp.Events = append(resp.Events, e)
 				}
 			}
@@ -1086,14 +1092,14 @@ async function renderEvents() {
 		document.getElementById('panel-events').innerHTML = '<div class="empty">No events for this time range.</div>';
 		return;
 	}
-	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
 	for (const e of data.events) {
 		const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '\u2014';
 		const statusBadge = e.failed
 			? '<span class="badge badge-danger">FAIL</span>'
 			: '<span class="badge badge-success">OK</span>';
 		html += '<tr><td>' + timeStr + '</td><td title="' + e.provider + '">' + e.model + '</td>' +
-			'<td>' + formatNum(e.total_tokens) + '</td><td>' + formatMs(e.latency_ms) + '</td>' +
+			'<td>' + formatNum(e.total_tokens) + '</td><td>' + (e.cache_hit_rate || 0).toFixed(1) + '%%</td><td>' + formatMs(e.latency_ms) + '</td>' +
 			'<td>' + statusBadge + '</td></tr>';
 	}
 	html += '</tbody></table>';
@@ -1149,6 +1155,13 @@ refreshAll();
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
+// cacheHitRate returns the cache hit rate as a percentage, or 0 if input tokens is zero.
+func cacheHitRate(cacheRead, inputTokens int64) float64 {
+	if inputTokens <= 0 {
+		return 0
+	}
+	return float64(cacheRead) / float64(inputTokens) * 100
+}
 
 func okEnvelope(result any) ([]byte, error) {
 	raw, errMarshal := json.Marshal(result)
