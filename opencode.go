@@ -55,7 +55,6 @@ var (
 
 func initOpenCodeAccounts(cfgs []openCodeGoAcctCfg) {
 	opencodeAcctMu.Lock()
-	defer opencodeAcctMu.Unlock()
 
 	// Preserve existing in-memory accounts (from Dashboard). Only add
 	// config entries that don't already exist, and never remove accounts.
@@ -81,7 +80,92 @@ func initOpenCodeAccounts(cfgs []openCodeGoAcctCfg) {
 			},
 		})
 	}
+	opencodeAcctMu.Unlock()
+
 	startQuotaRefreshLoop()
+
+	// Load persisted accounts from SQLite (survives restarts)
+	loadOpenCodeAccountsFromDB()
+
+	// Kick off immediate fetch for any account that has a cookie
+	opencodeAcctMu.RLock()
+	tasks := make([]*opencodeAccountRuntime, 0)
+	for _, a := range opencodeAccounts {
+		if a.Cookie != "" {
+			tasks = append(tasks, a)
+		}
+	}
+	opencodeAcctMu.RUnlock()
+	for _, a := range tasks {
+		go refreshSingleQuota(a)
+	}
+}
+
+// DB persistence for OpenCode accounts
+func persistOpenCodeAccount(name, cookie, workspaceID string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	d.Exec(`INSERT INTO opencode_quota_accounts (name, auth_cookie, workspace_id) VALUES (?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET auth_cookie=excluded.auth_cookie, workspace_id=excluded.workspace_id`,
+		name, cookie, workspaceID)
+}
+
+func deleteOpenCodeAccountFromDB(name string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	d.Exec("DELETE FROM opencode_quota_accounts WHERE name = ?", name)
+}
+
+func loadOpenCodeAccountsFromDB() {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	rows, err := d.Query("SELECT name, auth_cookie, workspace_id FROM opencode_quota_accounts")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	opencodeAcctMu.Lock()
+	defer opencodeAcctMu.Unlock()
+	for rows.Next() {
+		var name, cookie, wsID string
+		if rows.Scan(&name, &cookie, &wsID) != nil {
+			continue
+		}
+		// skip if already loaded from config or in-memory
+		seen := false
+		for _, a := range opencodeAccounts {
+			if a.Name == name {
+				seen = true
+				break
+			}
+		}
+		if seen {
+			continue
+		}
+		opencodeAccounts = append(opencodeAccounts, &opencodeAccountRuntime{
+			Name:        name,
+			Cookie:      cookie,
+			WorkspaceID: wsID,
+			Cache: quotaAccount{
+				Name:    name,
+				Success: false,
+				Windows: []quotaWindow{},
+				Error:   "not fetched yet",
+			},
+		})
+	}
 }
 
 func startQuotaRefreshLoop() {
@@ -381,6 +465,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 			}
 			opencodeAccounts = append(opencodeAccounts, r)
 			opencodeAcctMu.Unlock()
+			persistOpenCodeAccount(acctName, strings.TrimSpace(cookie), strings.TrimSpace(workspace))
 			if cookie != "" {
 				refreshSingleQuota(r)
 			}
@@ -404,6 +489,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 					if a.Name == acctName { opencodeAccounts = append(opencodeAccounts[:i], opencodeAccounts[i+1:]...); break }
 				}
 				opencodeAcctMu.Unlock()
+				deleteOpenCodeAccountFromDB(acctName)
 			case "setcookie":
 				c := strings.TrimSpace(cookie)
 				if c == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"}) }
@@ -411,10 +497,12 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 				if workspace != "" {
 					target.WorkspaceID = workspace
 				}
+				persistOpenCodeAccount(target.Name, target.Cookie, target.WorkspaceID)
 				refreshSingleQuota(target)
 			case "setworkspace":
 				if workspace == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "workspace is required"}) }
 				target.WorkspaceID = workspace
+				persistOpenCodeAccount(target.Name, target.Cookie, target.WorkspaceID)
 				refreshSingleQuota(target)
 			case "refresh":
 				if target.Cookie == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"}) }

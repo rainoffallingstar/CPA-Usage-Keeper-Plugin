@@ -269,6 +269,7 @@ async function renderPricing(){
 	h+='<input class="input" type="number" id="pricing-completion" placeholder="completion" step="0.0001" style="width:110px">';
 	h+='<input class="input" type="number" id="pricing-cache" placeholder="cache" step="0.0001" style="width:100px">';
 	h+='<button class="btn btn-sm" onclick="addPrice()">+ Add</button>';
+	h+='<button class="btn btn-sm" onclick="syncPrices()" id="syncBtn" style="margin-left:auto">&#8635; Sync from modelprice.boxtech.icu</button>';
 	h+='</div>';
 	if(entries.length===0){
 		h+='<div class="empty">No pricing configured yet.<br>Add model pricing above (all values in $ per 1M tokens).</div>';
@@ -292,6 +293,19 @@ async function addPrice(){
 	await renderPricing();
 }
 async function deletePrice(model){await fetch(API_BASE+'/prices?action=delete&model='+encodeURIComponent(model));await renderPricing();}
+async function syncPrices(){
+	var btn=document.getElementById('syncBtn');if(btn){btn.textContent='Syncing...';btn.disabled=true;}
+	try{
+		const resp=await fetch(API_BASE+'/prices/sync');
+		const data=await resp.json();
+		if(btn)btn.textContent='\u2713 Synced '+data.synced+' models';
+		await renderPricing();
+		setTimeout(function(){if(btn)btn.textContent='\u8635 Sync from modelprice.boxtech.icu';},3000);
+	}catch(e){
+		if(btn)btn.textContent='\u26a0 Sync failed';
+		setTimeout(function(){if(btn)btn.textContent='\u8635 Sync from modelprice.boxtech.icu';},3000);
+	}
+}
 
 async function renderHealth(){
 	try{

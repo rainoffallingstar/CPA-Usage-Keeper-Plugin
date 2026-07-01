@@ -423,6 +423,12 @@ func createTables() error {
 	`)
 	// Schema migration: add hashed_api_key for existing databases
 	_, _ = db.Exec(`ALTER TABLE usage_events ADD COLUMN hashed_api_key TEXT NOT NULL DEFAULT ''`)
+	// Create opencode quota accounts table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS opencode_quota_accounts (
+		name TEXT PRIMARY KEY,
+		auth_cookie TEXT NOT NULL DEFAULT '',
+		workspace_id TEXT NOT NULL DEFAULT ''
+	)`)
 	return err
 }
 
@@ -674,6 +680,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleCleanup())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
 		return okEnvelope(handleHealthCheck())
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices/sync"):
+		return okEnvelope(handlePriceSync())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices"):
 		return okEnvelope(handleGetPricesWithActions(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPut) && strings.HasSuffix(path, "/prices"):
