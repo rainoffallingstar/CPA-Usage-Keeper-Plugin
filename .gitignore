@@ -5,3 +5,9 @@ dist/
 *.h
 usage-keeper.db
 .DS_Store
+# Compiled binary
+cpa-plugin-usage-keeper
+# Backup files
+*.bak
+# Export temp dir
+usage-keeper-exports/

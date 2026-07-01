@@ -38,6 +38,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,138 +51,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const (
-	pluginID                   = "usage-keeper"
-	defaultDBPath              = "usage-keeper.db"
-	defaultRetentionDays       = 90
-	defaultRefreshSeconds      = 0
-	defaultMaxInMemoryEvents   = 1000
-	contentTypeJSON            = "application/json; charset=utf-8"
-	contentTypeHTML            = "text/html; charset=utf-8"
-	managementSummaryPath      = "/v0/management/usage-keeper/summary"
-	managementModelsPath       = "/v0/management/usage-keeper/models"
-	managementEventsPath       = "/v0/management/usage-keeper/events"
-	managementCleanupPath      = "/v0/management/usage-keeper/cleanup"
-	resourceDashboardPath      = "/v0/resource/plugins/usage-keeper/dashboard"
-	resourceAPISummaryPath     = "/v0/resource/plugins/usage-keeper/api/summary"
-	resourceAPIModelsPath      = "/v0/resource/plugins/usage-keeper/api/models"
-	resourceAPIEventsPath      = "/v0/resource/plugins/usage-keeper/api/events"
-	managementUsageCompatPath  = "/v0/management/usage"
-	resourceAPIUsagePath       = "/v0/resource/plugins/usage-keeper/api/usage"
-)
-
-var pluginVersion = "0.1.0"
-
-// ---------------------------------------------------------------------------
-// Plugin configuration
-// ---------------------------------------------------------------------------
-
-type pluginConfig struct {
-	DBPath            string `yaml:"db_path"`
-	RetentionDays     int    `yaml:"retention_days"`
-	MaxInMemoryEvents int    `yaml:"max_in_memory_events"`
-	RefreshSeconds    int    `yaml:"refresh_seconds"`
-}
-
-func defaultConfig() pluginConfig {
-	return pluginConfig{
-		DBPath:            defaultDBPath,
-		RetentionDays:     defaultRetentionDays,
-		MaxInMemoryEvents: defaultMaxInMemoryEvents,
-		RefreshSeconds:    defaultRefreshSeconds,
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RPC envelope types
-// ---------------------------------------------------------------------------
-
-type envelope struct {
-	OK     bool            `json:"ok"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *envelopeError  `json:"error,omitempty"`
-}
-
-type envelopeError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-type lifecycleRequest struct {
-	ConfigYAML []byte `json:"config_yaml"`
-}
-
-type registration struct {
-	SchemaVersion uint32                   `json:"schema_version"`
-	Metadata      pluginapi.Metadata       `json:"metadata"`
-	Capabilities  registrationCapabilities `json:"capabilities"`
-}
-
-type registrationCapabilities struct {
-	UsagePlugin   bool `json:"usage_plugin"`
-	ManagementAPI bool `json:"management_api"`
-}
-
-type managementRegistrationResponse struct {
-	Routes    []pluginapi.ManagementRoute `json:"routes,omitempty"`
-	Resources []pluginapi.ResourceRoute   `json:"resources,omitempty"`
-}
-
-type managementRequest struct {
-	pluginapi.ManagementRequest
-}
-
-// ---------------------------------------------------------------------------
-// API response types
-// ---------------------------------------------------------------------------
-
-type summaryResponse struct {
-	TotalRequests  int64   `json:"total_requests"`
-	TotalTokens    int64   `json:"total_tokens"`
-	InputTokens    int64   `json:"input_tokens"`
-	OutputTokens   int64   `json:"output_tokens"`
-	FailedRequests int64   `json:"failed_requests"`
-	UniqueModels   int64   `json:"unique_models"`
-	AvgLatencyMs   float64 `json:"avg_latency_ms"`
-	CacheHitRate   float64 `json:"cache_hit_rate"`
-	RangeHours     int     `json:"range_hours"`
-}
-
-type modelBreakdown struct {
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	Requests     int64  `json:"requests"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	TotalTokens  int64  `json:"total_tokens"`
-}
-
-type usageEvent struct {
-	ID               int64  `json:"id"`
-	Timestamp        string `json:"timestamp"`
-	Provider         string `json:"provider"`
-	Model            string `json:"model"`
-	InputTokens      int64  `json:"input_tokens"`
-	OutputTokens     int64  `json:"output_tokens"`
-	TotalTokens      int64  `json:"total_tokens"`
-	LatencyMs        int64  `json:"latency_ms"`
-	Failed           bool    `json:"failed"`
-	CacheHitRate     float64 `json:"cache_hit_rate"`
-	FailureBody      string  `json:"failure_body,omitempty"`
-	AuthID           string `json:"auth_id"`
-	ExecutorType     string `json:"executor_type"`
-}
-
-type eventsResponse struct {
-	Events []usageEvent `json:"events"`
-	Total  int64        `json:"total"`
-	Limit  int          `json:"limit"`
-	Offset int          `json:"offset"`
-}
 
 // ---------------------------------------------------------------------------
 // Global state
@@ -305,14 +174,100 @@ func configure(raw []byte) error {
 
 	cfg := defaultConfig()
 	if len(req.ConfigYAML) > 0 {
+		values := usageStatisticsConfigValues(req.ConfigYAML)
 		var decoded pluginConfig
+		// Try direct unmarshal
 		if errUnmarshal := yaml.Unmarshal(req.ConfigYAML, &decoded); errUnmarshal != nil {
 			return errUnmarshal
+		}
+		// Override from nested config paths
+		if v, ok := stringConfig(values, "db_path"); ok {
+			decoded.DBPath = v
+		}
+		if v, ok := intConfig(values, "retention_days"); ok {
+			decoded.RetentionDays = v
+		}
+		if v, ok := intConfig(values, "max_in_memory_events"); ok {
+			decoded.MaxInMemoryEvents = v
+		}
+		if v, ok := intConfig(values, "refresh_seconds"); ok {
+			decoded.RefreshSeconds = v
+		}
+		if v, ok := stringConfig(values, "api_key_hash_salt"); ok {
+			decoded.APIKeyHashSalt = v
 		}
 		cfg = mergeConfig(cfg, decoded)
 	}
 	activeConfig.Store(normalizeConfig(cfg))
 	return nil
+}
+
+func usageStatisticsConfigValues(yamlBytes []byte) map[string]interface{} {
+	var root map[string]interface{}
+	if err := yaml.Unmarshal(yamlBytes, &root); err != nil {
+		return nil
+	}
+	// Try multiple fallback paths
+	if values, ok := nestedMap(root, "plugins", "configs", "usage-keeper"); ok {
+		return values
+	}
+	if values, ok := nestedMap(root, "configs", "usage-keeper"); ok {
+		return values
+	}
+	if values, ok := nestedMap(root, "usage-keeper"); ok {
+		return values
+	}
+	return root
+}
+
+func nestedMap(root map[string]interface{}, path ...string) (map[string]interface{}, bool) {
+	current := root
+	for _, key := range path {
+		value, ok := current[key]
+		if !ok {
+			return nil, false
+		}
+		next, ok := value.(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		current = next
+	}
+	return current, true
+}
+
+func intConfig(values map[string]interface{}, key string) (int, bool) {
+	val, ok := values[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case int:
+		if v >= 0 {
+			return v, true
+		}
+	case int64:
+		if v >= 0 {
+			return int(v), true
+		}
+	case float64:
+		if v >= 0 && v == float64(int(v)) {
+			return int(v), true
+		}
+	case string:
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func stringConfig(values map[string]interface{}, key string) (string, bool) {
+	val, ok := values[key]
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(fmt.Sprint(val)), true
 }
 
 func mergeConfig(base, override pluginConfig) pluginConfig {
@@ -442,6 +397,7 @@ func createTables() error {
 			auth_type TEXT NOT NULL DEFAULT '',
 			auth_index TEXT NOT NULL DEFAULT '',
 			api_key TEXT NOT NULL DEFAULT '',
+			hashed_api_key TEXT NOT NULL DEFAULT '',
 			input_tokens INTEGER NOT NULL DEFAULT 0,
 			output_tokens INTEGER NOT NULL DEFAULT 0,
 			reasoning_tokens INTEGER NOT NULL DEFAULT 0,
@@ -463,6 +419,8 @@ func createTables() error {
 		CREATE INDEX IF NOT EXISTS idx_usage_events_provider ON usage_events(provider);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_failed ON usage_events(failed);
 	`)
+	// Schema migration: add hashed_api_key for existing databases
+	_, _ = db.Exec(`ALTER TABLE usage_events ADD COLUMN hashed_api_key TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -534,13 +492,23 @@ func handleUsage(raw []byte) ([]byte, error) {
 		event.FailureBody = record.Failure.Body
 	}
 
+	// Hash API key for privacy before storing
+	hashedKey := ""
+	maskedKey := record.APIKey
+	if record.APIKey != "" {
+		if looksLikeSecretKey(record.APIKey) {
+			maskedKey = maskAPIKey(record.APIKey)
+		}
+		hashedKey = hashAPIKey(record.APIKey)
+	}
+
 	// Insert into SQLite
 	result, errInsert := db.Exec(
-		`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key,
+		`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key, hashed_api_key,
 		 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
 		 latency_ms, ttft_ms, failed, failure_status_code, failure_body,
 		 executor_type, source, service_tier)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.RequestedAt.Format(time.RFC3339),
 		record.Provider,
 		record.Model,
@@ -548,7 +516,8 @@ func handleUsage(raw []byte) ([]byte, error) {
 		record.AuthID,
 		record.AuthType,
 		record.AuthIndex,
-		record.APIKey,
+		maskedKey,
+		hashedKey,
 		record.Detail.InputTokens,
 		record.Detail.OutputTokens,
 		record.Detail.ReasoningTokens,
@@ -613,7 +582,13 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodGet, Path: "/usage-keeper/models"},
 			{Method: http.MethodGet, Path: "/usage-keeper/events"},
 			{Method: http.MethodPost, Path: "/usage-keeper/cleanup"},
-		{Method: http.MethodGet, Path: "/usage"},
+			{Method: http.MethodGet, Path: "/usage"},
+			{Method: http.MethodGet, Path: "/usage-keeper/health"},
+			{Method: http.MethodGet, Path: "/usage-keeper/prices"},
+			{Method: http.MethodPut, Path: "/usage-keeper/prices"},
+			{Method: http.MethodDelete, Path: "/usage-keeper/prices"},
+			{Method: http.MethodGet, Path: "/usage-keeper/export"},
+			{Method: http.MethodPost, Path: "/usage-keeper/import"},
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
@@ -666,13 +641,33 @@ func handleManagement(raw []byte) ([]byte, error) {
 	case strings.EqualFold(req.Method, http.MethodGet) && path == resourceDashboardPath:
 		return okEnvelope(htmlResponse(http.StatusOK, renderDashboard()))
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPISummaryPath || path == managementSummaryPath || path == managementUsageCompatPath || path == resourceAPIUsagePath):
-		return okEnvelope(handleSummary(req.Query))
+		return okEnvelope(handleSummary(req.Query, req.Headers))
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPIModelsPath || path == managementModelsPath):
 		return okEnvelope(handleModels(req.Query))
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPIEventsPath || path == managementEventsPath):
-		return okEnvelope(handleEvents(req.Query))
+		return okEnvelope(handleEvents(req.Query, req.Headers))
 	case strings.EqualFold(req.Method, http.MethodPost) && path == managementCleanupPath:
 		return okEnvelope(handleCleanup())
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
+		return okEnvelope(handleHealthCheck())
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices"):
+		return okEnvelope(handleGetPrices())
+	case strings.EqualFold(req.Method, http.MethodPut) && strings.HasSuffix(path, "/prices"):
+		return okEnvelope(handlePutPrice(req.Body))
+	case strings.EqualFold(req.Method, http.MethodDelete) && strings.HasSuffix(path, "/prices"):
+		return okEnvelope(handleDeletePrice(req.Query))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/export"):
+		return okEnvelope(handleExportUsage())
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/export-jobs"):
+		return okEnvelope(handleCreateExportJob(req.Query))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/export-jobs"):
+		return okEnvelope(handleGetExportJobs(req.Query))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/export-download"):
+		return okEnvelope(handleGetExportDownload(req.Query))
+	case strings.EqualFold(req.Method, http.MethodDelete) && strings.HasSuffix(path, "/export-jobs"):
+		return okEnvelope(handleDeleteExportJob(req.Query))
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/import"):
+		return okEnvelope(handleImportUsage(req.Body))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}
@@ -703,14 +698,26 @@ func parseRangeHours(query map[string][]string) int {
 	}
 }
 
-func handleSummary(query map[string][]string) pluginapi.ManagementResponse {
-	rangeHours := parseRangeHours(query)
-
+func handleSummary(query map[string][]string, headers map[string][]string) pluginapi.ManagementResponse {
 	// Detect Quotio caller: no range param means return the Quotio shape
 	_, hasRange := query["range"]
 	if !hasRange && len(query) == 0 {
 		return handleQuotioUsage()
 	}
+
+	rangeHours := parseRangeHours(query)
+
+	// Generate ETag for conditional caching
+	etag := dashboardWeakETag("summary", fmt.Sprintf("%d", rangeHours))
+	if checkETag(headers, etag) {
+		cacheMu.Lock()
+		summaryCacheHits++
+		cacheMu.Unlock()
+		return notModifiedResponse(etag)
+	}
+	cacheMu.Lock()
+	summaryCacheMisses++
+	cacheMu.Unlock()
 
 	dbMu.RLock()
 	d := db
@@ -736,20 +743,6 @@ func handleSummary(query map[string][]string) pluginapi.ManagementResponse {
 }
 
 // handleQuotioUsage returns the aggregate shape expected by Quotio (UsageStats).
-// Maps to: GET /v0/management/usage and /v0/resource/plugins/usage-keeper/api/usage
-type quotioUsageResponse struct {
-	Usage         quotioUsageData `json:"usage"`
-	FailedReqs    int64           `json:"failed_requests"`
-}
-
-type quotioUsageData struct {
-	TotalRequests int64 `json:"total_requests"`
-	SuccessCount  int64 `json:"success_count"`
-	FailureCount  int64 `json:"failure_count"`
-	TotalTokens   int64 `json:"total_tokens"`
-	InputTokens   int64 `json:"input_tokens"`
-	OutputTokens  int64 `json:"output_tokens"`
-}
 
 func handleQuotioUsage() pluginapi.ManagementResponse {
 	dbMu.RLock()
@@ -784,6 +777,11 @@ func handleQuotioUsage() pluginapi.ManagementResponse {
 
 func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 	rangeHours := parseRangeHours(query)
+	provider := ""
+	if vals, ok := query["provider"]; ok && len(vals) > 0 {
+		provider = strings.TrimSpace(vals[0])
+	}
+
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()
@@ -792,10 +790,19 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 	models := make([]modelBreakdown, 0)
 
 	if d != nil {
-		rows, err := d.Query(
-			"SELECT provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM usage_events WHERE timestamp >= ? GROUP BY provider, model ORDER BY provider, SUM(total_tokens) DESC",
-			since,
-		)
+		var rows *sql.Rows
+		var err error
+		if provider != "" {
+			rows, err = d.Query(
+				"SELECT provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM usage_events WHERE timestamp >= ? AND provider = ? GROUP BY provider, model ORDER BY SUM(total_tokens) DESC",
+				since, provider,
+			)
+		} else {
+			rows, err = d.Query(
+				"SELECT COALESCE(NULLIF(GROUP_CONCAT(DISTINCT provider),\"\"),\"multiple\") as provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM usage_events WHERE timestamp >= ? GROUP BY model ORDER BY SUM(total_tokens) DESC",
+				since,
+			)
+		}
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
@@ -810,7 +817,7 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 	return jsonResponse(http.StatusOK, models)
 }
 
-func handleEvents(query map[string][]string) pluginapi.ManagementResponse {
+func handleEvents(query map[string][]string, headers map[string][]string) pluginapi.ManagementResponse {
 	limit := 50
 	offset := 0
 	rangeHours := 24
@@ -827,6 +834,32 @@ func handleEvents(query map[string][]string) pluginapi.ManagementResponse {
 	}
 	rangeHours = parseRangeHours(query)
 
+	// Multi-dimensional filters
+	modelFilter := ""
+	if vals, ok := query["model"]; ok && len(vals) > 0 {
+		modelFilter = strings.TrimSpace(vals[0])
+	}
+	sourceFilter := ""
+	if vals, ok := query["source"]; ok && len(vals) > 0 {
+		sourceFilter = strings.TrimSpace(vals[0])
+	}
+	authFilter := ""
+	if vals, ok := query["auth"]; ok && len(vals) > 0 {
+		authFilter = strings.TrimSpace(vals[0])
+	}
+
+	// ETag conditional caching
+	etag := dashboardWeakETag("events", fmt.Sprintf("%d-%d-%d-%s-%s-%s", limit, offset, rangeHours, modelFilter, sourceFilter, authFilter))
+	if checkETag(headers, etag) {
+		cacheMu.Lock()
+		eventsCacheHits++
+		cacheMu.Unlock()
+		return notModifiedResponse(etag)
+	}
+	cacheMu.Lock()
+	eventsCacheMisses++
+	cacheMu.Unlock()
+
 	since := time.Now().Add(-time.Duration(rangeHours) * time.Hour).Format(time.RFC3339)
 
 	var resp eventsResponse
@@ -838,11 +871,29 @@ func handleEvents(query map[string][]string) pluginapi.ManagementResponse {
 	dbMu.RUnlock()
 
 	if d != nil {
-		_ = d.QueryRow("SELECT COUNT(*) FROM usage_events WHERE timestamp >= ?", since).Scan(&resp.Total)
+		// Build dynamic query with filters
+		where := "WHERE timestamp >= ?"
+		args := []interface{}{since}
+		if modelFilter != "" {
+			where += " AND model = ?"
+			args = append(args, modelFilter)
+		}
+		if sourceFilter != "" {
+			where += " AND source = ?"
+			args = append(args, sourceFilter)
+		}
+		if authFilter != "" {
+			where += " AND auth_id = ?"
+			args = append(args, authFilter)
+		}
 
+		countArgs := append([]interface{}{}, args...)
+		_ = d.QueryRow("SELECT COUNT(*) FROM usage_events "+where, countArgs...).Scan(&resp.Total)
+
+		queryArgs := append(args, limit, offset)
 		rows, err := d.Query(
-			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events WHERE timestamp >= ? ORDER BY id DESC LIMIT ? OFFSET ?",
-			since, limit, offset,
+			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+			queryArgs...,
 		)
 		if err == nil {
 			defer rows.Close()
@@ -864,6 +915,111 @@ func handleCleanup() pluginapi.ManagementResponse {
 	cfg := currentConfig()
 	cleanupOldRecords(cfg.RetentionDays)
 	return jsonResponse(http.StatusOK, map[string]any{"ok": true, "message": "cleanup triggered"})
+}
+
+// ---------------------------------------------------------------------------
+// Export usage data
+// ---------------------------------------------------------------------------
+
+func handleExportUsage() pluginapi.ManagementResponse {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+
+	if d == nil {
+		return jsonResponse(http.StatusOK, map[string]any{"events": []usageEvent{}, "total": 0})
+	}
+
+	rows, err := d.Query("SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY id ASC LIMIT 100000")
+	if err != nil {
+		return jsonResponse(http.StatusInternalServerError, map[string]string{"error": "query failed"})
+	}
+	defer rows.Close()
+
+	events := make([]usageEvent, 0)
+	for rows.Next() {
+		var e usageEvent
+		var cachedEvt int64
+		if err := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &cachedEvt); err == nil {
+			e.CacheHitRate = cacheHitRate(cachedEvt, e.InputTokens)
+			events = append(events, e)
+		}
+	}
+
+	return jsonResponse(http.StatusOK, map[string]any{"version": 1, "exported_at": time.Now().UTC().Format(time.RFC3339), "events": events, "total": len(events)})
+}
+
+// ---------------------------------------------------------------------------
+// Import usage data
+// ---------------------------------------------------------------------------
+
+func handleImportUsage(body []byte) pluginapi.ManagementResponse {
+	const maxBodySize = 50 * 1024 * 1024
+
+	if len(body) > maxBodySize {
+		return jsonResponse(http.StatusRequestEntityTooLarge, map[string]string{"error": "payload too large"})
+	}
+
+	var payload struct {
+		Events []struct {
+			Timestamp    string `json:"timestamp"`
+			Provider     string `json:"provider"`
+			Model        string `json:"model"`
+			InputTokens  int64  `json:"input_tokens"`
+			OutputTokens int64  `json:"output_tokens"`
+			TotalTokens  int64  `json:"total_tokens"`
+			LatencyMs    int64  `json:"latency_ms"`
+			Failed       bool   `json:"failed"`
+			FailureBody  string `json:"failure_body,omitempty"`
+			AuthID       string `json:"auth_id"`
+			ExecutorType string `json:"executor_type"`
+			CacheTokens  int64  `json:"cached_tokens"`
+		} `json:"events"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	}
+
+	if len(payload.Events) > 200000 {
+		return jsonResponse(http.StatusRequestEntityTooLarge, map[string]string{"error": "too many records"})
+	}
+
+	ensureDB()
+	dbMu.Lock()
+	d := db
+	dbMu.Unlock()
+
+	added := 0
+	skipped := 0
+
+	for _, e := range payload.Events {
+		if e.Timestamp == "" {
+			e.Timestamp = time.Now().Format(time.RFC3339)
+		}
+		failedInt := 0
+		if e.Failed {
+			failedInt = 1
+		}
+		_, err := d.Exec(
+			`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key, hashed_api_key,
+			 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
+			 latency_ms, ttft_ms, failed, failure_status_code, failure_body,
+			 executor_type, source, service_tier)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			e.Timestamp, e.Provider, e.Model, "", e.AuthID, "", "", "", "",
+			e.InputTokens, e.OutputTokens, 0, e.TotalTokens, e.CacheTokens, 0, 0,
+			e.LatencyMs, 0, failedInt, 0, e.FailureBody,
+			e.ExecutorType, "", "default",
+		)
+		if err == nil {
+			added++
+		} else {
+			skipped++
+		}
+	}
+
+	return jsonResponse(http.StatusOK, map[string]any{"added": added, "skipped": skipped, "total": added + skipped})
 }
 
 // ---------------------------------------------------------------------------
@@ -1004,7 +1160,7 @@ tr:hover { background: rgba(88,166,255,0.04); }
 <div class="panel active" id="panel-models">
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
         <label style="font-size:0.8rem;color:var(--text-secondary);">Provider:</label>
-        <select id="providerFilter" class="refresh-select" onchange="filterModels()">
+        <select id="providerFilter" class="refresh-select" onchange="renderModels()">
             <option value="">All Providers</option>
         </select>
     </div>
@@ -1062,8 +1218,15 @@ function rangeValue() {
 	return document.getElementById('rangeSelect').value;
 }
 
-async function fetchJSON(path) {
-	const resp = await fetch(API_BASE + path + '?range=' + rangeValue());
+async function fetchJSON(path, extraParams) {
+	var url = API_BASE + path + '?range=' + rangeValue();
+	if (extraParams) {
+		Object.keys(extraParams).forEach(function(k) {
+			var v = extraParams[k];
+			if (v) url += '&' + k + '=' + encodeURIComponent(v);
+		});
+	}
+	const resp = await fetch(url);
 	if (!resp.ok) throw new Error('HTTP ' + resp.status);
 	return resp.json();
 }
@@ -1077,7 +1240,8 @@ function renderCards(data) {
 }
 
 async function renderModels() {
-	const models = await fetchJSON('/models');
+		var prov = document.getElementById('providerFilter').value;
+	const models = await fetchJSON('/models', {provider: prov});
 	if (!models || models.length === 0) {
 		document.getElementById('modelTable').innerHTML = '<div class="empty">No usage data yet for this time range.</div>';
 		return;
@@ -1086,7 +1250,7 @@ async function renderModels() {
 	let html = '<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th></tr></thead><tbody>';
 	for (const m of models) {
 		const pct = Math.max((m.total_tokens / maxTokens) * 100, 1);
-		html += '<tr data-provider="' + (m.provider || '') + '"><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
+		html += '<tr><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
 			'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:' + pct + '%%"></div></div>' + formatNum(m.total_tokens) + '</div></td>' +
 			'<td>' + formatNum(m.input_tokens) + '</td><td>' + formatNum(m.output_tokens) + '</td></tr>';
 	}
@@ -1113,13 +1277,6 @@ function buildProviderFilter(models) {
 	if (current && seen[current]) sel.value = current;
 }
 
-function filterModels() {
-	var sel = document.getElementById('providerFilter').value;
-	var rows = document.querySelectorAll('#modelTable tr[data-provider]');
-	rows.forEach(function(r) {
-		r.style.display = (!sel || r.getAttribute('data-provider') === sel) ? '' : 'none';
-	});
-}
 
 async function renderEvents() {
 	const data = await fetchJSON('/events?limit=100');
