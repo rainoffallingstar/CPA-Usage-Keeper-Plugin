@@ -30,16 +30,18 @@ const (
 	resourceAPIUsagePath       = "/v0/resource/plugins/usage-keeper/api/usage"
 	resourceAPIHealthPath      = "/v0/resource/plugins/usage-keeper/api/health"
 	resourceAPIPricesPath      = "/v0/resource/plugins/usage-keeper/api/prices"
+	resourceAPIOpenCodeQuota   = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
 )
 
 var pluginVersion = "0.2.0"
 
 type pluginConfig struct {
-	DBPath            string `yaml:"db_path"`
-	RetentionDays     int    `yaml:"retention_days"`
-	MaxInMemoryEvents int    `yaml:"max_in_memory_events"`
-	RefreshSeconds    int    `yaml:"refresh_seconds"`
-	APIKeyHashSalt    string `yaml:"api_key_hash_salt"`
+	DBPath              string             `yaml:"db_path"`
+	RetentionDays       int                `yaml:"retention_days"`
+	MaxInMemoryEvents   int                `yaml:"max_in_memory_events"`
+	RefreshSeconds      int                `yaml:"refresh_seconds"`
+	APIKeyHashSalt      string             `yaml:"api_key_hash_salt"`
+	OpenCodeGoAccounts  []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
 }
 
 func defaultConfig() pluginConfig {
@@ -135,4 +137,39 @@ type quotioUsageData struct {
 	TotalTokens   int64 `json:"total_tokens"`
 	InputTokens   int64 `json:"input_tokens"`
 	OutputTokens  int64 `json:"output_tokens"`
+}
+
+// ---------------------------------------------------------------------------
+// OpenCode Go quota types
+// ---------------------------------------------------------------------------
+
+type openCodeGoAcctCfg struct {
+	Name        string `yaml:"name"`
+	AuthCookie  string `yaml:"auth_cookie"`
+	WorkspaceID string `yaml:"workspace_id"`
+}
+
+type quotaWindow struct {
+	Label      string  `json:"label"`
+	Used       float64 `json:"used"`
+	Remaining  float64 `json:"remaining"`
+	Total      float64 `json:"total"`
+	Unit       string  `json:"unit"`
+	ResetInSec int     `json:"reset_in_sec"`
+}
+
+type quotaAccount struct {
+	Name      string        `json:"name"`
+	Success   bool          `json:"success"`
+	UpdatedAt string        `json:"updated_at"`
+	Windows   []quotaWindow `json:"windows"`
+	Error     string        `json:"error,omitempty"`
+}
+
+type quotaResponse struct {
+	Accounts []quotaAccount `json:"accounts"`
+}
+
+type quotaRefreshRequest struct {
+	Account string `json:"account"`
 }

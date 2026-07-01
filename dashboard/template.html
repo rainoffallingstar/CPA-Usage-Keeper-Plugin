@@ -125,6 +125,7 @@ tr:hover { background: rgba(88,166,255,0.04); }
 	<button class="tab" onclick="switchTab('events')">All Events</button>
 	<button class="tab" onclick="switchTab('pricing')">Pricing</button>
 	<button class="tab" onclick="switchTab('health')">Health</button>
+	<button class="tab" onclick="switchTab('quota')">Quota</button>
 </div>
 
 <div class="panel active" id="panel-models">
@@ -143,6 +144,9 @@ tr:hover { background: rgba(88,166,255,0.04); }
 <div class="panel" id="panel-health">
     <div id="healthCards" style="margin-bottom: 16px;"></div>
     <div id="healthDetails"></div>
+</div>
+<div class="panel" id="panel-quota">
+    <div id="quotaList"></div>
 </div>
 
 <script>
@@ -297,6 +301,9 @@ async function refreshAll() {
 	if (document.getElementById('panel-health').classList.contains('active')) {
 		await renderHealth();
 	}
+	if (document.getElementById('panel-quota').classList.contains('active')) {
+		await renderQuota();
+	}
 }
 
 async function renderPricing() {
@@ -346,6 +353,79 @@ async function renderHealth() {
 	}
 }
 
+async function renderQuota() {
+	try {
+		const data = await fetchJSON('/opencode-quota');
+		const accounts = data.accounts || [];
+		if (accounts.length === 0) {
+			document.getElementById('quotaList').innerHTML = '<div class="empty">No OpenCode Go accounts configured. Add opencode_go_accounts in config.yaml.</div>';
+			return;
+		}
+		let html = '';
+		for (const acct of accounts) {
+			html += '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--surface)">';
+			html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+			html += '<h3 style="margin:0;font-size:1rem">' + acct.name + '</h3>';
+			html += '<div style="display:flex;gap:6px;align-items:center">';
+			html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="refreshQuotaAccount(\'' + acct.name + '\')">Refresh</button>';
+			html += '<div style="font-size:0.75rem;color:var(--text-secondary);cursor:pointer" onclick="toggleCookieInput(\'' + acct.name + '\')">Set Cookie</div>';
+			html += '</div></div>';
+
+			if (!acct.success) {
+				html += '<div style="color:var(--danger);font-size:0.85rem;margin-bottom:8px">' + (acct.error || 'Unknown error') + '</div>';
+			}
+
+			html += '<div id="cookie-input-' + acct.name + '" style="display:none;margin-bottom:12px">';
+			html += '<input type="text" id="cookie-val-' + acct.name + '" placeholder="auth=xxx" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem">';
+			html += '<button class="theme-toggle" style="margin-top:6px;font-size:0.75rem;padding:3px 8px" onclick="setCookie(\'' + acct.name + '\')">Save</button>';
+			html += '</div>';
+
+			if (acct.windows && acct.windows.length > 0) {
+				html += '<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">';
+				for (const w of acct.windows) {
+					var pct = w.remaining;
+					var color = pct > 50 ? 'var(--success)' : (pct > 20 ? 'var(--warning)' : 'var(--danger)');
+					html += '<div class="card"><div class="card-label">' + w.label + '</div>';
+					html += '<div class="card-value" style="color:' + color + ';font-size:1.2rem">' + w.remaining.toFixed(1) + w.unit + '</div>';
+					html += '<div class="card-sub">' + w.used.toFixed(1) + '%% used</div></div>';
+				}
+				html += '</div>';
+			}
+			if (acct.updated_at) {
+				html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px">Updated: ' + new Date(acct.updated_at).toLocaleString() + '</div>';
+			}
+			html += '</div>';
+		}
+		document.getElementById('quotaList').innerHTML = html;
+	} catch(e) {
+		document.getElementById('quotaList').innerHTML = '<div class="empty">Quota API not available</div>';
+	}
+}
+
+function toggleCookieInput(name) {
+	var el = document.getElementById('cookie-input-' + name);
+	el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function setCookie(name) {
+	var val = document.getElementById('cookie-val-' + name).value;
+	await fetch(API_BASE + '/opencode-quota', {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({action: 'setcookie', account: name, cookie: val})
+	});
+	await renderQuota();
+}
+
+async function refreshQuotaAccount(name) {
+	await fetch(API_BASE + '/opencode-quota', {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({action: 'refresh', account: name})
+	});
+	await renderQuota();
+}
+
 let refreshTimer = null;
 let refreshIntervalMs = %d;
 
@@ -368,6 +448,7 @@ switchTab = function(name) {
 	if (name === 'events') renderEvents();
 	if (name === 'pricing') renderPricing();
 	if (name === 'health') renderHealth();
+	if (name === 'quota') renderQuota();
 };
 
 document.getElementById('refreshSelect').value = '%d';

@@ -198,6 +198,7 @@ func configure(raw []byte) error {
 		cfg = mergeConfig(cfg, decoded)
 	}
 	activeConfig.Store(normalizeConfig(cfg))
+	initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
 	return nil
 }
 
@@ -279,6 +280,9 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 	if override.MaxInMemoryEvents > 0 {
 		base.RefreshSeconds = override.RefreshSeconds
 		base.MaxInMemoryEvents = override.MaxInMemoryEvents
+	}
+	if len(override.OpenCodeGoAccounts) > 0 {
+		base.OpenCodeGoAccounts = override.OpenCodeGoAccounts
 	}
 	return base
 }
@@ -591,6 +595,8 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodGet, Path: "/usage-keeper/export-download"},
 			{Method: http.MethodDelete, Path: "/usage-keeper/export-jobs"},
 			{Method: http.MethodPost, Path: "/usage-keeper/import"},
+			{Method: http.MethodGet, Path: "/usage-keeper/opencode-quota"},
+			{Method: http.MethodPost, Path: "/usage-keeper/opencode-quota"},
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
@@ -627,6 +633,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Path:        "/api/prices",
 				Menu:        "",
 				Description: "Model pricing JSON API.",
+			},
+			{
+				Path:        "/api/opencode-quota",
+				Menu:        "",
+				Description: "OpenCode Go quota JSON API.",
 			},
 		},
 	}
@@ -680,6 +691,10 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleDeleteExportJob(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/import"):
 		return okEnvelope(handleImportUsage(req.Body))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/opencode-quota"):
+		return okEnvelope(handleOpenCodeQuotaGet())
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/opencode-quota"):
+		return okEnvelope(handleOpenCodeQuotaPost(req.Body))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}
