@@ -55,23 +55,19 @@ func initOpenCodeAccounts(cfgs []openCodeGoAcctCfg) {
 	opencodeAcctMu.Lock()
 	defer opencodeAcctMu.Unlock()
 
-	// preserve existing cookies if account names match
-	oldByName := make(map[string]string)
+	// Preserve existing in-memory accounts (from Dashboard). Only add
+	// config entries that don't already exist, and never remove accounts.
+	seen := make(map[string]bool)
 	for _, a := range opencodeAccounts {
-		oldByName[a.Name] = a.Cookie
+		seen[a.Name] = true
 	}
-
-	opencodeAccounts = make([]*opencodeAccountRuntime, 0, len(cfgs))
 	for _, cfg := range cfgs {
 		name := strings.TrimSpace(cfg.Name)
-		if name == "" {
+		if name == "" || seen[name] {
 			continue
 		}
+		seen[name] = true
 		cookie := strings.TrimSpace(cfg.AuthCookie)
-		// prefer existing in-memory cookie over config cookie
-		if existing, ok := oldByName[name]; ok && existing != "" {
-			cookie = existing
-		}
 		opencodeAccounts = append(opencodeAccounts, &opencodeAccountRuntime{
 			Name:   name,
 			Cookie: cookie,
