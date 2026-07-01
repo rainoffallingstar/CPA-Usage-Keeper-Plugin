@@ -92,12 +92,14 @@ type summaryResponse struct {
 	RangeHours     int     `json:"range_hours"`
 }
 type modelBreakdown struct {
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	Requests     int64  `json:"requests"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	TotalTokens  int64  `json:"total_tokens"`
+	Provider      string  `json:"provider"`
+	Model         string  `json:"model"`
+	Requests      int64   `json:"requests"`
+	InputTokens   int64   `json:"input_tokens"`
+	OutputTokens  int64   `json:"output_tokens"`
+	TotalTokens   int64   `json:"total_tokens"`
+	CachedTokens  int64   `json:"cached_tokens"`
+	Cost          float64 `json:"cost"`
 }
 type usageEvent struct {
 	ID           int64   `json:"id"`

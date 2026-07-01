@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Usage Keeper – CPA Plugin</title>
+<style>
+/* Light theme (default, follows prefers-color-scheme) */
+:root {
+	--bg: #ffffff;
+	--surface: #f6f8fa;
+	--border: #d0d7de;
+	--text: #1f2328;
+	--text-secondary: #656d76;
+	--accent: #0969da;
+	--success: #1a7f37;
+	--danger: #cf222e;
+	--warning: #9a6700;
+	--radius: 8px;
+}
+/* Dark theme */
+[data-theme="dark"] {
+	--bg: #0d1117;
+	--surface: #161b22;
+	--border: #30363d;
+	--text: #c9d1d9;
+	--text-secondary: #8b949e;
+	--accent: #58a6ff;
+	--success: #3fb950;
+	--danger: #f85149;
+	--warning: #d2991d;
+}
+@media (prefers-color-scheme: dark) {
+	html:not([data-theme]) {
+		--bg: #0d1117;
+		--surface: #161b22;
+		--border: #30363d;
+		--text: #c9d1d9;
+		--text-secondary: #8b949e;
+		--accent: #58a6ff;
+		--success: #3fb950;
+		--danger: #f85149;
+		--warning: #d2991d;
+	}
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 1.5rem; font-weight: 600; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.range-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: var(--radius); font-size: 0.85rem; cursor: pointer; }
+.range-select:focus { outline: none; border-color: var(--accent); }
+.auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); }
+.auto-refresh .dot { width: 8px; height: 8px; border-radius: 50%%; background: var(--success); animation: pulse 2s infinite; }
+.auto-refresh .dot.paused { background: var(--text-secondary); animation: none; }
+.refresh-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+.refresh-select:focus { outline: none; border-color: var(--accent); }
+.theme-toggle { background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; border-radius: 4px; padding: 4px 8px; transition: background 0.15s; }
+.theme-toggle:hover { background: var(--border); }
+@keyframes pulse { 0%%, 100%% { opacity: 1; } 50%% { opacity: 0.4; } }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.card-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.card-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.card-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+.tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: var(--text-secondary); border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.panel { display: none; }
+.panel.active { display: block; }
+table { width: 100%%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+tr:hover { background: rgba(88,166,255,0.04); }
+.badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+.badge-success { background: rgba(26,127,55,0.15); color: var(--success); }
+.badge-danger { background: rgba(207,34,46,0.15); color: var(--danger); }
+.model-bar { display: flex; align-items: center; gap: 8px; }
+.model-bar-fill { height: 6px; background: var(--accent); border-radius: 3px; min-width: 2px; }
+.model-bar-bg { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.empty { text-align: center; padding: 40px; color: var(--text-secondary); }
+.cost-col { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+	body { padding: 12px; }
+	.cards { grid-template-columns: repeat(2, 1fr); }
+	.header { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+	<h1>Usage Keeper</h1>
+	<div class="header-right">
+		<select class="range-select" id="rangeSelect" onchange="refreshAll()">
+			<option value="1h">Last hour</option>
+			<option value="6h">Last 6 hours</option>
+			<option value="24h" selected>Last 24 hours</option>
+			<option value="7d">Last 7 days</option>
+			<option value="30d">Last 30 days</option>
+		</select>
+		<div class="auto-refresh">
+            <span class="dot" id="refreshDot"></span>
+            <select class="refresh-select" id="refreshSelect" onchange="setRefreshInterval(this.value)">
+                <option value="0" selected>Off</option>
+                <option value="10">10s</option>
+                <option value="30">30s</option>
+                <option value="60">1m</option>
+                <option value="300">5m</option>
+                <option value="600">10m</option>
+                <option value="1800">30m</option>
+                <option value="3600">1h</option>
+            </select>
+            <button class="theme-toggle" id="refreshBtn" onclick="refreshAll()" title="Refresh now">&#8635;</button>
+        </div>
+		<button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">&#9788;</button>
+	</div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="tabs">
+	<button class="tab active" onclick="switchTab('models')">By Model</button>
+	<button class="tab" onclick="switchTab('events')">All Events</button>
+</div>
+
+<div class="panel active" id="panel-models">
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <label style="font-size:0.8rem;color:var(--text-secondary);">Provider:</label>
+        <select id="providerFilter" class="refresh-select" onchange="renderModels()">
+            <option value="">All Providers</option>
+        </select>
+    </div>
+    <div id="modelTable"></div>
+</div>
+<div class="panel" id="panel-events"></div>
+
+<script>
+(function() {
+	const saved = localStorage.getItem('theme');
+	if (saved) {
+		document.documentElement.setAttribute('data-theme', saved);
+	}
+	updateThemeIcon();
+})();
+
+function toggleTheme() {
+	const el = document.documentElement;
+	const current = el.getAttribute('data-theme');
+	const next = current === 'dark' ? 'light' : 'dark';
+	el.setAttribute('data-theme', next);
+	localStorage.setItem('theme', next);
+	updateThemeIcon();
+}
+
+function updateThemeIcon() {
+	const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+	document.getElementById('themeToggle').innerHTML = isDark ? '&#9790;' : '&#9788;';
+}
+
+const API_BASE = window.location.pathname.replace(/\/dashboard$/, '') + '/api';
+
+function switchTab(name) {
+	document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+	document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+	document.querySelector('[onclick="switchTab(\'' + name + '\')"]').classList.add('active');
+	document.getElementById('panel-' + name).classList.add('active');
+}
+
+function formatNum(n) {
+	if (n === undefined || n === null) return '0';
+	if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+	if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+	if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+	return n.toLocaleString();
+}
+
+function formatMs(ms) {
+	if (!ms || ms <= 0) return '\u2014';
+	if (ms >= 1000) return (ms/1000).toFixed(1) + 's';
+	return ms.toFixed(0) + 'ms';
+}
+
+function formatCost(cost) {
+	if (!cost || cost <= 0) return '\u2014';
+	return '$' + cost.toFixed(2);
+}
+
+function rangeValue() {
+	return document.getElementById('rangeSelect').value;
+}
+
+async function fetchJSON(path, extraParams) {
+	var url = API_BASE + path + '?range=' + rangeValue();
+	if (extraParams) {
+		Object.keys(extraParams).forEach(function(k) {
+			var v = extraParams[k];
+			if (v) url += '&' + k + '=' + encodeURIComponent(v);
+		});
+	}
+	const resp = await fetch(url);
+	if (!resp.ok) throw new Error('HTTP ' + resp.status);
+	return resp.json();
+}
+
+function renderCards(data) {
+	document.getElementById('cards').innerHTML =
+		'<div class="card"><div class="card-label">Requests</div><div class="card-value">' + formatNum(data.total_requests) + '</div><div class="card-sub">' + formatNum(data.failed_requests) + ' failed</div></div>' +
+		'<div class="card"><div class="card-label">Tokens</div><div class="card-value">' + formatNum(data.total_tokens) + '</div><div class="card-sub">In: ' + formatNum(data.input_tokens) + ' / Out: ' + formatNum(data.output_tokens) + '</div></div>' +
+		'<div class="card"><div class="card-label">Models</div><div class="card-value">' + formatNum(data.unique_models) + '</div><div class="card-sub">Avg latency ' + formatMs(data.avg_latency_ms) + '</div></div>' +
+		'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
+}
+
+async function renderModels() {
+		var prov = document.getElementById('providerFilter').value;
+	const models = await fetchJSON('/models', {provider: prov});
+	if (!models || models.length === 0) {
+		document.getElementById('modelTable').innerHTML = '<div class="empty">No usage data yet for this time range.</div>';
+		return;
+	}
+	const maxTokens = Math.max(...models.map(m => m.total_tokens), 1);
+	let html = '<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>';
+	for (const m of models) {
+		const pct = Math.max((m.total_tokens / maxTokens) * 100, 1);
+		html += '<tr><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
+			'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:' + pct + '%%"></div></div>' + formatNum(m.total_tokens) + '</div></td>' +
+			'<td>' + formatNum(m.input_tokens) + '</td><td>' + formatNum(m.output_tokens) + '</td>' +
+			'<td class="cost-col">' + formatCost(m.cost) + '</td></tr>';
+	}
+	html += '</tbody></table>';
+	document.getElementById('modelTable').innerHTML = html;
+	window._allModels = models;
+	buildProviderFilter(models);
+}
+function buildProviderFilter(models) {
+	var sel = document.getElementById('providerFilter');
+	var seen = {};
+	var current = sel.value;
+	sel.innerHTML = '<option value="">All Providers</option>';
+	models.forEach(function(m) {
+		var p = (m.provider || 'Unknown').trim();
+		if (p && !seen[p]) {
+			seen[p] = true;
+			var opt = document.createElement('option');
+			opt.value = p;
+			opt.textContent = p.split('-').slice(-2).join('-');
+			sel.appendChild(opt);
+		}
+	});
+	if (current && seen[current]) sel.value = current;
+}
+
+
+async function renderEvents() {
+	const data = await fetchJSON('/events?limit=100');
+	if (!data || !data.events || data.events.length === 0) {
+		document.getElementById('panel-events').innerHTML = '<div class="empty">No events for this time range.</div>';
+		return;
+	}
+	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
+	for (const e of data.events) {
+		const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '\u2014';
+		const statusBadge = e.failed
+			? '<span class="badge badge-danger">FAIL</span>'
+			: '<span class="badge badge-success">OK</span>';
+		html += '<tr><td>' + timeStr + '</td><td title="' + e.provider + '">' + e.model + '</td>' +
+			'<td>' + formatNum(e.total_tokens) + '</td><td>' + (e.cache_hit_rate || 0).toFixed(1) + '%%</td><td>' + formatMs(e.latency_ms) + '</td>' +
+			'<td>' + statusBadge + '</td></tr>';
+	}
+	html += '</tbody></table>';
+	if (data.total > 100) {
+		html += '<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of ' + formatNum(data.total) + ' events</p>';
+	}
+	document.getElementById('panel-events').innerHTML = html;
+}
+
+async function refreshAll() {
+	const summary = await fetchJSON('/summary');
+	renderCards(summary);
+	await renderModels();
+	if (document.getElementById('panel-events').classList.contains('active')) {
+		await renderEvents();
+	}
+}
+
+let refreshTimer = null;
+let refreshIntervalMs = %d;
+
+function setRefreshInterval(seconds) {
+    refreshIntervalMs = parseInt(seconds) * 1000;
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (refreshIntervalMs > 0) {
+        refreshTimer = setInterval(refreshAll, refreshIntervalMs);
+        document.getElementById('refreshDot').classList.remove('paused');
+    } else {
+        document.getElementById('refreshDot').classList.add('paused');
+    }
+}
+
+// Listen for tab switches to also refresh events on demand
+const origSwitchTab = switchTab;
+switchTab = function(name) {
+	origSwitchTab(name);
+	updateThemeIcon();
+	if (name === 'events') renderEvents();
+};
+
+document.getElementById('refreshSelect').value = '%d';
+setRefreshInterval(%d);
+
+refreshAll();
+</script>
+</body>
+</html>
