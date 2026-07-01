@@ -149,6 +149,11 @@ type openCodeGoAcctCfg struct {
 	WorkspaceID string `yaml:"workspace_id"`
 }
 
+type workspaceEntry struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type quotaWindow struct {
 	Label      string  `json:"label"`
 	Used       float64 `json:"used"`
@@ -159,12 +164,13 @@ type quotaWindow struct {
 }
 
 type quotaAccount struct {
-	Name        string        `json:"name"`
-	WorkspaceID string        `json:"workspace_id"`
-	Success     bool          `json:"success"`
-	UpdatedAt   string        `json:"updated_at"`
-	Windows     []quotaWindow `json:"windows"`
-	Error       string        `json:"error,omitempty"`
+	Name        string           `json:"name"`
+	WorkspaceID string           `json:"workspace_id"`
+	Workspaces  []workspaceEntry `json:"workspaces"`
+	Success     bool             `json:"success"`
+	UpdatedAt   string           `json:"updated_at"`
+	Windows     []quotaWindow    `json:"windows"`
+	Error       string           `json:"error,omitempty"`
 }
 
 type quotaResponse struct {

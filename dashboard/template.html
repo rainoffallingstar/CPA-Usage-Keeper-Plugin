@@ -400,7 +400,17 @@ async function renderQuota() {
 			html += '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--surface)">';
 			html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
 			html += '<div><h3 style="margin:0;font-size:1rem">' + acct.name + '</h3>';
-			html += '<div style="font-size:0.7rem;color:var(--text-secondary)">Workspace: ' + (acct.workspace_id || 'auto') + '</div></div>';
+			if (acct.workspaces && acct.workspaces.length > 0) {
+				html += '<select onchange="switchWorkspace(\'' + acct.name + '\', this.value)" style="font-size:0.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);margin-top:4px">';
+				for (const ws of acct.workspaces) {
+					var sel = ws.id === acct.workspace_id ? ' selected' : '';
+					html += '<option value="' + ws.id + '"' + sel + '>' + ws.name + '</option>';
+				}
+				html += '</select>';
+			} else {
+				html += '<div style="font-size:0.7rem;color:var(--text-secondary)">Workspace: ' + (acct.workspace_id || 'auto') + '</div>';
+			}
+			html += '</div>';
 			html += '<div style="display:flex;gap:6px;align-items:center">';
 			html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="refreshQuotaAccount(\'' + acct.name + '\')">Refresh</button>';
 			html += '<div style="font-size:0.75rem;color:var(--text-secondary);cursor:pointer" onclick="toggleCookieInput(\'' + acct.name + '\')">Set Cookie</div>';
@@ -468,6 +478,11 @@ async function saveAccountConfig(name) {
 
 async function refreshQuotaAccount(name) {
 	await fetch(API_BASE + '/opencode-quota?action=refresh&account=' + encodeURIComponent(name));
+	await renderQuota();
+}
+
+async function switchWorkspace(name, workspaceId) {
+	await fetch(API_BASE + '/opencode-quota?action=setworkspace&account=' + encodeURIComponent(name) + '&workspace=' + encodeURIComponent(workspaceId));
 	await renderQuota();
 }
 

@@ -36,6 +36,7 @@ type opencodeAccountRuntime struct {
 	Name        string
 	Cookie      string
 	WorkspaceID string
+	Workspaces  []workspaceEntry
 	Cache       quotaAccount
 	CacheMu     sync.RWMutex
 }
@@ -169,15 +170,15 @@ func clampPercent(v float64) float64 {
 	return v
 }
 
-func resolveWorkspaceID(cookie string) (string, error) {
+func resolveWorkspaces(cookie string) ([]workspaceEntry, error) {
 	c := buildCookieHeader(cookie)
 	if c == "" {
-		return "", fmt.Errorf("auth cookie is empty")
+		return nil, fmt.Errorf("auth cookie is empty")
 	}
 	url := fmt.Sprintf("https://opencode.ai/_server?id=%s", opencodeServerID)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Cookie", c)
 	req.Header.Set("X-Server-Id", opencodeServerID)
@@ -189,28 +190,37 @@ func resolveWorkspaceID(cookie string) (string, error) {
 
 	resp, err := opencodeHTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("workspace query failed: %w", err)
+		return nil, fmt.Errorf("workspace query failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return "", fmt.Errorf("auth cookie expired or invalid (HTTP %d)", resp.StatusCode)
+		return nil, fmt.Errorf("auth cookie expired or invalid (HTTP %d)", resp.StatusCode)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("workspace query returned HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("workspace query returned HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxQuotaHTMLBytes))
 	if err != nil {
-		return "", fmt.Errorf("read workspace response failed: %w", err)
+		return nil, fmt.Errorf("read workspace response failed: %w", err)
 	}
 
 	matches := reWorkspaceEntry.FindAllStringSubmatch(string(body), -1)
 	if len(matches) == 0 {
-		return "", fmt.Errorf("no workspace found for this account")
+		return nil, fmt.Errorf("no workspace found for this account")
 	}
-	// return the first workspace ID
-	return matches[0][1], nil
+	seen := make(map[string]bool)
+	var entries []workspaceEntry
+	for _, m := range matches {
+		id := m[1]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		entries = append(entries, workspaceEntry{ID: id, Name: m[2]})
+	}
+	return entries, nil
 }
 
 func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
@@ -219,19 +229,16 @@ func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
 		return nil, fmt.Errorf("auth cookie is empty")
 	}
 
-	// Resolve the actual workspace ID if none provided
-	if workspaceID == "" {
-		resolved, err := resolveWorkspaceID(cookie)
+	// Resolve workspaces if we don't have an explicit wrk_xxx
+	if workspaceID == "" || !strings.HasPrefix(workspaceID, "wrk_") {
+		entries, err := resolveWorkspaces(cookie)
 		if err != nil {
 			return nil, fmt.Errorf("workspace resolution failed: %w", err)
 		}
-		workspaceID = resolved
-	} else if !strings.HasPrefix(workspaceID, "wrk_") {
-		// If a name like "Default" was given, resolve it
-		resolved, err := resolveWorkspaceID(cookie)
-		if err == nil {
-			workspaceID = resolved
+		if len(entries) == 0 {
+			return nil, fmt.Errorf("no workspace found")
 		}
+		workspaceID = entries[0].ID
 	}
 
 	// Fetch dashboard using resolved workspace ID
@@ -303,6 +310,12 @@ func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
 // ---------------------------------------------------------------------------
 
 func refreshSingleQuota(acct *opencodeAccountRuntime) {
+	// Refresh workspace list if empty
+	if len(acct.Workspaces) == 0 && acct.Cookie != "" {
+		if entries, err := resolveWorkspaces(acct.Cookie); err == nil {
+			acct.Workspaces = entries
+		}
+	}
 	windows, err := fetchAndParseQuota(acct.Cookie, acct.WorkspaceID)
 	acct.CacheMu.Lock()
 	defer acct.CacheMu.Unlock()
@@ -371,7 +384,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 			if cookie != "" {
 				refreshSingleQuota(r)
 			}
-		} else if action == "removeaccount" || action == "setcookie" || action == "refresh" {
+		} else if action == "removeaccount" || action == "setcookie" || action == "setworkspace" || action == "refresh" {
 			if acctName == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "account name is required"})
 			}
@@ -399,6 +412,10 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 					target.WorkspaceID = workspace
 				}
 				refreshSingleQuota(target)
+			case "setworkspace":
+				if workspace == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "workspace is required"}) }
+				target.WorkspaceID = workspace
+				refreshSingleQuota(target)
 			case "refresh":
 				if target.Cookie == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"}) }
 				refreshSingleQuota(target)
@@ -416,6 +433,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 		a.CacheMu.RUnlock()
 		accounts[i].Name = a.Name
 		accounts[i].WorkspaceID = a.WorkspaceID
+		accounts[i].Workspaces = a.Workspaces
 	}
 	opencodeAcctMu.RUnlock()
 	return jsonResponse(http.StatusOK, quotaResponse{Accounts: accounts})
