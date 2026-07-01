@@ -30,7 +30,7 @@ const (
 	resourceAPIUsagePath       = "/v0/resource/plugins/usage-keeper/api/usage"
 )
 
-var pluginVersion = "0.1.0"
+var pluginVersion = "0.2.0"
 
 type pluginConfig struct {
 	DBPath            string `yaml:"db_path"`
