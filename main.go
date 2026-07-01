@@ -147,6 +147,7 @@ func handleMethod(method string, request []byte) ([]byte, error) {
 			return nil, errConfigure
 		}
 		ensureDB()
+		initAllAccounts()
 		return okEnvelope(pluginRegistration())
 	case pluginabi.MethodUsageHandle:
 		return handleUsage(request)
@@ -198,10 +199,33 @@ func configure(raw []byte) error {
 		cfg = mergeConfig(cfg, decoded)
 	}
 	activeConfig.Store(normalizeConfig(cfg))
-	initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
-	initGlmCodingAccounts(cfg.GlmCodingAccounts)
-	initModelPriceSync()
 	return nil
+}
+
+var accountsInitOnce sync.Once
+
+func initAllAccounts() {
+	defer func() { recover() }()
+	accountsInitOnce.Do(func() {
+		cfg := currentConfig()
+		initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
+		initGlmCodingAccounts(cfg.GlmCodingAccounts)
+		initModelPriceSync()
+	})
+}
+
+// lazyInit defers all db.Query operations to the first API request, avoiding
+// the modernc.org/sqlite + CGO crash that occurs during CPA startup.
+var lazyInitOnce sync.Once
+
+func lazyInit() {
+	lazyInitOnce.Do(func() {
+		defer func() { recover() }()
+		loadRecentIntoRing()
+		loadOpenCodeAccountsFromDB()
+		loadGlmAccountsFromDB()
+		loadPricesFromDB()
+	})
 }
 
 func usageStatisticsConfigValues(yamlBytes []byte) map[string]interface{} {
@@ -369,6 +393,7 @@ func pluginRegistration() registration {
 // ---------------------------------------------------------------------------
 
 func ensureDB() {
+	defer func() { recover() }()
 	initOnce.Do(func() {
 		cfg := currentConfig()
 		var err error
@@ -386,9 +411,6 @@ func ensureDB() {
 		// Migration: add cache detail columns for existing databases
 		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0")
 		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_creation_tokens INTEGER NOT NULL DEFAULT 0")
-
-		// Load recent events into ring buffer
-		loadRecentIntoRing()
 	})
 }
 
@@ -434,6 +456,12 @@ func createTables() error {
 		auth_cookie TEXT NOT NULL DEFAULT '',
 		workspace_id TEXT NOT NULL DEFAULT ''
 	)`)
+	// Create GLM coding accounts table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS glm_coding_accounts (
+		name TEXT PRIMARY KEY,
+		api_key TEXT NOT NULL DEFAULT '',
+		base_url TEXT NOT NULL DEFAULT ''
+	)`)
 	// Create model prices table for persistence
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS model_prices (
 		model TEXT PRIMARY KEY,
@@ -443,8 +471,6 @@ func createTables() error {
 		auto_synced INTEGER NOT NULL DEFAULT 0,
 		updated_at TEXT NOT NULL DEFAULT ''
 	)`)
-	// Load persisted prices into memory
-	loadPricesFromDB()
 	return err
 }
 
@@ -453,6 +479,16 @@ func loadRecentIntoRing() {
 	ringBuf = make([]usageEvent, cfg.MaxInMemoryEvents)
 	ringHead = 0
 	ringCount = 0
+
+	// Recover from panic during DB query in CGO context — ring buffer starts
+	// empty and will be populated as usage events arrive.
+	defer func() {
+		if r := recover(); r != nil {
+			ringBuf = make([]usageEvent, cfg.MaxInMemoryEvents)
+			ringHead = 0
+			ringCount = 0
+		}
+	}()
 
 	rows, err := db.Query(
 		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY id DESC LIMIT ?",
@@ -492,6 +528,7 @@ func loadRecentIntoRing() {
 
 func handleUsage(raw []byte) ([]byte, error) {
 	ensureDB()
+	lazyInit()
 
 	var record pluginapi.UsageRecord
 	if errUnmarshal := json.Unmarshal(raw, &record); errUnmarshal != nil {
@@ -684,6 +721,7 @@ func managementRegResponse() managementRegistrationResponse {
 
 func handleManagement(raw []byte) ([]byte, error) {
 	ensureDB()
+	lazyInit()
 
 	var req managementRequest
 	if errUnmarshal := json.Unmarshal(raw, &req); errUnmarshal != nil {

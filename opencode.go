@@ -84,9 +84,6 @@ func initOpenCodeAccounts(cfgs []openCodeGoAcctCfg) {
 
 	startQuotaRefreshLoop()
 
-	// Load persisted accounts from SQLite (survives restarts)
-	loadOpenCodeAccountsFromDB()
-
 	// Kick off immediate fetch for any account that has a cookie
 	opencodeAcctMu.RLock()
 	tasks := make([]*opencodeAccountRuntime, 0)
@@ -125,6 +122,8 @@ func deleteOpenCodeAccountFromDB(name string) {
 }
 
 func loadOpenCodeAccountsFromDB() {
+	defer func() { recover() }()
+
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()

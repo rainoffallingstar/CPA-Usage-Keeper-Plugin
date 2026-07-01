@@ -57,7 +57,7 @@ func fetchGlmCodingQuota(apiKey, baseURL string) (*quotaAccount, error) {
 	// Strip the anthropic path suffix to get the base domain
 	base := strings.TrimSuffix(strings.TrimSuffix(u, "/api/anthropic"), "/v1")
 	if strings.HasSuffix(base, "/api") {
-		base = base
+		base = strings.TrimSuffix(base, "/api")
 	}
 
 	// Time window: yesterday at current hour to now
@@ -265,6 +265,7 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 			}
 			glmAccounts = append(glmAccounts, r)
 			glmAcctMu.Unlock()
+			persistGlmAccount(acctName, r.APIKey, r.BaseURL)
 			if r.APIKey != "" {
 				go refreshGlmQuota(r)
 			}
@@ -277,6 +278,7 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 				}
 			}
 			glmAcctMu.Unlock()
+			deleteGlmAccountFromDB(acctName)
 		case "setkey":
 			glmAcctMu.RLock()
 			var target *glmCodingRuntime
@@ -292,6 +294,7 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 			}
 			target.APIKey = strings.TrimSpace(apiKey)
 			target.BaseURL = strings.TrimSpace(baseURL)
+			persistGlmAccount(target.Name, target.APIKey, target.BaseURL)
 			go refreshGlmQuota(target)
 		case "refresh":
 			glmAcctMu.RLock()
@@ -328,4 +331,53 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 
 func encodeQuery(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, " ", "%20"), ":", "%3A")
+}
+
+// ---------------------------------------------------------------------------
+// DB persistence for GLM Coding accounts
+// ---------------------------------------------------------------------------
+
+func loadGlmAccountsFromDB() {
+	defer func() { recover() }()
+
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil { return }
+	rows, _ := d.Query("SELECT name, api_key, base_url FROM glm_coding_accounts")
+	if rows == nil { return }
+	defer rows.Close()
+	glmAcctMu.Lock()
+	defer glmAcctMu.Unlock()
+	for rows.Next() {
+		var name, key, base string
+		if rows.Scan(&name, &key, &base) != nil { continue }
+		seen := false
+		for _, a := range glmAccounts {
+			if a.Name == name { seen = true; break }
+		}
+		if seen { continue }
+		glmAccounts = append(glmAccounts, &glmCodingRuntime{
+			Name: name, APIKey: key, BaseURL: base,
+			Cache: quotaAccount{Type: "glm_coding", Name: name, Success: false, Windows: []quotaWindow{}, Error: "not fetched yet"},
+		})
+		if key != "" { go refreshGlmQuota(glmAccounts[len(glmAccounts)-1]) }
+	}
+}
+
+func persistGlmAccount(name, key, baseURL string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil { return }
+	d.Exec(`INSERT INTO glm_coding_accounts (name, api_key, base_url) VALUES (?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET api_key=excluded.api_key, base_url=excluded.base_url`, name, key, baseURL)
+}
+
+func deleteGlmAccountFromDB(name string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil { return }
+	d.Exec("DELETE FROM glm_coding_accounts WHERE name = ?", name)
 }
