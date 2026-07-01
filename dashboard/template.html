@@ -5,86 +5,123 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Usage Keeper – CPA Plugin</title>
 <style>
-/* Light theme (default, follows prefers-color-scheme) */
 :root {
 	--bg: #ffffff;
 	--surface: #f6f8fa;
+	--surface-hover: #eaeef2;
 	--border: #d0d7de;
 	--text: #1f2328;
 	--text-secondary: #656d76;
 	--accent: #0969da;
+	--accent-light: rgba(9,105,218,0.08);
 	--success: #1a7f37;
 	--danger: #cf222e;
 	--warning: #9a6700;
-	--radius: 8px;
+	--radius: 10px;
+	--shadow: 0 1px 3px rgba(0,0,0,0.08);
+	--transition: 0.2s ease;
 }
-/* Dark theme */
 [data-theme="dark"] {
 	--bg: #0d1117;
 	--surface: #161b22;
+	--surface-hover: #21262d;
 	--border: #30363d;
-	--text: #c9d1d9;
+	--text: #e6edf3;
 	--text-secondary: #8b949e;
 	--accent: #58a6ff;
+	--accent-light: rgba(88,166,255,0.1);
 	--success: #3fb950;
 	--danger: #f85149;
 	--warning: #d2991d;
+	--shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 @media (prefers-color-scheme: dark) {
 	html:not([data-theme]) {
 		--bg: #0d1117;
 		--surface: #161b22;
+		--surface-hover: #21262d;
 		--border: #30363d;
-		--text: #c9d1d9;
+		--text: #e6edf3;
 		--text-secondary: #8b949e;
 		--accent: #58a6ff;
+		--accent-light: rgba(88,166,255,0.1);
 		--success: #3fb950;
 		--danger: #f85149;
 		--warning: #d2991d;
+		--shadow: 0 1px 3px rgba(0,0,0,0.3);
 	}
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; transition: background var(--transition), color var(--transition); }
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.header h1 { font-size: 1.5rem; font-weight: 600; }
-.header-right { display: flex; gap: 8px; align-items: center; }
-.range-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: var(--radius); font-size: 0.85rem; cursor: pointer; }
-.range-select:focus { outline: none; border-color: var(--accent); }
-.auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); }
-.auto-refresh .dot { width: 8px; height: 8px; border-radius: 50%%; background: var(--success); animation: pulse 2s infinite; }
+.header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+.header-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.range-select, .refresh-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: var(--radius); font-size: 0.85rem; cursor: pointer; transition: all var(--transition); }
+.range-select:hover, .refresh-select:hover { border-color: var(--accent); background: var(--surface-hover); }
+.range-select:focus, .refresh-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 10px; }
+.auto-refresh .dot { width: 7px; height: 7px; border-radius: 50%%; background: var(--success); animation: pulse 2s infinite; flex-shrink: 0; }
 .auto-refresh .dot.paused { background: var(--text-secondary); animation: none; }
-.refresh-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
-.refresh-select:focus { outline: none; border-color: var(--accent); }
-.theme-toggle { background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; font-size: 1rem; line-height: 1; border-radius: 4px; padding: 4px 8px; transition: background 0.15s; }
-.theme-toggle:hover { background: var(--border); }
-@keyframes pulse { 0%%, 100%% { opacity: 1; } 50%% { opacity: 0.4; } }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.card-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.card-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.card-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
-.tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-.tab { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: var(--text-secondary); border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; }
+.btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; border-radius: var(--radius); transition: all var(--transition); }
+.btn:hover { background: var(--surface-hover); border-color: var(--accent); }
+.btn-icon { font-size: 1rem; line-height: 1; padding: 6px 10px; }
+.btn-sm { font-size: 0.8rem; padding: 4px 12px; }
+.btn-xs { font-size: 0.7rem; padding: 2px 8px; }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { border-color: var(--danger); background: rgba(207,34,46,0.1); }
+@keyframes pulse { 0%%, 100%% { opacity: 1; } 50%% { opacity: 0.3; } }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); transition: transform var(--transition), box-shadow var(--transition); }
+.card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.card-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-weight: 600; }
+.card-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.card-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+.tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 2px solid var(--border); overflow-x: auto; }
+.tab { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: var(--text-secondary); border: none; border-bottom: 2px solid transparent; transition: all var(--transition); background: none; white-space: nowrap; margin-bottom: -2px; font-weight: 500; }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 .panel { display: none; }
-.panel.active { display: block; }
+.panel.active { display: block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 table { width: 100%%; border-collapse: collapse; font-size: 0.85rem; }
-th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-th { color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
-tr:hover { background: rgba(88,166,255,0.04); }
-.badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { color: var(--text-secondary); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+tbody tr { transition: background var(--transition); }
+tbody tr:hover { background: var(--accent-light); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; }
 .badge-success { background: rgba(26,127,55,0.15); color: var(--success); }
 .badge-danger { background: rgba(207,34,46,0.15); color: var(--danger); }
+.badge-warning { background: rgba(154,103,0,0.15); color: var(--warning); }
 .model-bar { display: flex; align-items: center; gap: 8px; }
-.model-bar-fill { height: 6px; background: var(--accent); border-radius: 3px; min-width: 2px; }
-.model-bar-bg { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.empty { text-align: center; padding: 40px; color: var(--text-secondary); }
-.cost-col { text-align: right; font-variant-numeric: tabular-nums; }
-@media (max-width: 600px) {
+.model-bar-fill { height: 5px; background: var(--accent); border-radius: 3px; min-width: 2px; transition: width 0.4s ease; }
+.model-bar-bg { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.cost-col { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.empty { text-align: center; padding: 48px 20px; color: var(--text-secondary); font-size: 0.9rem; }
+.filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-bar label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
+.form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 0.85rem; transition: all var(--transition); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.input::placeholder { color: var(--text-secondary); opacity: 0.7; }
+.quota-card { margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.quota-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+.quota-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.quota-meta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
+.quota-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.quota-error { background: rgba(207,34,46,0.08); border: 1px solid rgba(207,34,46,0.2); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; color: var(--danger); margin-bottom: 12px; }
+.progress-ring { display: flex; align-items: center; gap: 12px; }
+.progress-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%%; border-radius: 4px; transition: width 0.5s ease; }
+.cookie-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+.cookie-panel input { margin-bottom: 8px; }
+.timestamp { font-size: 0.7rem; color: var(--text-secondary); margin-top: 10px; font-style: italic; }
+.health-detail-table { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+@media (max-width: 640px) {
 	body { padding: 12px; }
 	.cards { grid-template-columns: repeat(2, 1fr); }
 	.header { flex-direction: column; align-items: flex-start; }
+	.header-right { width: 100%%; }
+	.quota-header { flex-direction: column; }
 }
 </style>
 </head>
@@ -101,20 +138,20 @@ tr:hover { background: rgba(88,166,255,0.04); }
 			<option value="30d">Last 30 days</option>
 		</select>
 		<div class="auto-refresh">
-            <span class="dot" id="refreshDot"></span>
-            <select class="refresh-select" id="refreshSelect" onchange="setRefreshInterval(this.value)">
-                <option value="0" selected>Off</option>
-                <option value="10">10s</option>
-                <option value="30">30s</option>
-                <option value="60">1m</option>
-                <option value="300">5m</option>
-                <option value="600">10m</option>
-                <option value="1800">30m</option>
-                <option value="3600">1h</option>
-            </select>
-            <button class="theme-toggle" id="refreshBtn" onclick="refreshAll()" title="Refresh now">&#8635;</button>
-        </div>
-		<button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark theme">&#9788;</button>
+			<span class="dot" id="refreshDot"></span>
+			<select class="refresh-select" id="refreshSelect" onchange="setRefreshInterval(this.value)">
+				<option value="0" selected>Off</option>
+				<option value="10">10s</option>
+				<option value="30">30s</option>
+				<option value="60">1m</option>
+				<option value="300">5m</option>
+				<option value="600">10m</option>
+				<option value="1800">30m</option>
+				<option value="3600">1h</option>
+			</select>
+			<button class="btn btn-icon" id="refreshBtn" onclick="refreshAll()" title="Refresh now">&#8635;</button>
+		</div>
+		<button class="btn btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
 	</div>
 </div>
 
@@ -129,391 +166,252 @@ tr:hover { background: rgba(88,166,255,0.04); }
 </div>
 
 <div class="panel active" id="panel-models">
-    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-        <label style="font-size:0.8rem;color:var(--text-secondary);">Provider:</label>
-        <select id="providerFilter" class="refresh-select" onchange="renderModels()">
-            <option value="">All Providers</option>
-        </select>
-    </div>
-    <div id="modelTable"></div>
+	<div class="filter-bar">
+		<label>Provider:</label>
+		<select id="providerFilter" class="refresh-select" onchange="renderModels()">
+			<option value="">All Providers</option>
+		</select>
+	</div>
+	<div id="modelTable"></div>
 </div>
 <div class="panel" id="panel-events"></div>
-<div class="panel" id="panel-pricing">
-    <div id="pricingTable"></div>
-</div>
+<div class="panel" id="panel-pricing"><div id="pricingTable"></div></div>
 <div class="panel" id="panel-health">
-    <div id="healthCards" style="margin-bottom: 16px;"></div>
-    <div id="healthDetails"></div>
+	<div id="healthCards" style="margin-bottom:16px;"></div>
+	<div id="healthDetails"></div>
 </div>
-<div class="panel" id="panel-quota">
-    <div id="quotaList"></div>
-</div>
+<div class="panel" id="panel-quota"><div id="quotaList"></div></div>
 
 <script>
-(function() {
-	const saved = localStorage.getItem('theme');
-	if (saved) {
-		document.documentElement.setAttribute('data-theme', saved);
-	}
-	updateThemeIcon();
-})();
+(function(){const s=localStorage.getItem('theme');if(s)document.documentElement.setAttribute('data-theme',s);updateThemeIcon();})();
+function toggleTheme(){const el=document.documentElement;const c=el.getAttribute('data-theme');const n=c==='dark'?'light':'dark';el.setAttribute('data-theme',n);localStorage.setItem('theme',n);updateThemeIcon();}
+function updateThemeIcon(){const d=document.documentElement.getAttribute('data-theme')==='dark';document.getElementById('themeToggle').innerHTML=d?'&#9790;':'&#9788;';}
 
-function toggleTheme() {
-	const el = document.documentElement;
-	const current = el.getAttribute('data-theme');
-	const next = current === 'dark' ? 'light' : 'dark';
-	el.setAttribute('data-theme', next);
-	localStorage.setItem('theme', next);
-	updateThemeIcon();
+const API_BASE=window.location.pathname.replace(/\/dashboard$/,'')+'/api';
+
+function switchTab(name){
+	document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+	document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+	document.querySelector('[onclick="switchTab(\''+name+'\')"]').classList.add('active');
+	document.getElementById('panel-'+name).classList.add('active');
 }
 
-function updateThemeIcon() {
-	const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-	document.getElementById('themeToggle').innerHTML = isDark ? '&#9790;' : '&#9788;';
-}
+function formatNum(n){if(n===undefined||n===null)return'0';if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString();}
+function formatMs(ms){if(!ms||ms<=0)return'\u2014';if(ms>=1000)return(ms/1000).toFixed(1)+'s';return ms.toFixed(0)+'ms';}
+function formatCost(c){return'$'+(c||0).toFixed(4);}
+function formatBytes(b){if(!b)return'0 B';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
+function formatDuration(sec){if(!sec)return'\u2014';if(sec<60)return sec+'s';if(sec<3600)return Math.floor(sec/60)+'m';return Math.floor(sec/3600)+'h'+Math.floor((sec%%60)/60)+'m';}
+function rangeValue(){return document.getElementById('rangeSelect').value;}
 
-const API_BASE = window.location.pathname.replace(/\/dashboard$/, '') + '/api';
-
-function switchTab(name) {
-	document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-	document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-	document.querySelector('[onclick="switchTab(\'' + name + '\')"]').classList.add('active');
-	document.getElementById('panel-' + name).classList.add('active');
-}
-
-function formatNum(n) {
-	if (n === undefined || n === null) return '0';
-	if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
-	if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-	if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-	return n.toLocaleString();
-}
-
-function formatMs(ms) {
-	if (!ms || ms <= 0) return '\u2014';
-	if (ms >= 1000) return (ms/1000).toFixed(1) + 's';
-	return ms.toFixed(0) + 'ms';
-}
-
-function formatCost(cost) {
-	return '$' + (cost || 0).toFixed(2);
-}
-
-function rangeValue() {
-	return document.getElementById('rangeSelect').value;
-}
-
-async function fetchJSON(path, extraParams) {
-	var url = API_BASE + path + '?range=' + rangeValue();
-	if (extraParams) {
-		Object.keys(extraParams).forEach(function(k) {
-			var v = extraParams[k];
-			if (v) url += '&' + k + '=' + encodeURIComponent(v);
-		});
-	}
-	const resp = await fetch(url);
-	if (!resp.ok) throw new Error('HTTP ' + resp.status);
+async function fetchJSON(path,extra){
+	var url=API_BASE+path+'?range='+rangeValue();
+	if(extra)Object.keys(extra).forEach(function(k){if(extra[k])url+='&'+k+'='+encodeURIComponent(extra[k]);});
+	const resp=await fetch(url);
+	if(!resp.ok)throw new Error('HTTP '+resp.status);
 	return resp.json();
 }
 
-function renderCards(data) {
-	document.getElementById('cards').innerHTML =
-		'<div class="card"><div class="card-label">Requests</div><div class="card-value">' + formatNum(data.total_requests) + '</div><div class="card-sub">' + formatNum(data.failed_requests) + ' failed</div></div>' +
-		'<div class="card"><div class="card-label">Tokens</div><div class="card-value">' + formatNum(data.total_tokens) + '</div><div class="card-sub">In: ' + formatNum(data.input_tokens) + ' / Out: ' + formatNum(data.output_tokens) + '</div></div>' +
-		'<div class="card"><div class="card-label">Models</div><div class="card-value">' + formatNum(data.unique_models) + '</div><div class="card-sub">Avg latency ' + formatMs(data.avg_latency_ms) + '</div></div>' +
-		'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
+function renderCards(d){
+	document.getElementById('cards').innerHTML=
+	'<div class="card"><div class="card-label">Requests</div><div class="card-value">'+formatNum(d.total_requests)+'</div><div class="card-sub">'+formatNum(d.failed_requests)+' failed</div></div>'+
+	'<div class="card"><div class="card-label">Tokens</div><div class="card-value">'+formatNum(d.total_tokens)+'</div><div class="card-sub">In '+formatNum(d.input_tokens)+' / Out '+formatNum(d.output_tokens)+'</div></div>'+
+	'<div class="card"><div class="card-label">Models</div><div class="card-value">'+formatNum(d.unique_models)+'</div><div class="card-sub">avg '+formatMs(d.avg_latency_ms)+'</div></div>'+
+	'<div class="card"><div class="card-label">Cache Hit</div><div class="card-value">'+(d.cache_hit_rate||0).toFixed(1)+'%%'+'</div><div class="card-sub">'+(d.range_hours||24)+'h window</div></div>'+
+	'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
 }
 
-async function renderModels() {
-		var prov = document.getElementById('providerFilter').value;
-	const models = await fetchJSON('/models', {provider: prov});
-	if (!models || models.length === 0) {
-		document.getElementById('modelTable').innerHTML = '<div class="empty">No usage data yet for this time range.</div>';
-		return;
+async function renderModels(){
+	var prov=document.getElementById('providerFilter').value;
+	const models=await fetchJSON('/models',{provider:prov});
+	if(!models||models.length===0){document.getElementById('modelTable').innerHTML='<div class="empty">No usage data for this time range.</div>';return;}
+	const maxT=Math.max(...models.map(m=>m.total_tokens),1);
+	let h='<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>';
+	for(const m of models){
+		const pct=Math.max((m.total_tokens/maxT)*100,1);
+		h+='<tr><td style="font-weight:500">'+m.model+'</td><td>'+formatNum(m.requests)+'</td>'+
+		'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:'+pct+'%%"></div></div>'+formatNum(m.total_tokens)+'</div></td>'+
+		'<td>'+formatNum(m.input_tokens)+'</td><td>'+formatNum(m.output_tokens)+'</td>'+
+		'<td class="cost-col">'+formatCost(m.cost)+'</td></tr>';
 	}
-	const maxTokens = Math.max(...models.map(m => m.total_tokens), 1);
-	let html = '<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>';
-	for (const m of models) {
-		const pct = Math.max((m.total_tokens / maxTokens) * 100, 1);
-		html += '<tr><td>' + m.model + '</td><td>' + formatNum(m.requests) + '</td>' +
-			'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:' + pct + '%%"></div></div>' + formatNum(m.total_tokens) + '</div></td>' +
-			'<td>' + formatNum(m.input_tokens) + '</td><td>' + formatNum(m.output_tokens) + '</td>' +
-			'<td class="cost-col">' + formatCost(m.cost) + '</td></tr>';
-	}
-	html += '</tbody></table>';
-	document.getElementById('modelTable').innerHTML = html;
-	window._allModels = models;
+	h+='</tbody></table>';
+	document.getElementById('modelTable').innerHTML=h;
 	buildProviderFilter(models);
 }
-function buildProviderFilter(models) {
-	var sel = document.getElementById('providerFilter');
-	var seen = {};
-	var current = sel.value;
-	sel.innerHTML = '<option value="">All Providers</option>';
-	models.forEach(function(m) {
-		var p = (m.provider || 'Unknown').trim();
-		if (p && !seen[p]) {
-			seen[p] = true;
-			var opt = document.createElement('option');
-			opt.value = p;
-			opt.textContent = p.split('-').slice(-2).join('-');
-			sel.appendChild(opt);
+function buildProviderFilter(models){
+	var sel=document.getElementById('providerFilter');var seen={};var cur=sel.value;
+	sel.innerHTML='<option value="">All Providers</option>';
+	models.forEach(function(m){var p=(m.provider||'Unknown').trim();if(p&&!seen[p]){seen[p]=true;var o=document.createElement('option');o.value=p;o.textContent=p.split('-').slice(-2).join('-');sel.appendChild(o);}});
+	if(cur&&seen[cur])sel.value=cur;
+}
+
+async function renderEvents(){
+	const data=await fetchJSON('/events?limit=100');
+	if(!data||!data.events||data.events.length===0){document.getElementById('panel-events').innerHTML='<div class="empty">No events for this time range.</div>';return;}
+	let h='<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
+	for(const e of data.events){
+		const ts=e.timestamp?new Date(e.timestamp).toLocaleTimeString():'\u2014';
+		const badge=e.failed?'<span class="badge badge-danger">FAIL</span>':'<span class="badge badge-success">OK</span>';
+		h+='<tr><td style="font-variant-numeric:tabular-nums;color:var(--text-secondary)">'+ts+'</td><td title="'+e.provider+'" style="font-weight:500">'+e.model+'</td>'+
+		'<td title="auth: '+e.auth_id+'"><span style="font-size:0.8rem">'+(e.executor_type||'\u2014')+'</span></td>'+
+		'<td>'+formatNum(e.total_tokens)+'</td><td>'+(e.cache_hit_rate||0).toFixed(1)+'%%</td><td>'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
+	}
+	h+='</tbody></table>';
+	if(data.total>100)h+='<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of '+formatNum(data.total)+' events</p>';
+	document.getElementById('panel-events').innerHTML=h;
+}
+
+async function renderPricing(){
+	const data=await fetchJSON('/prices');
+	const prices=data.prices||{};const entries=Object.entries(prices);
+	let h='<div class="form-row">';
+	h+='<input class="input" type="text" id="pricing-model" placeholder="model name" style="width:180px">';
+	h+='<input class="input" type="number" id="pricing-prompt" placeholder="prompt" step="0.0001" style="width:100px">';
+	h+='<input class="input" type="number" id="pricing-completion" placeholder="completion" step="0.0001" style="width:110px">';
+	h+='<input class="input" type="number" id="pricing-cache" placeholder="cache" step="0.0001" style="width:100px">';
+	h+='<button class="btn btn-sm" onclick="addPrice()">+ Add</button>';
+	h+='</div>';
+	if(entries.length===0){
+		h+='<div class="empty">No pricing configured yet.<br>Add model pricing above (all values in $ per 1M tokens).</div>';
+	}else{
+		h+='<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th><th></th></tr></thead><tbody>';
+		for(const[model,price]of entries){
+			h+='<tr><td style="font-weight:500">'+model+'</td><td>$'+(price.prompt||0).toFixed(4)+'</td><td>$'+(price.completion||0).toFixed(4)+'</td><td>$'+(price.cache||0).toFixed(4)+'</td>';
+			h+='<td><button class="btn btn-xs btn-danger" onclick="deletePrice(\''+model+'\')">&#10005;</button></td></tr>';
 		}
-	});
-	if (current && seen[current]) sel.value = current;
+		h+='</tbody></table>';
+	}
+	document.getElementById('pricingTable').innerHTML=h;
 }
-
-
-async function renderEvents() {
-	const data = await fetchJSON('/events?limit=100');
-	if (!data || !data.events || data.events.length === 0) {
-		document.getElementById('panel-events').innerHTML = '<div class="empty">No events for this time range.</div>';
-		return;
-	}
-	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
-	for (const e of data.events) {
-		const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '\u2014';
-		const statusBadge = e.failed
-			? '<span class="badge badge-danger">FAIL</span>'
-			: '<span class="badge badge-success">OK</span>';
-		html += '<tr><td>' + timeStr + '</td><td title="' + e.provider + '">' + e.model + '</td>' +
-			'<td title="auth: ' + e.auth_id + '">' + (e.executor_type || '\u2014') + '</td>' +
-			'<td>' + formatNum(e.total_tokens) + '</td><td>' + (e.cache_hit_rate || 0).toFixed(1) + '%%</td><td>' + formatMs(e.latency_ms) + '</td>' +
-			'<td>' + statusBadge + '</td></tr>';
-	}
-	html += '</tbody></table>';
-	if (data.total > 100) {
-		html += '<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of ' + formatNum(data.total) + ' events</p>';
-	}
-	document.getElementById('panel-events').innerHTML = html;
-}
-
-async function refreshAll() {
-	const summary = await fetchJSON('/summary');
-	renderCards(summary);
-	await renderModels();
-	if (document.getElementById('panel-events').classList.contains('active')) {
-		await renderEvents();
-	}
-	if (document.getElementById('panel-pricing').classList.contains('active')) {
-		await renderPricing();
-	}
-	if (document.getElementById('panel-health').classList.contains('active')) {
-		await renderHealth();
-	}
-	if (document.getElementById('panel-quota').classList.contains('active')) {
-		await renderQuota();
-	}
-}
-
-async function renderPricing() {
-	const data = await fetchJSON('/prices');
-	const prices = data.prices || {};
-	const entries = Object.entries(prices);
-	var html = '';
-	// Add form
-	html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">';
-	html += '<input type="text" id="pricing-model" placeholder="model name" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:160px">';
-	html += '<input type="number" id="pricing-prompt" placeholder="prompt" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
-	html += '<input type="number" id="pricing-completion" placeholder="compl" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
-	html += '<input type="number" id="pricing-cache" placeholder="cache" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
-	html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="addPrice()">Add</button>';
-	html += '</div>';
-
-	if (entries.length === 0) {
-		html += '<div class="empty">No pricing yet. Add your first pricing rule above.</div>';
-	} else {
-		html += '<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th><th></th></tr></thead><tbody>';
-		for (const [model, price] of entries) {
-			html += '<tr><td>' + model + '</td><td>' + (price.prompt || 0).toFixed(2) + '</td><td>' + (price.completion || 0).toFixed(2) + '</td><td>' + (price.cache || 0).toFixed(2) + '</td>';
-			html += '<td><button class="theme-toggle" style="font-size:0.7rem;padding:2px 6px;color:var(--danger)" onclick="deletePrice(\'' + model + '\')">X</button></td></tr>';
-		}
-		html += '</tbody></table>';
-	}
-	document.getElementById('pricingTable').innerHTML = html;
-}
-
-async function addPrice() {
-	var model = document.getElementById('pricing-model').value.trim();
-	var prompt = parseFloat(document.getElementById('pricing-prompt').value) || 0;
-	var completion = parseFloat(document.getElementById('pricing-completion').value) || 0;
-	var cache = parseFloat(document.getElementById('pricing-cache').value) || 0;
-	if (!model) return;
-	var url = API_BASE + '/prices?action=set&model=' + encodeURIComponent(model) + '&prompt=' + prompt + '&completion=' + completion + '&cache=' + cache;
-	await fetch(url);
+async function addPrice(){
+	var model=document.getElementById('pricing-model').value.trim();
+	var p=parseFloat(document.getElementById('pricing-prompt').value)||0;
+	var c=parseFloat(document.getElementById('pricing-completion').value)||0;
+	var ca=parseFloat(document.getElementById('pricing-cache').value)||0;
+	if(!model)return;
+	await fetch(API_BASE+'/prices?action=set&model='+encodeURIComponent(model)+'&prompt='+p+'&completion='+c+'&cache='+ca);
 	await renderPricing();
 }
+async function deletePrice(model){await fetch(API_BASE+'/prices?action=delete&model='+encodeURIComponent(model));await renderPricing();}
 
-async function deletePrice(model) {
-	await fetch(API_BASE + '/prices?action=delete&model=' + encodeURIComponent(model));
-	await renderPricing();
-}
-
-async function renderHealth() {
-	try {
-		const data = await fetchJSON('/health');
-		var statusColor = data.status === 'ok' ? 'var(--success)' : (data.status === 'warn' ? 'var(--warning)' : 'var(--danger)');
-		var cardsHtml = '<div class="cards">' +
-			'<div class="card"><div class="card-label">Status</div><div class="card-value" style="color:' + statusColor + '">' + (data.status || 'unknown').toUpperCase() + '</div><div class="card-sub">uptime ' + formatMs(data.runtime.uptime_seconds * 1000) + '</div></div>' +
-			'<div class="card"><div class="card-label">Ring Buffer</div><div class="card-value">' + data.runtime.ring_buffer_used + '/' + data.runtime.ring_buffer_size + '</div><div class="card-sub">total requests ' + formatNum(data.runtime.total_requests) + '</div></div>' +
-			'<div class="card"><div class="card-label">Cache Hit Rate</div><div class="card-value">' + (data.runtime.summary_cache_hit_rate || 0).toFixed(1) + '%%' + '</div><div class="card-sub">events ' + (data.runtime.events_cache_hit_rate || 0).toFixed(1) + '%%' + '</div></div>' +
-			'<div class="card"><div class="card-label">Storage</div><div class="card-value">' + data.storage.status + '</div><div class="card-sub">' + formatNum(data.storage.db_file_size) + ' bytes</div></div>' +
+async function renderHealth(){
+	try{
+		const data=await fetchJSON('/health');
+		var sc=data.status==='ok'?'var(--success)':(data.status==='warn'?'var(--warning)':'var(--danger)');
+		document.getElementById('healthCards').innerHTML='<div class="cards">'+
+		'<div class="card"><div class="card-label">Status</div><div class="card-value" style="color:'+sc+'">'+(data.status||'unknown').toUpperCase()+'</div><div class="card-sub">uptime '+formatDuration(data.runtime.uptime_seconds)+'</div></div>'+
+		'<div class="card"><div class="card-label">Ring Buffer</div><div class="card-value">'+data.runtime.ring_buffer_used+'<span style="font-size:1rem;color:var(--text-secondary)">/'+data.runtime.ring_buffer_size+'</span></div><div class="card-sub">'+formatNum(data.runtime.total_requests)+' total requests</div></div>'+
+		'<div class="card"><div class="card-label">Summary Cache</div><div class="card-value" style="color:'+(data.runtime.summary_cache_hit_rate>50?'var(--success)':'var(--warning)')+'">'+(data.runtime.summary_cache_hit_rate||0).toFixed(1)+'%%'+'</div><div class="card-sub">events '+(data.runtime.events_cache_hit_rate||0).toFixed(1)+'%%'+'</div></div>'+
+		'<div class="card"><div class="card-label">Storage</div><div class="card-value" style="color:var(--success);font-size:1.1rem">'+data.storage.status+'</div><div class="card-sub">'+formatBytes(data.storage.db_file_size)+'</div></div>'+
 		'</div>';
-		document.getElementById('healthCards').innerHTML = cardsHtml;
-
-		var detailsHtml = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>' +
-			'<tr><td>Last Write Duration</td><td>' + formatMs(data.runtime.last_write_duration_ms) + '</td></tr>' +
-			'<tr><td>Storage Write Errors</td><td>' + data.runtime.storage_write_errors + '</td></tr>' +
-			'<tr><td>DB Path</td><td style="font-size:0.8rem;word-break:break-all">' + data.storage.db_path + '</td></tr>' +
-			'<tr><td>WAL File Size</td><td>' + formatNum(data.storage.wal_file_size) + ' bytes</td></tr>';
-		if (data.alerts && data.alerts.length > 0) {
-			detailsHtml += '<tr><td colspan="2" style="padding-top:12px;font-weight:600">Alerts</td></tr>';
-			for (const a of data.alerts) {
-				var sevColor = a.severity === 'error' ? 'var(--danger)' : 'var(--warning)';
-				detailsHtml += '<tr><td><span class="badge" style="color:' + sevColor + '">' + a.severity.toUpperCase() + '</span> ' + a.code + '</td><td>' + a.message + '</td></tr>';
+		let h='<div class="health-detail-table"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+		h+='<tr><td>Last Write Duration</td><td>'+formatMs(data.runtime.last_write_duration_ms)+'</td></tr>';
+		h+='<tr><td>Storage Write Errors</td><td style="color:'+(data.runtime.storage_write_errors>0?'var(--danger)':'var(--success)')+'">'+data.runtime.storage_write_errors+'</td></tr>';
+		h+='<tr><td>DB Path</td><td style="font-size:0.8rem;word-break:break-all">'+data.storage.db_path+'</td></tr>';
+		h+='<tr><td>WAL Size</td><td>'+formatBytes(data.storage.wal_file_size)+'</td></tr>';
+		if(data.alerts&&data.alerts.length>0){
+			h+='<tr><td colspan="2" style="padding-top:14px;font-weight:700;color:var(--warning)">Alerts</td></tr>';
+			for(const a of data.alerts){
+				var bc=a.severity==='error'?'badge-danger':'badge-warning';
+				h+='<tr><td><span class="badge '+bc+'">'+a.severity.toUpperCase()+'</span> '+a.code+'</td><td>'+a.message+'</td></tr>';
 			}
 		}
-		detailsHtml += '</tbody></table>';
-		document.getElementById('healthDetails').innerHTML = detailsHtml;
-	} catch(e) {
-		document.getElementById('healthCards').innerHTML = '<div class="empty">Health endpoint not available</div>';
-	}
+		h+='</tbody></table></div>';
+		document.getElementById('healthDetails').innerHTML=h;
+	}catch(e){document.getElementById('healthCards').innerHTML='<div class="empty">Health endpoint not available</div>';}
 }
 
-async function renderQuota() {
-	try {
-		const data = await fetchJSON('/opencode-quota');
-		const accounts = data.accounts || [];
-		let html = '';
-		// Add account form at the top
-		html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:16px;flex-wrap:wrap">';
-		html += '<input type="text" id="quota-acct-name" placeholder="Account name" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:140px">';
-		html += '<input type="text" id="quota-acct-cookie" placeholder="auth cookie (optional)" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:200px">';
-		html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="addQuotaAccount()">Add Account</button>';
-		html += '</div>';
-
-		if (accounts.length === 0) {
-			html += '<div class="empty">No accounts yet. Add one above to monitor OpenCode Go quota.</div>';
-		}
-
-		for (const acct of accounts) {
-			html += '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--surface)">';
-			html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
-			html += '<div><h3 style="margin:0;font-size:1rem">' + acct.name + '</h3>';
-			if (acct.workspaces && acct.workspaces.length > 0) {
-				html += '<select onchange="switchWorkspace(\'' + acct.name + '\', this.value)" style="font-size:0.75rem;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);margin-top:4px">';
-				for (const ws of acct.workspaces) {
-					var sel = ws.id === acct.workspace_id ? ' selected' : '';
-					html += '<option value="' + ws.id + '"' + sel + '>' + ws.name + '</option>';
+async function renderQuota(){
+	try{
+		const data=await fetchJSON('/opencode-quota');
+		const accounts=data.accounts||[];
+		let h='<div class="form-row">';
+		h+='<input class="input" type="text" id="quota-acct-name" placeholder="Account name" style="width:150px">';
+		h+='<input class="input" type="text" id="quota-acct-cookie" placeholder="auth cookie (optional)" style="width:240px">';
+		h+='<button class="btn btn-sm" onclick="addQuotaAccount()">+ Add Account</button>';
+		h+='</div>';
+		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Add an account above to monitor OpenCode Go quota.</div>';}
+		for(const acct of accounts){
+			h+='<div class="quota-card">';
+			h+='<div class="quota-header"><div>';
+			h+='<h3>'+acct.name+'</h3>';
+			if(acct.workspaces&&acct.workspaces.length>0){
+				h+='<div class="quota-meta"><select onchange="switchWorkspace(\''+acct.name+'\',this.value)" class="refresh-select" style="margin-top:6px;font-size:0.75rem;padding:3px 6px">';
+				for(const ws of acct.workspaces){var sel=ws.id===acct.workspace_id?' selected':'';h+='<option value="'+ws.id+'"'+sel+'>'+ws.name+'</option>';}
+				h+='</select></div>';
+			}else{h+='<div class="quota-meta">Workspace: '+(acct.workspace_id||'auto-resolve')+'</div>';}
+			h+='</div>';
+			h+='<div class="quota-actions">';
+			h+='<button class="btn btn-sm" onclick="refreshQuotaAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
+			h+='<button class="btn btn-xs" onclick="toggleCookieInput(\''+acct.name+'\')">Set Cookie</button>';
+			h+='<button class="btn btn-xs btn-danger" onclick="removeQuotaAccount(\''+acct.name+'\')">&#10005;</button>';
+			h+='</div></div>';
+			if(!acct.success){h+='<div class="quota-error">'+(acct.error||'Unknown error')+'</div>';}
+			h+='<div id="cookie-input-'+acct.name+'" class="cookie-panel" style="display:none">';
+			h+='<input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value" style="width:100%%">';
+			h+='<input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="Workspace ID (wrk_xxx or leave empty for auto)" style="width:100%%">';
+			h+='<button class="btn btn-sm" onclick="saveAccountConfig(\''+acct.name+'\')">Save & Fetch</button>';
+			h+='</div>';
+			if(acct.windows&&acct.windows.length>0){
+				h+='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">';
+				for(const w of acct.windows){
+					var pct=w.remaining;var color=pct>50?'var(--success)':(pct>20?'var(--warning)':'var(--danger)');
+					h+='<div class="card"><div class="card-label">'+w.label+'</div>';
+					h+='<div class="card-value" style="color:'+color+';font-size:1.3rem">'+w.remaining.toFixed(1)+'%%'+'</div>';
+					h+='<div class="progress-ring" style="margin-top:8px"><div class="progress-track"><div class="progress-fill" style="width:'+pct+'%%;background:'+color+'"></div></div></div>';
+					h+='<div class="card-sub">'+w.used.toFixed(1)+'%% used &middot; resets in '+formatDuration(w.reset_in_sec)+'</div></div>';
 				}
-				html += '</select>';
-			} else {
-				html += '<div style="font-size:0.7rem;color:var(--text-secondary)">Workspace: ' + (acct.workspace_id || 'auto') + '</div>';
+				h+='</div>';
 			}
-			html += '</div>';
-			html += '<div style="display:flex;gap:6px;align-items:center">';
-			html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="refreshQuotaAccount(\'' + acct.name + '\')">Refresh</button>';
-			html += '<div style="font-size:0.75rem;color:var(--text-secondary);cursor:pointer" onclick="toggleCookieInput(\'' + acct.name + '\')">Set Cookie</div>';
-			html += '<button class="theme-toggle" style="font-size:0.7rem;padding:2px 6px;color:var(--danger)" onclick="removeQuotaAccount(\'' + acct.name + '\')">X</button>';
-			html += '</div></div>';
-
-			if (!acct.success) {
-				html += '<div style="color:var(--danger);font-size:0.85rem;margin-bottom:8px">' + (acct.error || 'Unknown error') + '</div>';
-			}
-
-			html += '<div id="cookie-input-' + acct.name + '" style="display:none;margin-bottom:12px">';
-			html += '<input type="text" id="cookie-val-' + acct.name + '" placeholder="Paste auth cookie value here" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;margin-bottom:6px">';
-			html += '<input type="text" id="ws-val-' + acct.name + '" placeholder="Workspace ID (wrk_xxx or auto)" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;margin-bottom:6px">';
-			html += '<button class="theme-toggle" style="font-size:0.75rem;padding:3px 8px" onclick="saveAccountConfig(\'' + acct.name + '\')">Save</button>';
-			html += '</div>';
-
-			if (acct.windows && acct.windows.length > 0) {
-				html += '<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">';
-				for (const w of acct.windows) {
-					var pct = w.remaining;
-					var color = pct > 50 ? 'var(--success)' : (pct > 20 ? 'var(--warning)' : 'var(--danger)');
-					html += '<div class="card"><div class="card-label">' + w.label + '</div>';
-					html += '<div class="card-value" style="color:' + color + ';font-size:1.2rem">' + w.remaining.toFixed(1) + w.unit + '</div>';
-					html += '<div class="card-sub">' + w.used.toFixed(1) + '%% used</div></div>';
-				}
-				html += '</div>';
-			}
-			if (acct.updated_at) {
-				html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-top:8px">Updated: ' + new Date(acct.updated_at).toLocaleString() + '</div>';
-			}
-			html += '</div>';
+			if(acct.updated_at){h+='<div class="timestamp">Updated '+new Date(acct.updated_at).toLocaleString()+'</div>';}
+			h+='</div>';
 		}
-		document.getElementById('quotaList').innerHTML = html;
-	} catch(e) {
-		document.getElementById('quotaList').innerHTML = '<div class="empty">Quota API not available</div>';
-	}
+		document.getElementById('quotaList').innerHTML=h;
+	}catch(e){document.getElementById('quotaList').innerHTML='<div class="empty">Quota API not available</div>';}
 }
 
-async function addQuotaAccount() {
-	var name = document.getElementById('quota-acct-name').value.trim();
-	var cookie = document.getElementById('quota-acct-cookie').value.trim();
-	if (!name) return;
-	await fetch(API_BASE + '/opencode-quota?action=addaccount&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie));
+function toggleCookieInput(name){var el=document.getElementById('cookie-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
+async function saveAccountConfig(name){
+	var cookie=document.getElementById('cookie-val-'+name).value;
+	var ws=document.getElementById('ws-val-'+name).value;
+	var p='action=setcookie&account='+encodeURIComponent(name)+'&cookie='+encodeURIComponent(cookie);
+	if(ws)p+='&workspace='+encodeURIComponent(ws);
+	await fetch(API_BASE+'/opencode-quota?'+p);await renderQuota();
+}
+async function addQuotaAccount(){
+	var name=document.getElementById('quota-acct-name').value.trim();
+	var cookie=document.getElementById('quota-acct-cookie').value.trim();
+	if(!name)return;
+	await fetch(API_BASE+'/opencode-quota?action=addaccount&account='+encodeURIComponent(name)+'&cookie='+encodeURIComponent(cookie));
 	await renderQuota();
 }
+async function removeQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
+async function refreshQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
+async function switchWorkspace(name,wsId){await fetch(API_BASE+'/opencode-quota?action=setworkspace&account='+encodeURIComponent(name)+'&workspace='+encodeURIComponent(wsId));await renderQuota();}
 
-async function removeQuotaAccount(name) {
-	await fetch(API_BASE + '/opencode-quota?action=removeaccount&account=' + encodeURIComponent(name));
-	await renderQuota();
+async function refreshAll(){
+	try{
+		const summary=await fetchJSON('/summary');
+		renderCards(summary);
+		await renderModels();
+		if(document.getElementById('panel-events').classList.contains('active'))await renderEvents();
+		if(document.getElementById('panel-pricing').classList.contains('active'))await renderPricing();
+		if(document.getElementById('panel-health').classList.contains('active'))await renderHealth();
+		if(document.getElementById('panel-quota').classList.contains('active'))await renderQuota();
+	}catch(e){console.error('refresh failed',e);}
 }
 
-function toggleCookieInput(name) {
-	var el = document.getElementById('cookie-input-' + name);
-	el.style.display = el.style.display === 'none' ? 'block' : 'none';
+let refreshTimer=null;
+let refreshIntervalMs=%d;
+function setRefreshInterval(seconds){
+	refreshIntervalMs=parseInt(seconds)*1000;
+	if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
+	if(refreshIntervalMs>0){refreshTimer=setInterval(refreshAll,refreshIntervalMs);document.getElementById('refreshDot').classList.remove('paused');}
+	else{document.getElementById('refreshDot').classList.add('paused');}
 }
-
-async function saveAccountConfig(name) {
-	var cookie = document.getElementById('cookie-val-' + name).value;
-	var ws = document.getElementById('ws-val-' + name).value;
-	var params = 'action=setcookie&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie);
-	if (ws) params += '&workspace=' + encodeURIComponent(ws);
-	await fetch(API_BASE + '/opencode-quota?' + params);
-	await renderQuota();
-}
-
-async function refreshQuotaAccount(name) {
-	await fetch(API_BASE + '/opencode-quota?action=refresh&account=' + encodeURIComponent(name));
-	await renderQuota();
-}
-
-async function switchWorkspace(name, workspaceId) {
-	await fetch(API_BASE + '/opencode-quota?action=setworkspace&account=' + encodeURIComponent(name) + '&workspace=' + encodeURIComponent(workspaceId));
-	await renderQuota();
-}
-
-let refreshTimer = null;
-let refreshIntervalMs = %d;
-
-function setRefreshInterval(seconds) {
-    refreshIntervalMs = parseInt(seconds) * 1000;
-    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-    if (refreshIntervalMs > 0) {
-        refreshTimer = setInterval(refreshAll, refreshIntervalMs);
-        document.getElementById('refreshDot').classList.remove('paused');
-    } else {
-        document.getElementById('refreshDot').classList.add('paused');
-    }
-}
-
-// Listen for tab switches to also refresh events on demand
-const origSwitchTab = switchTab;
-switchTab = function(name) {
-	origSwitchTab(name);
-	updateThemeIcon();
-	if (name === 'events') renderEvents();
-	if (name === 'pricing') renderPricing();
-	if (name === 'health') renderHealth();
-	if (name === 'quota') renderQuota();
-};
-
-document.getElementById('refreshSelect').value = '%d';
+const origSwitchTab=switchTab;
+switchTab=function(name){origSwitchTab(name);updateThemeIcon();if(name==='events')renderEvents();if(name==='pricing')renderPricing();if(name==='health')renderHealth();if(name==='quota')renderQuota();};
+document.getElementById('refreshSelect').value='%d';
 setRefreshInterval(%d);
-
 refreshAll();
 </script>
 </body>
