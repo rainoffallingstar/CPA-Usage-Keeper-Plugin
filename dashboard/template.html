@@ -310,16 +310,43 @@ async function renderPricing() {
 	const data = await fetchJSON('/prices');
 	const prices = data.prices || {};
 	const entries = Object.entries(prices);
+	var html = '';
+	// Add form
+	html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">';
+	html += '<input type="text" id="pricing-model" placeholder="model name" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:160px">';
+	html += '<input type="number" id="pricing-prompt" placeholder="prompt" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
+	html += '<input type="number" id="pricing-completion" placeholder="compl" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
+	html += '<input type="number" id="pricing-cache" placeholder="cache" step="0.01" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:80px">';
+	html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="addPrice()">Add</button>';
+	html += '</div>';
+
 	if (entries.length === 0) {
-		document.getElementById('pricingTable').innerHTML = '<div class="empty">No pricing configured. Use PUT /prices via management API.</div>';
-		return;
+		html += '<div class="empty">No pricing yet. Add your first pricing rule above.</div>';
+	} else {
+		html += '<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th><th></th></tr></thead><tbody>';
+		for (const [model, price] of entries) {
+			html += '<tr><td>' + model + '</td><td>' + (price.prompt || 0).toFixed(2) + '</td><td>' + (price.completion || 0).toFixed(2) + '</td><td>' + (price.cache || 0).toFixed(2) + '</td>';
+			html += '<td><button class="theme-toggle" style="font-size:0.7rem;padding:2px 6px;color:var(--danger)" onclick="deletePrice(\'' + model + '\')">X</button></td></tr>';
+		}
+		html += '</tbody></table>';
 	}
-	let html = '<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th></tr></thead><tbody>';
-	for (const [model, price] of entries) {
-		html += '<tr><td>' + model + '</td><td>' + (price.prompt || 0).toFixed(4) + '</td><td>' + (price.completion || 0).toFixed(4) + '</td><td>' + (price.cache || 0).toFixed(4) + '</td></tr>';
-	}
-	html += '</tbody></table>';
 	document.getElementById('pricingTable').innerHTML = html;
+}
+
+async function addPrice() {
+	var model = document.getElementById('pricing-model').value.trim();
+	var prompt = parseFloat(document.getElementById('pricing-prompt').value) || 0;
+	var completion = parseFloat(document.getElementById('pricing-completion').value) || 0;
+	var cache = parseFloat(document.getElementById('pricing-cache').value) || 0;
+	if (!model) return;
+	var url = API_BASE + '/prices?action=set&model=' + encodeURIComponent(model) + '&prompt=' + prompt + '&completion=' + completion + '&cache=' + cache;
+	await fetch(url);
+	await renderPricing();
+}
+
+async function deletePrice(model) {
+	await fetch(API_BASE + '/prices?action=delete&model=' + encodeURIComponent(model));
+	await renderPricing();
 }
 
 async function renderHealth() {
@@ -357,11 +384,18 @@ async function renderQuota() {
 	try {
 		const data = await fetchJSON('/opencode-quota');
 		const accounts = data.accounts || [];
-		if (accounts.length === 0) {
-			document.getElementById('quotaList').innerHTML = '<div class="empty">No OpenCode Go accounts configured. Add opencode_go_accounts in config.yaml.</div>';
-			return;
-		}
 		let html = '';
+		// Add account form at the top
+		html += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:16px;flex-wrap:wrap">';
+		html += '<input type="text" id="quota-acct-name" placeholder="Account name" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:140px">';
+		html += '<input type="text" id="quota-acct-cookie" placeholder="auth cookie (optional)" style="padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;width:200px">';
+		html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="addQuotaAccount()">Add Account</button>';
+		html += '</div>';
+
+		if (accounts.length === 0) {
+			html += '<div class="empty">No accounts yet. Add one above to monitor OpenCode Go quota.</div>';
+		}
+
 		for (const acct of accounts) {
 			html += '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--surface)">';
 			html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
@@ -369,6 +403,7 @@ async function renderQuota() {
 			html += '<div style="display:flex;gap:6px;align-items:center">';
 			html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="refreshQuotaAccount(\'' + acct.name + '\')">Refresh</button>';
 			html += '<div style="font-size:0.75rem;color:var(--text-secondary);cursor:pointer" onclick="toggleCookieInput(\'' + acct.name + '\')">Set Cookie</div>';
+			html += '<button class="theme-toggle" style="font-size:0.7rem;padding:2px 6px;color:var(--danger)" onclick="removeQuotaAccount(\'' + acct.name + '\')">X</button>';
 			html += '</div></div>';
 
 			if (!acct.success) {
@@ -402,6 +437,19 @@ async function renderQuota() {
 	}
 }
 
+async function addQuotaAccount() {
+	var name = document.getElementById('quota-acct-name').value.trim();
+	var cookie = document.getElementById('quota-acct-cookie').value.trim();
+	if (!name) return;
+	await fetch(API_BASE + '/opencode-quota?action=addaccount&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie));
+	await renderQuota();
+}
+
+async function removeQuotaAccount(name) {
+	await fetch(API_BASE + '/opencode-quota?action=removeaccount&account=' + encodeURIComponent(name));
+	await renderQuota();
+}
+
 function toggleCookieInput(name) {
 	var el = document.getElementById('cookie-input-' + name);
 	el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -409,20 +457,12 @@ function toggleCookieInput(name) {
 
 async function setCookie(name) {
 	var val = document.getElementById('cookie-val-' + name).value;
-	await fetch(API_BASE + '/opencode-quota', {
-		method: 'POST',
-		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify({action: 'setcookie', account: name, cookie: val})
-	});
+	await fetch(API_BASE + '/opencode-quota?action=setcookie&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(val));
 	await renderQuota();
 }
 
 async function refreshQuotaAccount(name) {
-	await fetch(API_BASE + '/opencode-quota', {
-		method: 'POST',
-		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify({action: 'refresh', account: name})
-	});
+	await fetch(API_BASE + '/opencode-quota?action=refresh&account=' + encodeURIComponent(name));
 	await renderQuota();
 }
 

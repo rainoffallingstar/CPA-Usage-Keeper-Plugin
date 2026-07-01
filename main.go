@@ -589,6 +589,7 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodGet, Path: "/usage-keeper/prices"},
 			{Method: http.MethodPut, Path: "/usage-keeper/prices"},
 			{Method: http.MethodDelete, Path: "/usage-keeper/prices"},
+			{Method: http.MethodPost, Path: "/usage-keeper/prices"},
 			{Method: http.MethodGet, Path: "/usage-keeper/export"},
 			{Method: http.MethodPost, Path: "/usage-keeper/export-jobs"},
 			{Method: http.MethodGet, Path: "/usage-keeper/export-jobs"},
@@ -674,11 +675,13 @@ func handleManagement(raw []byte) ([]byte, error) {
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
 		return okEnvelope(handleHealthCheck())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices"):
-		return okEnvelope(handleGetPrices())
+		return okEnvelope(handleGetPricesWithActions(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPut) && strings.HasSuffix(path, "/prices"):
 		return okEnvelope(handlePutPrice(req.Body))
 	case strings.EqualFold(req.Method, http.MethodDelete) && strings.HasSuffix(path, "/prices"):
 		return okEnvelope(handleDeletePrice(req.Query))
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/prices"):
+		return okEnvelope(handlePricesPost(req.Body))
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/export"):
 		return okEnvelope(handleExportUsage())
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/export-jobs"):
@@ -692,7 +695,7 @@ func handleManagement(raw []byte) ([]byte, error) {
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/import"):
 		return okEnvelope(handleImportUsage(req.Body))
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/opencode-quota"):
-		return okEnvelope(handleOpenCodeQuotaGet())
+		return okEnvelope(handleOpenCodeQuotaGet(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/opencode-quota"):
 		return okEnvelope(handleOpenCodeQuotaPost(req.Body))
 	default:

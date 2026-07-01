@@ -15,12 +15,14 @@ import (
 
 const (
 	opencodeDashboardBase = "https://opencode.ai/workspace"
+	opencodeServerID      = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f"
 	quotaUserAgent        = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0"
 	quotaHTTPTimeout      = 10 * time.Second
 	maxQuotaHTMLBytes     = 4 << 20 // 4 MB
 )
 
 var (
+	reWorkspaceEntry = regexp.MustCompile(`id\s*:\s*"(wrk_[^"]+)"[^{}]*?name\s*:\s*"([^"]*)"`)
 	reRollingPct  = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
 	reRollingRst  = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
 	reWeeklyPct   = regexp.MustCompile(`weeklyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
@@ -170,15 +172,65 @@ func clampPercent(v float64) float64 {
 	return v
 }
 
+func resolveWorkspaceID(cookie string) (string, error) {
+	c := buildCookieHeader(cookie)
+	if c == "" {
+		return "", fmt.Errorf("auth cookie is empty")
+	}
+	url := fmt.Sprintf("https://opencode.ai/_server?id=%s", opencodeServerID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Cookie", c)
+	req.Header.Set("X-Server-Id", opencodeServerID)
+	req.Header.Set("X-Server-Instance", fmt.Sprintf("server-fn:%d", time.Now().UnixNano()))
+	req.Header.Set("User-Agent", quotaUserAgent)
+	req.Header.Set("Origin", "https://opencode.ai")
+	req.Header.Set("Referer", "https://opencode.ai")
+	req.Header.Set("Accept", "text/javascript, application/json;q=0.9, */*;q=0.8")
+
+	resp, err := opencodeHTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("workspace query failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return "", fmt.Errorf("auth cookie expired or invalid (HTTP %d)", resp.StatusCode)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("workspace query returned HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxQuotaHTMLBytes))
+	if err != nil {
+		return "", fmt.Errorf("read workspace response failed: %w", err)
+	}
+
+	matches := reWorkspaceEntry.FindAllStringSubmatch(string(body), -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no workspace found for this account")
+	}
+	// return the first workspace ID
+	return matches[0][1], nil
+}
+
 func fetchAndParseQuota(cookie string) ([]quotaWindow, error) {
 	c := buildCookieHeader(cookie)
 	if c == "" {
 		return nil, fmt.Errorf("auth cookie is empty")
 	}
 
-	// Build workspace dashboard URL (using Default workspace)
-	url := opencodeDashboardBase + "/Default/go"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	// Resolve the actual workspace ID (wrk_xxx)
+	workspaceID, err := resolveWorkspaceID(cookie)
+	if err != nil {
+		return nil, fmt.Errorf("workspace resolution failed: %w", err)
+	}
+
+	// Fetch dashboard using resolved workspace ID
+	dashboardURL := fmt.Sprintf("%s/%s/go", opencodeDashboardBase, workspaceID)
+	req, err := http.NewRequest(http.MethodGet, dashboardURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +248,7 @@ func fetchAndParseQuota(cookie string) ([]quotaWindow, error) {
 		return nil, fmt.Errorf("auth cookie expired or invalid (HTTP %d)", resp.StatusCode)
 	}
 	if resp.StatusCode == 302 || resp.StatusCode == 301 {
-		return nil, fmt.Errorf("dashboard redirected (HTTP %d) - cookie may be expired", resp.StatusCode)
+		return nil, fmt.Errorf("dashboard redirected (HTTP %d) - workspace ID may be wrong", resp.StatusCode)
 	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("dashboard returned HTTP %d", resp.StatusCode)
@@ -284,7 +336,68 @@ func refreshAllQuotas() {
 // Handlers
 // ---------------------------------------------------------------------------
 
-func handleOpenCodeQuotaGet() pluginapi.ManagementResponse {
+func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementResponse {
+	// Check for query-param actions (for dashboard resource API which is GET-only)
+	if action, ok := getQueryParam(query, "action"); ok && action != "" {
+		acctName, _ := getQueryParam(query, "account")
+		cookie, _ := getQueryParam(query, "cookie")
+		action = strings.ToLower(strings.TrimSpace(action))
+		acctName = strings.TrimSpace(acctName)
+
+		if action == "addaccount" {
+			if acctName == "" {
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "account name is required"})
+			}
+			opencodeAcctMu.Lock()
+			for _, a := range opencodeAccounts {
+				if a.Name == acctName {
+					opencodeAcctMu.Unlock()
+					return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
+				}
+			}
+			r := &opencodeAccountRuntime{
+				Name: acctName, Cookie: strings.TrimSpace(cookie),
+				Cache: quotaAccount{Name: acctName, Success: false, Windows: []quotaWindow{}, Error: "not fetched yet"},
+			}
+			opencodeAccounts = append(opencodeAccounts, r)
+			opencodeAcctMu.Unlock()
+			if cookie != "" {
+				refreshSingleQuota(r)
+			}
+		} else if action == "removeaccount" || action == "setcookie" || action == "refresh" {
+			if acctName == "" {
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "account name is required"})
+			}
+			opencodeAcctMu.RLock()
+			var target *opencodeAccountRuntime
+			for _, a := range opencodeAccounts {
+				if a.Name == acctName { target = a; break }
+			}
+			opencodeAcctMu.RUnlock()
+			if target == nil {
+				return jsonResponse(http.StatusNotFound, map[string]string{"error": "account not found"})
+			}
+			switch action {
+			case "removeaccount":
+				opencodeAcctMu.Lock()
+				for i, a := range opencodeAccounts {
+					if a.Name == acctName { opencodeAccounts = append(opencodeAccounts[:i], opencodeAccounts[i+1:]...); break }
+				}
+				opencodeAcctMu.Unlock()
+			case "setcookie":
+				c := strings.TrimSpace(cookie)
+				if c == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"}) }
+				target.Cookie = c
+				refreshSingleQuota(target)
+			case "refresh":
+				if target.Cookie == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"}) }
+				refreshSingleQuota(target)
+			}
+		} else {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
+		}
+	}
+
 	opencodeAcctMu.RLock()
 	accounts := make([]quotaAccount, len(opencodeAccounts))
 	for i, a := range opencodeAccounts {
@@ -297,6 +410,13 @@ func handleOpenCodeQuotaGet() pluginapi.ManagementResponse {
 	return jsonResponse(http.StatusOK, quotaResponse{Accounts: accounts})
 }
 
+func getQueryParam(query map[string][]string, key string) (string, bool) {
+	if v, ok := query[key]; ok && len(v) > 0 {
+		return v[0], true
+	}
+	return "", false
+}
+
 func handleOpenCodeQuotaPost(body []byte) pluginapi.ManagementResponse {
 	var req struct {
 		Action  string `json:"action"`
@@ -307,6 +427,40 @@ func handleOpenCodeQuotaPost(body []byte) pluginapi.ManagementResponse {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 	}
 	acctName := strings.TrimSpace(req.Account)
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+
+	// addaccount does not need an existing target
+	if action == "addaccount" {
+		cookie := strings.TrimSpace(req.Cookie)
+		if acctName == "" {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "account name is required"})
+		}
+		opencodeAcctMu.Lock()
+		// check duplicate
+		for _, a := range opencodeAccounts {
+			if a.Name == acctName {
+				opencodeAcctMu.Unlock()
+				return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
+			}
+		}
+		r := &opencodeAccountRuntime{
+			Name:   acctName,
+			Cookie: cookie,
+			Cache: quotaAccount{
+				Name:    acctName,
+				Success: false,
+				Windows: []quotaWindow{},
+				Error:   "not fetched yet",
+			},
+		}
+		opencodeAccounts = append(opencodeAccounts, r)
+		opencodeAcctMu.Unlock()
+		if cookie != "" {
+			refreshSingleQuota(r)
+		}
+		return handleOpenCodeQuotaGet(nil)
+	}
+
 	if acctName == "" {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "account name is required"})
 	}
@@ -325,7 +479,17 @@ func handleOpenCodeQuotaPost(body []byte) pluginapi.ManagementResponse {
 		return jsonResponse(http.StatusNotFound, map[string]string{"error": "account not found"})
 	}
 
-	switch strings.ToLower(req.Action) {
+	switch strings.ToLower(action) {
+	case "removeaccount":
+		opencodeAcctMu.Lock()
+		for i, a := range opencodeAccounts {
+			if a.Name == acctName {
+				opencodeAccounts = append(opencodeAccounts[:i], opencodeAccounts[i+1:]...)
+				break
+			}
+		}
+		opencodeAcctMu.Unlock()
+		return handleOpenCodeQuotaGet(nil)
 	case "setcookie":
 		cookie := strings.TrimSpace(req.Cookie)
 		if cookie == "" {
@@ -333,14 +497,14 @@ func handleOpenCodeQuotaPost(body []byte) pluginapi.ManagementResponse {
 		}
 		target.Cookie = cookie
 		refreshSingleQuota(target)
-		return handleOpenCodeQuotaGet()
+		return handleOpenCodeQuotaGet(nil)
 	case "refresh":
 		if target.Cookie == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured for this account"})
 		}
 		refreshSingleQuota(target)
-		return handleOpenCodeQuotaGet()
+		return handleOpenCodeQuotaGet(nil)
 	default:
-		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'setcookie' or 'refresh'"})
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'setcookie', 'refresh', 'addaccount', or 'removeaccount'"})
 	}
 }

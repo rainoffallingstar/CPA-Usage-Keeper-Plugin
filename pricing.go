@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -66,6 +67,81 @@ func handleDeletePrice(query map[string][]string) pluginapi.ManagementResponse {
 	pricesMu.Lock()
 	delete(pricesStore, model)
 	pricesMu.Unlock()
+	return handleGetPrices()
+}
+
+func handleGetPricesWithActions(query map[string][]string) pluginapi.ManagementResponse {
+	action := ""
+	if v, ok := query["action"]; ok && len(v) > 0 {
+		action = strings.ToLower(strings.TrimSpace(v[0]))
+	}
+	model := ""
+	if v, ok := query["model"]; ok && len(v) > 0 {
+		model = strings.TrimSpace(v[0])
+	}
+
+	switch action {
+	case "set":
+		if model == "" {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "model is required"})
+		}
+		pr := modelPrice{}
+		if v, ok := query["prompt"]; ok && len(v) > 0 {
+			fmt.Sscanf(strings.TrimSpace(v[0]), "%f", &pr.Prompt)
+		}
+		if v, ok := query["completion"]; ok && len(v) > 0 {
+			fmt.Sscanf(strings.TrimSpace(v[0]), "%f", &pr.Completion)
+		}
+		if v, ok := query["cache"]; ok && len(v) > 0 {
+			fmt.Sscanf(strings.TrimSpace(v[0]), "%f", &pr.Cache)
+		}
+		if pr.Prompt == 0 && pr.Completion == 0 && pr.Cache == 0 {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "at least one price field is required"})
+		}
+		pricesMu.Lock()
+		pricesStore[model] = pr
+		pricesMu.Unlock()
+	case "delete":
+		if model == "" {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "model is required"})
+		}
+		pricesMu.Lock()
+		delete(pricesStore, model)
+		pricesMu.Unlock()
+	}
+
+	return handleGetPrices()
+}
+
+func handlePricesPost(body []byte) pluginapi.ManagementResponse {
+	var req struct {
+		Action string     `json:"action"`
+		Model  string     `json:"model"`
+		Price  modelPrice `json:"price"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "model is required"})
+	}
+	switch action {
+	case "set", "":
+		if req.Price.Prompt == 0 && req.Price.Completion == 0 && req.Price.Cache == 0 {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "at least one price field is required"})
+		}
+		pricesMu.Lock()
+		pricesStore[model] = req.Price
+		pricesMu.Unlock()
+	case "delete":
+		pricesMu.Lock()
+		delete(pricesStore, model)
+		pricesMu.Unlock()
+	default:
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'set' or 'delete'"})
+	}
 	return handleGetPrices()
 }
 
