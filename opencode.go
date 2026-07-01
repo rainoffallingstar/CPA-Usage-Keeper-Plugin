@@ -33,10 +33,11 @@ var (
 
 // runtime per-account state
 type opencodeAccountRuntime struct {
-	Name      string
-	Cookie    string
-	Cache     quotaAccount
-	CacheMu   sync.RWMutex
+	Name        string
+	Cookie      string
+	WorkspaceID string
+	Cache       quotaAccount
+	CacheMu     sync.RWMutex
 }
 
 var (
@@ -212,16 +213,25 @@ func resolveWorkspaceID(cookie string) (string, error) {
 	return matches[0][1], nil
 }
 
-func fetchAndParseQuota(cookie string) ([]quotaWindow, error) {
+func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
 	c := buildCookieHeader(cookie)
 	if c == "" {
 		return nil, fmt.Errorf("auth cookie is empty")
 	}
 
-	// Resolve the actual workspace ID (wrk_xxx)
-	workspaceID, err := resolveWorkspaceID(cookie)
-	if err != nil {
-		return nil, fmt.Errorf("workspace resolution failed: %w", err)
+	// Resolve the actual workspace ID if none provided
+	if workspaceID == "" {
+		resolved, err := resolveWorkspaceID(cookie)
+		if err != nil {
+			return nil, fmt.Errorf("workspace resolution failed: %w", err)
+		}
+		workspaceID = resolved
+	} else if !strings.HasPrefix(workspaceID, "wrk_") {
+		// If a name like "Default" was given, resolve it
+		resolved, err := resolveWorkspaceID(cookie)
+		if err == nil {
+			workspaceID = resolved
+		}
 	}
 
 	// Fetch dashboard using resolved workspace ID
@@ -293,7 +303,7 @@ func fetchAndParseQuota(cookie string) ([]quotaWindow, error) {
 // ---------------------------------------------------------------------------
 
 func refreshSingleQuota(acct *opencodeAccountRuntime) {
-	windows, err := fetchAndParseQuota(acct.Cookie)
+	windows, err := fetchAndParseQuota(acct.Cookie, acct.WorkspaceID)
 	acct.CacheMu.Lock()
 	defer acct.CacheMu.Unlock()
 	acct.Cache.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -337,6 +347,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 	if action, ok := getQueryParam(query, "action"); ok && action != "" {
 		acctName, _ := getQueryParam(query, "account")
 		cookie, _ := getQueryParam(query, "cookie")
+		workspace, _ := getQueryParam(query, "workspace")
 		action = strings.ToLower(strings.TrimSpace(action))
 		acctName = strings.TrimSpace(acctName)
 
@@ -384,6 +395,9 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 				c := strings.TrimSpace(cookie)
 				if c == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"}) }
 				target.Cookie = c
+				if workspace != "" {
+					target.WorkspaceID = workspace
+				}
 				refreshSingleQuota(target)
 			case "refresh":
 				if target.Cookie == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"}) }
@@ -401,6 +415,7 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 		accounts[i] = a.Cache
 		a.CacheMu.RUnlock()
 		accounts[i].Name = a.Name
+		accounts[i].WorkspaceID = a.WorkspaceID
 	}
 	opencodeAcctMu.RUnlock()
 	return jsonResponse(http.StatusOK, quotaResponse{Accounts: accounts})

@@ -399,7 +399,8 @@ async function renderQuota() {
 		for (const acct of accounts) {
 			html += '<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:var(--radius);padding:16px;background:var(--surface)">';
 			html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
-			html += '<h3 style="margin:0;font-size:1rem">' + acct.name + '</h3>';
+			html += '<div><h3 style="margin:0;font-size:1rem">' + acct.name + '</h3>';
+			html += '<div style="font-size:0.7rem;color:var(--text-secondary)">Workspace: ' + (acct.workspace_id || 'auto') + '</div></div>';
 			html += '<div style="display:flex;gap:6px;align-items:center">';
 			html += '<button class="theme-toggle" style="font-size:0.8rem;padding:4px 10px" onclick="refreshQuotaAccount(\'' + acct.name + '\')">Refresh</button>';
 			html += '<div style="font-size:0.75rem;color:var(--text-secondary);cursor:pointer" onclick="toggleCookieInput(\'' + acct.name + '\')">Set Cookie</div>';
@@ -411,8 +412,9 @@ async function renderQuota() {
 			}
 
 			html += '<div id="cookie-input-' + acct.name + '" style="display:none;margin-bottom:12px">';
-			html += '<input type="text" id="cookie-val-' + acct.name + '" placeholder="Paste auth cookie value here" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem">';
-			html += '<button class="theme-toggle" style="margin-top:6px;font-size:0.75rem;padding:3px 8px" onclick="setCookie(\'' + acct.name + '\')">Save</button>';
+			html += '<input type="text" id="cookie-val-' + acct.name + '" placeholder="Paste auth cookie value here" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;margin-bottom:6px">';
+			html += '<input type="text" id="ws-val-' + acct.name + '" placeholder="Workspace ID (wrk_xxx or auto)" style="width:100%%;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:0.8rem;margin-bottom:6px">';
+			html += '<button class="theme-toggle" style="font-size:0.75rem;padding:3px 8px" onclick="saveAccountConfig(\'' + acct.name + '\')">Save</button>';
 			html += '</div>';
 
 			if (acct.windows && acct.windows.length > 0) {
@@ -455,9 +457,12 @@ function toggleCookieInput(name) {
 	el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-async function setCookie(name) {
-	var val = document.getElementById('cookie-val-' + name).value;
-	await fetch(API_BASE + '/opencode-quota?action=setcookie&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(val));
+async function saveAccountConfig(name) {
+	var cookie = document.getElementById('cookie-val-' + name).value;
+	var ws = document.getElementById('ws-val-' + name).value;
+	var params = 'action=setcookie&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie);
+	if (ws) params += '&workspace=' + encodeURIComponent(ws);
+	await fetch(API_BASE + '/opencode-quota?' + params);
 	await renderQuota();
 }
 
