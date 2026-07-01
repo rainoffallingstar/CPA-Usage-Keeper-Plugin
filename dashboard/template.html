@@ -123,6 +123,8 @@ tr:hover { background: rgba(88,166,255,0.04); }
 <div class="tabs">
 	<button class="tab active" onclick="switchTab('models')">By Model</button>
 	<button class="tab" onclick="switchTab('events')">All Events</button>
+	<button class="tab" onclick="switchTab('pricing')">Pricing</button>
+	<button class="tab" onclick="switchTab('health')">Health</button>
 </div>
 
 <div class="panel active" id="panel-models">
@@ -135,6 +137,13 @@ tr:hover { background: rgba(88,166,255,0.04); }
     <div id="modelTable"></div>
 </div>
 <div class="panel" id="panel-events"></div>
+<div class="panel" id="panel-pricing">
+    <div id="pricingTable"></div>
+</div>
+<div class="panel" id="panel-health">
+    <div id="healthCards" style="margin-bottom: 16px;"></div>
+    <div id="healthDetails"></div>
+</div>
 
 <script>
 (function() {
@@ -183,8 +192,7 @@ function formatMs(ms) {
 }
 
 function formatCost(cost) {
-	if (!cost || cost <= 0) return '\u2014';
-	return '$' + cost.toFixed(2);
+	return '$' + (cost || 0).toFixed(2);
 }
 
 function rangeValue() {
@@ -258,13 +266,14 @@ async function renderEvents() {
 		document.getElementById('panel-events').innerHTML = '<div class="empty">No events for this time range.</div>';
 		return;
 	}
-	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
 	for (const e of data.events) {
 		const timeStr = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '\u2014';
 		const statusBadge = e.failed
 			? '<span class="badge badge-danger">FAIL</span>'
 			: '<span class="badge badge-success">OK</span>';
 		html += '<tr><td>' + timeStr + '</td><td title="' + e.provider + '">' + e.model + '</td>' +
+			'<td title="auth: ' + e.auth_id + '">' + (e.executor_type || '\u2014') + '</td>' +
 			'<td>' + formatNum(e.total_tokens) + '</td><td>' + (e.cache_hit_rate || 0).toFixed(1) + '%%</td><td>' + formatMs(e.latency_ms) + '</td>' +
 			'<td>' + statusBadge + '</td></tr>';
 	}
@@ -281,6 +290,59 @@ async function refreshAll() {
 	await renderModels();
 	if (document.getElementById('panel-events').classList.contains('active')) {
 		await renderEvents();
+	}
+	if (document.getElementById('panel-pricing').classList.contains('active')) {
+		await renderPricing();
+	}
+	if (document.getElementById('panel-health').classList.contains('active')) {
+		await renderHealth();
+	}
+}
+
+async function renderPricing() {
+	const data = await fetchJSON('/prices');
+	const prices = data.prices || {};
+	const entries = Object.entries(prices);
+	if (entries.length === 0) {
+		document.getElementById('pricingTable').innerHTML = '<div class="empty">No pricing configured. Use PUT /prices via management API.</div>';
+		return;
+	}
+	let html = '<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th></tr></thead><tbody>';
+	for (const [model, price] of entries) {
+		html += '<tr><td>' + model + '</td><td>' + (price.prompt || 0).toFixed(4) + '</td><td>' + (price.completion || 0).toFixed(4) + '</td><td>' + (price.cache || 0).toFixed(4) + '</td></tr>';
+	}
+	html += '</tbody></table>';
+	document.getElementById('pricingTable').innerHTML = html;
+}
+
+async function renderHealth() {
+	try {
+		const data = await fetchJSON('/health');
+		var statusColor = data.status === 'ok' ? 'var(--success)' : (data.status === 'warn' ? 'var(--warning)' : 'var(--danger)');
+		var cardsHtml = '<div class="cards">' +
+			'<div class="card"><div class="card-label">Status</div><div class="card-value" style="color:' + statusColor + '">' + (data.status || 'unknown').toUpperCase() + '</div><div class="card-sub">uptime ' + formatMs(data.runtime.uptime_seconds * 1000) + '</div></div>' +
+			'<div class="card"><div class="card-label">Ring Buffer</div><div class="card-value">' + data.runtime.ring_buffer_used + '/' + data.runtime.ring_buffer_size + '</div><div class="card-sub">total requests ' + formatNum(data.runtime.total_requests) + '</div></div>' +
+			'<div class="card"><div class="card-label">Cache Hit Rate</div><div class="card-value">' + (data.runtime.summary_cache_hit_rate || 0).toFixed(1) + '%%' + '</div><div class="card-sub">events ' + (data.runtime.events_cache_hit_rate || 0).toFixed(1) + '%%' + '</div></div>' +
+			'<div class="card"><div class="card-label">Storage</div><div class="card-value">' + data.storage.status + '</div><div class="card-sub">' + formatNum(data.storage.db_file_size) + ' bytes</div></div>' +
+		'</div>';
+		document.getElementById('healthCards').innerHTML = cardsHtml;
+
+		var detailsHtml = '<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>' +
+			'<tr><td>Last Write Duration</td><td>' + formatMs(data.runtime.last_write_duration_ms) + '</td></tr>' +
+			'<tr><td>Storage Write Errors</td><td>' + data.runtime.storage_write_errors + '</td></tr>' +
+			'<tr><td>DB Path</td><td style="font-size:0.8rem;word-break:break-all">' + data.storage.db_path + '</td></tr>' +
+			'<tr><td>WAL File Size</td><td>' + formatNum(data.storage.wal_file_size) + ' bytes</td></tr>';
+		if (data.alerts && data.alerts.length > 0) {
+			detailsHtml += '<tr><td colspan="2" style="padding-top:12px;font-weight:600">Alerts</td></tr>';
+			for (const a of data.alerts) {
+				var sevColor = a.severity === 'error' ? 'var(--danger)' : 'var(--warning)';
+				detailsHtml += '<tr><td><span class="badge" style="color:' + sevColor + '">' + a.severity.toUpperCase() + '</span> ' + a.code + '</td><td>' + a.message + '</td></tr>';
+			}
+		}
+		detailsHtml += '</tbody></table>';
+		document.getElementById('healthDetails').innerHTML = detailsHtml;
+	} catch(e) {
+		document.getElementById('healthCards').innerHTML = '<div class="empty">Health endpoint not available</div>';
 	}
 }
 
@@ -304,6 +366,8 @@ switchTab = function(name) {
 	origSwitchTab(name);
 	updateThemeIcon();
 	if (name === 'events') renderEvents();
+	if (name === 'pricing') renderPricing();
+	if (name === 'health') renderHealth();
 };
 
 document.getElementById('refreshSelect').value = '%d';

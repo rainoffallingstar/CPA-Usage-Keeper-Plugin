@@ -28,6 +28,8 @@ const (
 	resourceAPIEventsPath      = "/v0/resource/plugins/usage-keeper/api/events"
 	managementUsageCompatPath  = "/v0/management/usage"
 	resourceAPIUsagePath       = "/v0/resource/plugins/usage-keeper/api/usage"
+	resourceAPIHealthPath      = "/v0/resource/plugins/usage-keeper/api/health"
+	resourceAPIPricesPath      = "/v0/resource/plugins/usage-keeper/api/prices"
 )
 
 var pluginVersion = "0.2.0"

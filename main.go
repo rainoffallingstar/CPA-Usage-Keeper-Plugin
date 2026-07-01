@@ -586,6 +586,10 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodPut, Path: "/usage-keeper/prices"},
 			{Method: http.MethodDelete, Path: "/usage-keeper/prices"},
 			{Method: http.MethodGet, Path: "/usage-keeper/export"},
+			{Method: http.MethodPost, Path: "/usage-keeper/export-jobs"},
+			{Method: http.MethodGet, Path: "/usage-keeper/export-jobs"},
+			{Method: http.MethodGet, Path: "/usage-keeper/export-download"},
+			{Method: http.MethodDelete, Path: "/usage-keeper/export-jobs"},
 			{Method: http.MethodPost, Path: "/usage-keeper/import"},
 		},
 		Resources: []pluginapi.ResourceRoute{
@@ -613,6 +617,16 @@ func managementRegResponse() managementRegistrationResponse {
 				Path:        "/api/usage",
 				Menu:        "",
 				Description: "Quotio-compatible aggregate usage JSON API.",
+			},
+			{
+				Path:        "/api/health",
+				Menu:        "",
+				Description: "Health monitoring JSON API.",
+			},
+			{
+				Path:        "/api/prices",
+				Menu:        "",
+				Description: "Model pricing JSON API.",
 			},
 		},
 	}
