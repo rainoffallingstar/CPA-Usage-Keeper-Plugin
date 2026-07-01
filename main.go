@@ -643,6 +643,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Description: "Model pricing JSON API.",
 			},
 			{
+				Path:        "/api/prices/sync",
+				Menu:        "",
+				Description: "Trigger model price sync from modelprice.boxtech.icu.",
+			},
+			{
 				Path:        "/api/opencode-quota",
 				Menu:        "",
 				Description: "OpenCode Go quota JSON API.",
