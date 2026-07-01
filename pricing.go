@@ -16,10 +16,13 @@ type modelPrice struct {
 	Prompt     float64 `json:"prompt"`
 	Completion float64 `json:"completion"`
 	Cache      float64 `json:"cache"`
+	AutoSynced bool    `json:"auto_synced"`
 }
 
 type pricesResponse struct {
-	Prices map[string]modelPrice `json:"prices"`
+	Prices    map[string]modelPrice `json:"prices"`
+	LastSync  string                `json:"last_sync,omitempty"`
+	SyncedAt  string                `json:"synced_at,omitempty"`
 }
 
 var pricesMu sync.RWMutex
@@ -225,10 +228,60 @@ func syncModelPrices() (int, error) {
 	return count, nil
 }
 
-func handlePriceSync() pluginapi.ManagementResponse {
+func handlePriceSyncImpl() pluginapi.ManagementResponse {
 	count, err := syncModelPrices()
 	if err != nil {
 		return jsonResponse(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return jsonResponse(http.StatusOK, map[string]any{"synced": count, "total": len(pricesStore)})
+}
+
+// ---------------------------------------------------------------------------
+// Background auto-sync from modelprice.boxtech.icu
+// ---------------------------------------------------------------------------
+
+var (
+	priceSyncOnce sync.Once
+	priceSyncStop chan struct{}
+	priceLastSync string
+	priceSyncMu   sync.Mutex
+)
+
+func initModelPriceSync() {
+	priceSyncOnce.Do(func() {
+		priceSyncStop = make(chan struct{})
+		go func() {
+			// Immediate first sync
+			go doPriceSync()
+			for {
+				select {
+				case <-priceSyncStop:
+					return
+				case <-time.After(6 * time.Hour):
+				}
+				go doPriceSync()
+			}
+		}()
+	})
+}
+
+func doPriceSync() {
+	count, err := syncModelPrices()
+	priceSyncMu.Lock()
+	if err != nil {
+		priceLastSync = "error: " + err.Error()
+	} else {
+		priceLastSync = time.Now().UTC().Format(time.RFC3339)
+	}
+	priceSyncMu.Unlock()
+	_ = count
+}
+
+func getPriceSyncStatus() string {
+	priceSyncMu.Lock()
+	defer priceSyncMu.Unlock()
+	if priceLastSync == "" {
+		return "pending"
+	}
+	return priceLastSync
 }

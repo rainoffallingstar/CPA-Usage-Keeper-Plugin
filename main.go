@@ -199,6 +199,7 @@ func configure(raw []byte) error {
 	}
 	activeConfig.Store(normalizeConfig(cfg))
 	initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
+	initModelPriceSync()
 	return nil
 }
 
@@ -681,7 +682,7 @@ func handleManagement(raw []byte) ([]byte, error) {
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
 		return okEnvelope(handleHealthCheck())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices/sync"):
-		return okEnvelope(handlePriceSync())
+		return okEnvelope(handlePriceSyncImpl())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/prices"):
 		return okEnvelope(handleGetPricesWithActions(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPut) && strings.HasSuffix(path, "/prices"):
