@@ -28,10 +28,60 @@ type pricesResponse struct {
 var pricesMu sync.RWMutex
 var pricesStore = make(map[string]modelPrice)
 
-func init() {
+// ---------------------------------------------------------------------------
+// DB persistence
+// ---------------------------------------------------------------------------
+
+func loadPricesFromDB() {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	rows, err := d.Query("SELECT model, prompt, completion, cache, auto_synced FROM model_prices")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
 	pricesMu.Lock()
-	defer pricesMu.Unlock()
-	pricesStore = make(map[string]modelPrice)
+	for rows.Next() {
+		var model string
+		var mp modelPrice
+		var as int
+		if rows.Scan(&model, &mp.Prompt, &mp.Completion, &mp.Cache, &as) == nil {
+			mp.AutoSynced = as != 0
+			pricesStore[model] = mp
+		}
+	}
+	pricesMu.Unlock()
+}
+
+func persistPrice(model string, mp modelPrice) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	as := 0
+	if mp.AutoSynced {
+		as = 1
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	d.Exec(`INSERT INTO model_prices (model, prompt, completion, cache, auto_synced, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(model) DO UPDATE SET prompt=excluded.prompt, completion=excluded.completion, cache=excluded.cache, auto_synced=excluded.auto_synced, updated_at=excluded.updated_at`,
+		model, mp.Prompt, mp.Completion, mp.Cache, as, now)
+}
+
+func deletePriceFromDB(model string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	d.Exec("DELETE FROM model_prices WHERE model = ?", model)
 }
 
 func handleGetPrices() pluginapi.ManagementResponse {
@@ -58,6 +108,7 @@ func handlePutPrice(body []byte) pluginapi.ManagementResponse {
 	pricesMu.Lock()
 	pricesStore[payload.Model] = payload.Price
 	pricesMu.Unlock()
+	persistPrice(payload.Model, payload.Price)
 	return handleGetPrices()
 }
 
@@ -72,6 +123,7 @@ func handleDeletePrice(query map[string][]string) pluginapi.ManagementResponse {
 	pricesMu.Lock()
 	delete(pricesStore, model)
 	pricesMu.Unlock()
+	deletePriceFromDB(model)
 	return handleGetPrices()
 }
 
@@ -106,6 +158,7 @@ func handleGetPricesWithActions(query map[string][]string) pluginapi.ManagementR
 		pricesMu.Lock()
 		pricesStore[model] = pr
 		pricesMu.Unlock()
+		persistPrice(model, pr)
 	case "delete":
 		if model == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "model is required"})
@@ -113,6 +166,7 @@ func handleGetPricesWithActions(query map[string][]string) pluginapi.ManagementR
 		pricesMu.Lock()
 		delete(pricesStore, model)
 		pricesMu.Unlock()
+		deletePriceFromDB(model)
 	}
 
 	return handleGetPrices()
@@ -140,10 +194,12 @@ func handlePricesPost(body []byte) pluginapi.ManagementResponse {
 		pricesMu.Lock()
 		pricesStore[model] = req.Price
 		pricesMu.Unlock()
+		persistPrice(model, req.Price)
 	case "delete":
 		pricesMu.Lock()
 		delete(pricesStore, model)
 		pricesMu.Unlock()
+		deletePriceFromDB(model)
 	default:
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'set' or 'delete'"})
 	}
@@ -152,7 +208,7 @@ func handlePricesPost(body []byte) pluginapi.ManagementResponse {
 
 func computeCost(model string, inputTokens, outputTokens, cachedTokens int64) float64 {
 	pricesMu.RLock()
-	price, ok := pricesStore[model]
+	price, ok := matchPrice(model)
 	pricesMu.RUnlock()
 	if !ok {
 		return 0
@@ -165,6 +221,52 @@ func computeCost(model string, inputTokens, outputTokens, cachedTokens int64) fl
 		input -= cached
 	}
 	return input/1e6*price.Prompt + float64(outputTokens)/1e6*price.Completion + cached/1e6*price.Cache
+}
+
+// matchPrice looks up a model name with fuzzy matching against pricesStore.
+func matchPrice(model string) (modelPrice, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return modelPrice{}, false
+	}
+	// Exact match first
+	if p, ok := pricesStore[model]; ok {
+		return p, true
+	}
+	// Try lowercase
+	lower := strings.ToLower(model)
+	if p, ok := pricesStore[lower]; ok {
+		return p, true
+	}
+	// Generate variants (dot↔dash, no dashes, no dots)
+	for _, v := range modelVariants(lower) {
+		if p, ok := pricesStore[v]; ok {
+			return p, true
+		}
+	}
+	// Try stripping common prefixes (openai/, anthropic/, etc.)
+	if idx := strings.Index(model, "/"); idx >= 0 {
+		return matchPrice(model[idx+1:])
+	}
+	return modelPrice{}, false
+}
+
+// modelVariants generates common spelling variations of a model name.
+func modelVariants(name string) []string {
+	var out []string
+	add := func(s string) { out = append(out, s) }
+	// dot↔dash interchange
+	if strings.Contains(name, ".") {
+		add(strings.ReplaceAll(name, ".", "-"))
+	}
+	if strings.Contains(name, "-") {
+		add(strings.ReplaceAll(name, "-", "."))
+	}
+	// remove all separators
+	add(strings.ReplaceAll(strings.ReplaceAll(name, "-", ""), ".", ""))
+	// insert possible missing dashes between number-letter boundaries
+	// e.g. "glm5.2" → "glm-5.2", "deepseekv4" → "deepseek-v4"
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -217,11 +319,18 @@ func syncModelPrices() (int, error) {
 		mp := modelPrice{
 			Prompt:     *e.Primary.Pricing.Input,
 			Completion: *e.Primary.Pricing.Output,
+			AutoSynced: true,
 		}
 		if e.Primary.Pricing.CacheRead != nil {
 			mp.Cache = *e.Primary.Pricing.CacheRead
 		}
 		pricesStore[e.Slug] = mp
+		// Add common spelling aliases (dot↔dash, no separators)
+		for _, alias := range modelVariants(e.Slug) {
+			if _, exists := pricesStore[alias]; !exists {
+				pricesStore[alias] = mp
+			}
+		}
 		count++
 	}
 	pricesMu.Unlock()

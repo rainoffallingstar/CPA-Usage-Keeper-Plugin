@@ -430,6 +430,17 @@ func createTables() error {
 		auth_cookie TEXT NOT NULL DEFAULT '',
 		workspace_id TEXT NOT NULL DEFAULT ''
 	)`)
+	// Create model prices table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS model_prices (
+		model TEXT PRIMARY KEY,
+		prompt REAL NOT NULL DEFAULT 0,
+		completion REAL NOT NULL DEFAULT 0,
+		cache REAL NOT NULL DEFAULT 0,
+		auto_synced INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT ''
+	)`)
+	// Load persisted prices into memory
+	loadPricesFromDB()
 	return err
 }
 
