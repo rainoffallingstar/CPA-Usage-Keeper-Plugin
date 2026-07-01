@@ -31,6 +31,7 @@ const (
 	resourceAPIHealthPath      = "/v0/resource/plugins/usage-keeper/api/health"
 	resourceAPIPricesPath      = "/v0/resource/plugins/usage-keeper/api/prices"
 	resourceAPIOpenCodeQuota   = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
+	resourceAPIGlmCodingQuota  = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
 )
 
 var pluginVersion = "0.2.0"
@@ -42,6 +43,7 @@ type pluginConfig struct {
 	RefreshSeconds      int                `yaml:"refresh_seconds"`
 	APIKeyHashSalt      string             `yaml:"api_key_hash_salt"`
 	OpenCodeGoAccounts  []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
+	GlmCodingAccounts   []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
 }
 
 func defaultConfig() pluginConfig {
@@ -149,6 +151,12 @@ type openCodeGoAcctCfg struct {
 	WorkspaceID string `yaml:"workspace_id"`
 }
 
+type glmCodingAcctCfg struct {
+	Name    string `yaml:"name"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+}
+
 type workspaceEntry struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -163,13 +171,20 @@ type quotaWindow struct {
 	ResetInSec int     `json:"reset_in_sec"`
 }
 
+type glmModelUsage struct {
+	Model  string `json:"model"`
+	Tokens int64  `json:"tokens"`
+}
+
 type quotaAccount struct {
+	Type        string           `json:"type"`
 	Name        string           `json:"name"`
 	WorkspaceID string           `json:"workspace_id"`
-	Workspaces  []workspaceEntry `json:"workspaces"`
+	Workspaces  []workspaceEntry `json:"workspaces,omitempty"`
 	Success     bool             `json:"success"`
 	UpdatedAt   string           `json:"updated_at"`
 	Windows     []quotaWindow    `json:"windows"`
+	ModelUsage  []glmModelUsage  `json:"model_usage,omitempty"`
 	Error       string           `json:"error,omitempty"`
 }
 

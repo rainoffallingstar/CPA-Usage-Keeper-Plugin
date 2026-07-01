@@ -336,35 +336,60 @@ async function renderHealth(){
 
 async function renderQuota(){
 	try{
-		const data=await fetchJSON('/opencode-quota');
-		const accounts=data.accounts||[];
+		const[ocData,glmData]=await Promise.all([
+			fetchJSON('/opencode-quota'),
+			fetchJSON('/glmcoding-quota')
+		]);
+		const accounts=[...(ocData.accounts||[]),...(glmData.accounts||[])];
 		let h='<div class="form-row">';
 		h+='<input class="input" type="text" id="quota-acct-name" placeholder="Account name" style="width:150px">';
 		h+='<input class="input" type="text" id="quota-acct-cookie" placeholder="auth cookie (optional)" style="width:240px">';
-		h+='<button class="btn btn-sm" onclick="addQuotaAccount()">+ Add Account</button>';
+		h+='<button class="btn btn-sm" onclick="addQuotaAccount()">+ OpenCode Go</button>';
 		h+='</div>';
-		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Add an account above to monitor OpenCode Go quota.</div>';}
+		h+='<div class="form-row">';
+		h+='<input class="input" type="text" id="glm-acct-name" placeholder="Account name" style="width:150px">';
+		h+='<input class="input" type="text" id="glm-acct-key" placeholder="API key" style="width:300px">';
+		h+='<input class="input" type="text" id="glm-acct-base" placeholder="Base URL (e.g. https://api.z.ai)" value="https://api.z.ai" style="width:240px">';
+		h+='<button class="btn btn-sm" onclick="addGlmAccount()">+ GLM Plan</button>';
+		h+='</div>';
+		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Use the forms above to add OpenCode Go or GLM Coding Plan accounts.</div>';}
 		for(const acct of accounts){
 			h+='<div class="quota-card">';
 			h+='<div class="quota-header"><div>';
-			h+='<h3>'+acct.name+'</h3>';
-			if(acct.workspaces&&acct.workspaces.length>0){
+			var typeBadge='';
+			if(acct.type==='glm_coding')typeBadge=' <span class="badge badge-success" style="font-size:0.65rem;vertical-align:middle">GLM</span>';
+			h+='<h3>'+acct.name+typeBadge+'</h3>';
+			if(acct.type!=='glm_coding'&&acct.workspaces&&acct.workspaces.length>0){
 				h+='<div class="quota-meta"><select onchange="switchWorkspace(\''+acct.name+'\',this.value)" class="refresh-select" style="margin-top:6px;font-size:0.75rem;padding:3px 6px">';
 				for(const ws of acct.workspaces){var sel=ws.id===acct.workspace_id?' selected':'';h+='<option value="'+ws.id+'"'+sel+'>'+ws.name+'</option>';}
 				h+='</select></div>';
-			}else{h+='<div class="quota-meta">Workspace: '+(acct.workspace_id||'auto-resolve')+'</div>';}
+			}else if(acct.type!=='glm_coding'){h+='<div class="quota-meta">Workspace: '+(acct.workspace_id||'auto-resolve')+'</div>';}
 			h+='</div>';
 			h+='<div class="quota-actions">';
-			h+='<button class="btn btn-sm" onclick="refreshQuotaAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
-			h+='<button class="btn btn-xs" onclick="toggleCookieInput(\''+acct.name+'\')">Set Cookie</button>';
-			h+='<button class="btn btn-xs btn-danger" onclick="removeQuotaAccount(\''+acct.name+'\')">&#10005;</button>';
+			if(acct.type==='glm_coding'){
+				h+='<button class="btn btn-sm" onclick="refreshGlmAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
+				h+='<button class="btn btn-xs" onclick="toggleGlmInput(\''+acct.name+'\')">Set Key</button>';
+				h+='<button class="btn btn-xs btn-danger" onclick="removeGlmAccount(\''+acct.name+'\')">&#10005;</button>';
+			}else{
+				h+='<button class="btn btn-sm" onclick="refreshQuotaAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
+				h+='<button class="btn btn-xs" onclick="toggleCookieInput(\''+acct.name+'\')">Set Cookie</button>';
+				h+='<button class="btn btn-xs btn-danger" onclick="removeQuotaAccount(\''+acct.name+'\')">&#10005;</button>';
+			}
 			h+='</div></div>';
 			if(!acct.success){h+='<div class="quota-error">'+(acct.error||'Unknown error')+'</div>';}
-			h+='<div id="cookie-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-			h+='<input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value" style="width:100%%">';
-			h+='<input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="Workspace ID (wrk_xxx or leave empty for auto)" style="width:100%%">';
-			h+='<button class="btn btn-sm" onclick="saveAccountConfig(\''+acct.name+'\')">Save & Fetch</button>';
-			h+='</div>';
+			if(acct.type==='glm_coding'){
+				h+='<div id="glm-input-'+acct.name+'" class="cookie-panel" style="display:none">';
+				h+='<input class="input" type="text" id="glm-key-'+acct.name+'" placeholder="API key" style="width:100%%;margin-bottom:6px">';
+				h+='<input class="input" type="text" id="glm-base-'+acct.name+'" placeholder="Base URL" style="width:100%%;margin-bottom:6px" value="https://api.z.ai">';
+				h+='<button class="btn btn-sm" onclick="saveGlmKey(\''+acct.name+'\')">Save & Fetch</button>';
+				h+='</div>';
+			}else{
+				h+='<div id="cookie-input-'+acct.name+'" class="cookie-panel" style="display:none">';
+				h+='<input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value" style="width:100%%;margin-bottom:6px">';
+				h+='<input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="Workspace ID (wrk_xxx or leave empty for auto)" style="width:100%%">';
+				h+='<button class="btn btn-sm" onclick="saveAccountConfig(\''+acct.name+'\')">Save & Fetch</button>';
+				h+='</div>';
+			}
 			if(acct.windows&&acct.windows.length>0){
 				h+='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">';
 				for(const w of acct.windows){
@@ -372,9 +397,15 @@ async function renderQuota(){
 					h+='<div class="card"><div class="card-label">'+w.label+'</div>';
 					h+='<div class="card-value" style="color:'+color+';font-size:1.3rem">'+w.remaining.toFixed(1)+'%%'+'</div>';
 					h+='<div class="progress-ring" style="margin-top:8px"><div class="progress-track"><div class="progress-fill" style="width:'+pct+'%%;background:'+color+'"></div></div></div>';
-					h+='<div class="card-sub">'+w.used.toFixed(1)+'%% used &middot; resets in '+formatDuration(w.reset_in_sec)+'</div></div>';
+					h+='<div class="card-sub">'+w.used.toFixed(1)+'%% used</div></div>';
 				}
 				h+='</div>';
+			}
+			if(acct.model_usage&&acct.model_usage.length>0){
+				h+='<div style="margin-top:12px;font-size:0.8rem;color:var(--text-secondary)">Models (24h): ';
+				var mu=[];
+				for(const m of acct.model_usage){mu.push(m.model+' '+formatNum(m.tokens));}
+				h+=mu.join(', ')+'</div>';
 			}
 			if(acct.updated_at){h+='<div class="timestamp">Updated '+new Date(acct.updated_at).toLocaleString()+'</div>';}
 			h+='</div>';
@@ -401,6 +432,25 @@ async function addQuotaAccount(){
 async function removeQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
 async function refreshQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
 async function switchWorkspace(name,wsId){await fetch(API_BASE+'/opencode-quota?action=setworkspace&account='+encodeURIComponent(name)+'&workspace='+encodeURIComponent(wsId));await renderQuota();}
+
+async function addGlmAccount(){
+	var name=document.getElementById('glm-acct-name').value.trim();
+	var key=document.getElementById('glm-acct-key').value.trim();
+	var base=document.getElementById('glm-acct-base').value.trim();
+	if(!name)return;
+	await fetch(API_BASE+'/glmcoding-quota?action=addaccount&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key)+'&base_url='+encodeURIComponent(base));
+	await renderQuota();
+}
+async function removeGlmAccount(name){await fetch(API_BASE+'/glmcoding-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
+async function refreshGlmAccount(name){await fetch(API_BASE+'/glmcoding-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
+
+function toggleGlmInput(name){var el=document.getElementById('glm-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
+async function saveGlmKey(name){
+	var key=document.getElementById('glm-key-'+name).value;
+	var base=document.getElementById('glm-base-'+name).value;
+	await fetch(API_BASE+'/glmcoding-quota?action=setkey&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key)+'&base_url='+encodeURIComponent(base));
+	await renderQuota();
+}
 
 async function refreshAll(){
 	try{

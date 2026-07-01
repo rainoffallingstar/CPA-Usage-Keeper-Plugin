@@ -199,6 +199,7 @@ func configure(raw []byte) error {
 	}
 	activeConfig.Store(normalizeConfig(cfg))
 	initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
+	initGlmCodingAccounts(cfg.GlmCodingAccounts)
 	initModelPriceSync()
 	return nil
 }
@@ -284,6 +285,9 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 	}
 	if len(override.OpenCodeGoAccounts) > 0 {
 		base.OpenCodeGoAccounts = override.OpenCodeGoAccounts
+	}
+	if len(override.GlmCodingAccounts) > 0 {
+		base.GlmCodingAccounts = override.GlmCodingAccounts
 	}
 	return base
 }
@@ -616,6 +620,8 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodPost, Path: "/usage-keeper/import"},
 			{Method: http.MethodGet, Path: "/usage-keeper/opencode-quota"},
 			{Method: http.MethodPost, Path: "/usage-keeper/opencode-quota"},
+			{Method: http.MethodGet, Path: "/usage-keeper/glmcoding-quota"},
+			{Method: http.MethodPost, Path: "/usage-keeper/glmcoding-quota"},
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
@@ -662,6 +668,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Path:        "/api/opencode-quota",
 				Menu:        "",
 				Description: "OpenCode Go quota JSON API.",
+			},
+			{
+				Path:        "/api/glmcoding-quota",
+				Menu:        "",
+				Description: "GLM Coding Plan quota JSON API.",
 			},
 		},
 	}
@@ -723,6 +734,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleOpenCodeQuotaGet(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/opencode-quota"):
 		return okEnvelope(handleOpenCodeQuotaPost(req.Body))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/glmcoding-quota"):
+		return okEnvelope(handleGlmCodingQuotaGet(req.Query))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}
