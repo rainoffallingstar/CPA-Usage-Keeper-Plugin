@@ -1718,11 +1718,20 @@ function renderQuotaCard(acct) {
 		windowsHtml = '<div class="usage-list">';
 		for (const w of acct.windows) {
 			if (acct.type === 'deepseek') {
-				windowsHtml += `<div class="usage-row ok">
+				var ceiling = Math.max(100, Math.ceil(w.remaining / 100) * 100);
+				var pct = Math.min(100, (w.remaining / ceiling) * 100);
+				var cls = pct > 50 ? 'ok' : (pct > 20 ? 'warn' : 'danger');
+				windowsHtml += `<div class="usage-row ${cls}">
+					${ringProgress(pct, cls)}
 					<div class="usage-row-body">
-						<div class="usage-row-head"><span class="usage-row-label">${esc(w.label)}</span></div>
-						<div class="usage-row-desc">${w.remaining.toFixed(2)} ${esc(w.unit)} remaining</div>
-						${w.reset_in_sec>0?`<div class="usage-row-reset">${formatResetTime(w.reset_in_sec)}</div>`:''}
+						<div class="usage-row-head">
+							<span class="usage-row-label">${esc(w.label)}</span>
+							<span class="usage-row-pct ${cls}">${pct.toFixed(1)}%%</span>
+						</div>
+						<div class="usage-bar-track"><div class="usage-bar-fill ${cls}" style="width:${pct}%%"></div></div>
+						<div class="usage-row-footer">
+							<span class="usage-row-footer-left">${w.remaining.toFixed(2)} / ${ceiling} ${esc(w.unit)}</span>
+						</div>
 					</div>
 				</div>`;
 			} else {
