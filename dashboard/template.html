@@ -5,154 +5,987 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Usage Keeper – CPA Plugin</title>
 <style>
+/* ============================================================
+   Design Tokens
+   ============================================================ */
 :root {
 	--bg: #ffffff;
 	--surface: #f6f8fa;
+	--surface-2: #ffffff;
 	--surface-hover: #eaeef2;
+	--surface-glass: rgba(255,255,255,0.7);
 	--border: #d0d7de;
+	--border-subtle: #e8ecf0;
 	--text: #1f2328;
 	--text-secondary: #656d76;
+	--text-tertiary: #8c959f;
 	--accent: #0969da;
+	--accent-hover: #0860c5;
 	--accent-light: rgba(9,105,218,0.08);
+	--accent-glow: 0 0 0 3px rgba(9,105,218,0.12);
 	--success: #1a7f37;
+	--success-light: rgba(26,127,55,0.08);
 	--danger: #cf222e;
+	--danger-light: rgba(207,34,46,0.08);
 	--warning: #9a6700;
-	--radius: 10px;
-	--shadow: 0 1px 3px rgba(0,0,0,0.08);
+	--warning-light: rgba(154,103,0,0.08);
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+	--shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+	--shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+	--shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+	--shadow-lg: 0 8px 32px rgba(0,0,0,0.1);
+	--shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02);
+	--shadow-card-hover: 0 8px 24px rgba(0,0,0,0.1), 0 0 0 1px rgba(9,105,218,0.12);
 	--transition: 0.2s ease;
+	--transition-slow: 0.35s ease;
+	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Helvetica, Arial, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
 }
 [data-theme="dark"] {
 	--bg: #0d1117;
 	--surface: #161b22;
+	--surface-2: #1c2330;
 	--surface-hover: #21262d;
+	--surface-glass: rgba(22,27,34,0.7);
 	--border: #30363d;
+	--border-subtle: #21262d;
 	--text: #e6edf3;
 	--text-secondary: #8b949e;
+	--text-tertiary: #6e7681;
 	--accent: #58a6ff;
+	--accent-hover: #79b8ff;
 	--accent-light: rgba(88,166,255,0.1);
+	--accent-glow: 0 0 0 3px rgba(88,166,255,0.15);
 	--success: #3fb950;
+	--success-light: rgba(63,185,80,0.1);
 	--danger: #f85149;
+	--danger-light: rgba(248,81,73,0.1);
 	--warning: #d2991d;
-	--shadow: 0 1px 3px rgba(0,0,0,0.3);
+	--warning-light: rgba(210,153,29,0.1);
+	--shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+	--shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+	--shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+	--shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+	--shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.03);
+	--shadow-card-hover: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(88,166,255,0.2);
 }
 @media (prefers-color-scheme: dark) {
 	html:not([data-theme]) {
 		--bg: #0d1117;
 		--surface: #161b22;
+		--surface-2: #1c2330;
 		--surface-hover: #21262d;
+		--surface-glass: rgba(22,27,34,0.7);
 		--border: #30363d;
+		--border-subtle: #21262d;
 		--text: #e6edf3;
 		--text-secondary: #8b949e;
+		--text-tertiary: #6e7681;
 		--accent: #58a6ff;
+		--accent-hover: #79b8ff;
 		--accent-light: rgba(88,166,255,0.1);
+		--accent-glow: 0 0 0 3px rgba(88,166,255,0.15);
 		--success: #3fb950;
+		--success-light: rgba(63,185,80,0.1);
 		--danger: #f85149;
+		--danger-light: rgba(248,81,73,0.1);
 		--warning: #d2991d;
-		--shadow: 0 1px 3px rgba(0,0,0,0.3);
+		--warning-light: rgba(210,153,29,0.1);
+		--shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+		--shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+		--shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+		--shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+		--shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.03);
+		--shadow-card-hover: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(88,166,255,0.2);
 	}
 }
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; transition: background var(--transition), color var(--transition); }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
-.header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
-.header-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.range-select, .refresh-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: var(--radius); font-size: 0.85rem; cursor: pointer; transition: all var(--transition); }
-.range-select:hover, .refresh-select:hover { border-color: var(--accent); background: var(--surface-hover); }
-.range-select:focus, .refresh-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
-.auto-refresh { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 10px; }
-.auto-refresh .dot { width: 7px; height: 7px; border-radius: 50%%; background: var(--success); animation: pulse 2s infinite; flex-shrink: 0; }
-.auto-refresh .dot.paused { background: var(--text-secondary); animation: none; }
-.btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; border-radius: var(--radius); transition: all var(--transition); }
-.btn:hover { background: var(--surface-hover); border-color: var(--accent); }
-.btn-icon { font-size: 1rem; line-height: 1; padding: 6px 10px; }
-.btn-sm { font-size: 0.8rem; padding: 4px 12px; }
-.btn-xs { font-size: 0.7rem; padding: 2px 8px; }
+body {
+	font-family: var(--font-sans);
+	background: var(--bg);
+	color: var(--text);
+	padding: 24px;
+	line-height: 1.5;
+	transition: background var(--transition-slow), color var(--transition);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+.header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 24px;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.header h1 {
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: -0.5px;
+	background: linear-gradient(135deg, var(--text) 0%%, var(--text-secondary) 100%%);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+.header-right {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+/* ============================================================
+   Form Controls
+   ============================================================ */
+.range-select, .refresh-select, .input {
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	color: var(--text);
+	padding: 7px 12px;
+	border-radius: var(--radius-md);
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition: all var(--transition);
+	font-family: var(--font-sans);
+}
+.range-select:hover, .refresh-select:hover {
+	border-color: var(--accent);
+	background: var(--surface-hover);
+}
+.range-select:focus, .refresh-select:focus, .input:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: var(--accent-glow);
+}
+.input {
+	cursor: text;
+	width: 100%%;
+	padding: 8px 12px;
+}
+.input::placeholder { color: var(--text-tertiary); opacity: 0.8; }
+
+.auto-refresh {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	padding: 4px 10px;
+}
+.auto-refresh .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%%;
+	background: var(--success);
+	animation: pulse 2s infinite;
+	flex-shrink: 0;
+	box-shadow: 0 0 8px var(--success);
+}
+.auto-refresh .dot.paused {
+	background: var(--text-tertiary);
+	animation: none;
+	box-shadow: none;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	color: var(--text);
+	cursor: pointer;
+	border-radius: var(--radius-md);
+	transition: all var(--transition);
+	font-family: var(--font-sans);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+.btn:hover {
+	background: var(--surface-hover);
+	border-color: var(--accent);
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-xs);
+}
+.btn:active { transform: translateY(0); }
+.btn-icon { font-size: 1rem; line-height: 1; padding: 7px 9px; }
+.btn-icon svg { width: 16px; height: 16px; }
+.btn-sm { font-size: 0.8rem; padding: 5px 12px; }
+.btn-xs { font-size: 0.7rem; padding: 3px 8px; }
 .btn-danger { color: var(--danger); }
-.btn-danger:hover { border-color: var(--danger); background: rgba(207,34,46,0.1); }
-@keyframes pulse { 0%%, 100%% { opacity: 1; } 50%% { opacity: 0.3; } }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); transition: transform var(--transition), box-shadow var(--transition); }
-.card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.card-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-weight: 600; }
-.card-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
-.card-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
-.tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 2px solid var(--border); overflow-x: auto; }
-.tab { padding: 8px 16px; cursor: pointer; font-size: 0.9rem; color: var(--text-secondary); border: none; border-bottom: 2px solid transparent; transition: all var(--transition); background: none; white-space: nowrap; margin-bottom: -2px; font-weight: 500; }
+.btn-danger:hover {
+	border-color: var(--danger);
+	background: var(--danger-light);
+	color: var(--danger);
+}
+.btn:disabled, .btn.is-loading {
+	opacity: 0.6;
+	pointer-events: none;
+}
+.btn .btn-spinner {
+	width: 14px;
+	height: 14px;
+	animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Animations
+   ============================================================ */
+@keyframes pulse {
+	0%%, 100%% { opacity: 1; transform: scale(1); }
+	50%% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* ============================================================
+   KPI Cards
+   ============================================================ */
+.cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 14px;
+	margin-bottom: 24px;
+}
+.card {
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 18px;
+	box-shadow: var(--shadow-card);
+	transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+	position: relative;
+	overflow: hidden;
+}
+.card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-card-hover);
+	border-color: var(--accent);
+}
+.card-sparkline {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 32px;
+	opacity: 0.5;
+	pointer-events: none;
+}
+.card-label {
+	font-size: 0.68rem;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.8px;
+	margin-bottom: 6px;
+	font-weight: 600;
+}
+.card-value {
+	font-size: 1.6rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.5px;
+	font-family: var(--font-mono);
+	line-height: 1.2;
+}
+.card-sub {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	margin-top: 4px;
+}
+
+/* ============================================================
+   Tabs with sliding indicator
+   ============================================================ */
+.tabs {
+	display: flex;
+	gap: 2px;
+	margin-bottom: 20px;
+	border-bottom: 1px solid var(--border);
+	overflow-x: auto;
+	position: relative;
+	-webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar { height: 0; }
+.tab {
+	padding: 9px 16px;
+	cursor: pointer;
+	font-size: 0.88rem;
+	color: var(--text-secondary);
+	border: none;
+	background: none;
+	white-space: nowrap;
+	font-weight: 500;
+	transition: color var(--transition);
+	position: relative;
+	z-index: 1;
+}
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab.active {
+	color: var(--accent);
+	font-weight: 600;
+}
+.tab-indicator {
+	position: absolute;
+	bottom: -1px;
+	height: 2px;
+	background: var(--accent);
+	border-radius: 2px 2px 0 0;
+	transition: left 0.35s var(--ease-out-expo), width 0.35s var(--ease-out-expo);
+	box-shadow: 0 0 8px var(--accent);
+	pointer-events: none;
+}
+
+/* ============================================================
+   Panels
+   ============================================================ */
 .panel { display: none; }
-.panel.active { display: block; animation: fadeIn 0.2s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-table { width: 100%%; border-collapse: collapse; font-size: 0.85rem; }
-th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-th { color: var(--text-secondary); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
-tbody tr { transition: background var(--transition); }
+.panel.active {
+	display: block;
+	animation: panelIn 0.35s var(--ease-out-expo);
+}
+@keyframes panelIn {
+	from { opacity: 0; transform: translateY(8px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Tables
+   ============================================================ */
+table {
+	width: 100%%;
+	border-collapse: collapse;
+	font-size: 0.85rem;
+}
+th, td {
+	padding: 10px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--border-subtle);
+}
+th {
+	color: var(--text-secondary);
+	font-weight: 600;
+	font-size: 0.72rem;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	position: sticky;
+	top: 0;
+	background: var(--surface-2);
+	z-index: 1;
+	border-bottom: 1px solid var(--border);
+}
+tbody tr {
+	transition: background var(--transition);
+}
+tbody tr.clickable { cursor: pointer; }
 tbody tr:hover { background: var(--accent-light); }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; }
-.badge-success { background: rgba(26,127,55,0.15); color: var(--success); }
-.badge-danger { background: rgba(207,34,46,0.15); color: var(--danger); }
-.badge-warning { background: rgba(154,103,0,0.15); color: var(--warning); }
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: var(--radius-sm);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+}
+.badge-success { background: var(--success-light); color: var(--success); }
+.badge-danger { background: var(--danger-light); color: var(--danger); }
+.badge-warning { background: var(--warning-light); color: var(--warning); }
+
 .model-bar { display: flex; align-items: center; gap: 8px; }
-.model-bar-fill { height: 5px; background: var(--accent); border-radius: 3px; min-width: 2px; transition: width 0.4s ease; }
-.model-bar-bg { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.cost-col { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-.empty { text-align: center; padding: 48px 20px; color: var(--text-secondary); font-size: 0.9rem; }
-.filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.filter-bar label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
-.form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.add-account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.add-account-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); transition: all var(--transition); border-left: 3px solid var(--accent); }
-.add-account-card:nth-child(2) { border-left-color: var(--success); }
-.add-account-card:nth-child(3) { border-left-color: var(--warning); }
-.add-account-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-[data-theme="dark"] .add-account-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-.add-account-card .field-group { flex: 1; min-width: 120px; }
-.add-account-card .form-row { margin-bottom: 0; }
-.add-account-card .btn-sm { white-space: nowrap; }
-.field-group { display: flex; flex-direction: column; gap: 4px; }
-.field-label { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-.config-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.config-panel .form-row { margin-bottom: 0; }
-.cookie-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.cookie-panel .form-row { margin-bottom: 0; }
-.input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 0.85rem; transition: all var(--transition); width: 100%%; }
-.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
-.input::placeholder { color: var(--text-secondary); opacity: 0.7; }
-.quota-card { margin-bottom: 20px; border: none; border-radius: 16px; padding: 24px; background: var(--bg); box-shadow: 0 4px 24px rgba(0,0,0,0.06); transition: box-shadow var(--transition), transform var(--transition); }
-.quota-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.1); transform: translateY(-2px); }
-.quota-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-.quota-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.quota-header-left h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
-.quota-header-left .badge { font-size: 0.65rem; padding: 3px 8px; border-radius: 8px; background: rgba(26,127,55,0.12); color: var(--success); font-weight: 700; text-transform: none; letter-spacing: 0; }
-.quota-header-right { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.quota-sub { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 14px; margin-top: -10px; }
-.usage-list { display: flex; flex-direction: column; gap: 16px; }
-.usage-row { background: rgba(26,127,55,0.04); border-radius: 12px; padding: 14px 18px; }
-.usage-row.warn { background: rgba(154,103,0,0.04); }
-.usage-row.danger { background: rgba(207,34,46,0.04); }
-.usage-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.usage-row-label { font-size: 0.85rem; font-weight: 600; color: var(--text); }
-.usage-row-pct { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.model-bar-fill {
+	height: 5px;
+	background: linear-gradient(90deg, var(--accent) 0%%, var(--accent-hover) 100%%);
+	border-radius: 3px;
+	min-width: 2px;
+	transition: width 0.5s var(--ease-out-expo);
+	box-shadow: 0 0 4px var(--accent-light);
+}
+.model-bar-bg {
+	flex: 1;
+	height: 5px;
+	background: var(--border-subtle);
+	border-radius: 3px;
+	overflow: hidden;
+}
+.model-bar-value {
+	font-family: var(--font-mono);
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+}
+.cost-col {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	font-family: var(--font-mono);
+}
+.num-col {
+	font-variant-numeric: tabular-nums;
+	font-family: var(--font-mono);
+}
+.font-medium { font-weight: 500; }
+
+/* ============================================================
+   Empty States
+   ============================================================ */
+.empty-state {
+	text-align: center;
+	padding: 56px 20px;
+	color: var(--text-secondary);
+}
+.empty-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 64px;
+	height: 64px;
+	border-radius: 50%%;
+	background: var(--surface);
+	border: 1px solid var(--border-subtle);
+	margin-bottom: 14px;
+	color: var(--text-tertiary);
+}
+.empty-icon svg { width: 28px; height: 28px; }
+.empty-text { font-size: 0.9rem; line-height: 1.6; }
+.empty-sub { font-size: 0.78rem; color: var(--text-tertiary); margin-top: 4px; }
+
+/* ============================================================
+   Filter Bar & Search
+   ============================================================ */
+.filter-bar {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+.filter-group-left {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.filter-bar label {
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	font-weight: 500;
+	white-space: nowrap;
+}
+.search-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+.search-wrapper svg {
+	position: absolute;
+	left: 10px;
+	width: 15px;
+	height: 15px;
+	color: var(--text-tertiary);
+	pointer-events: none;
+	transition: color var(--transition);
+}
+.search-wrapper:focus-within svg {
+	color: var(--accent);
+}
+.search-input {
+	padding: 7px 12px 7px 32px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--surface-2);
+	color: var(--text);
+	font-size: 0.85rem;
+	transition: all var(--transition);
+	font-family: var(--font-sans);
+	width: 280px;
+	max-width: 100%%;
+}
+.search-input:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: var(--accent-glow);
+}
+.search-input::placeholder { color: var(--text-tertiary); }
+
+/* ============================================================
+   Forms & Unified Add Account Bar
+   ============================================================ */
+.form-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.add-account-bar {
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	padding: 14px 18px;
+	box-shadow: var(--shadow-card);
+	margin-bottom: 24px;
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	flex-wrap: wrap;
+	transition: all var(--transition);
+}
+.add-account-bar:focus-within {
+	border-color: var(--accent);
+	box-shadow: var(--shadow-md);
+}
+.add-account-bar .field-group {
+	flex: 1;
+	min-width: 150px;
+}
+.add-account-bar select.input {
+	cursor: pointer;
+}
+.add-account-bar .btn {
+	height: 38px;
+	padding: 0 16px;
+}
+.base-url-group {
+	overflow: hidden;
+	transition: max-width 0.3s var(--ease-out-expo), opacity 0.25s ease, flex 0.3s var(--ease-out-expo);
+}
+.base-url-group.hidden {
+	max-width: 0;
+	opacity: 0;
+	flex: 0 0 0;
+	min-width: 0;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	pointer-events: none;
+	overflow: hidden;
+}
+.base-url-group.hidden .field-group,
+.base-url-group.hidden input { display: none; }
+@media (max-width: 640px) {
+	.add-account-bar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.add-account-bar .field-group {
+		width: 100%%;
+	}
+	.add-account-bar .btn {
+		width: 100%%;
+		margin-top: 4px;
+	}
+	.filter-bar {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+	.filter-group-left {
+		width: 100%%;
+	}
+	.search-wrapper {
+		width: 100%%;
+		margin-left: 0;
+	}
+	.search-input {
+		width: 100%%;
+	}
+}
+.field-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.field-label {
+	font-size: 0.68rem;
+	font-weight: 600;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+.config-panel, .cookie-panel {
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	padding: 14px 16px;
+	margin-bottom: 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	box-shadow: var(--shadow-xs);
+}
+.config-panel .form-row, .cookie-panel .form-row { margin-bottom: 0; }
+
+/* ============================================================
+   Quota Cards with circular progress
+   ============================================================ */
+.quota-card {
+	margin-bottom: 20px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-xl);
+	padding: 24px;
+	background: var(--surface-2);
+	box-shadow: var(--shadow-card);
+	transition: box-shadow var(--transition), transform var(--transition);
+}
+.quota-card:hover {
+	box-shadow: var(--shadow-md);
+	transform: translateY(-1px);
+}
+.quota-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+.quota-header-left {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.quota-header-left h3 {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--text);
+}
+.quota-header-left .badge {
+	font-size: 0.65rem;
+	padding: 3px 8px;
+	border-radius: var(--radius-sm);
+	background: var(--success-light);
+	color: var(--success);
+	font-weight: 700;
+	text-transform: none;
+	letter-spacing: 0;
+}
+.quota-header-right {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.usage-list {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.usage-row {
+	background: var(--success-light);
+	border-radius: var(--radius-md);
+	padding: 14px 18px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+.usage-row.warn { background: var(--warning-light); }
+.usage-row.danger { background: var(--danger-light); }
+.usage-ring {
+	flex-shrink: 0;
+	width: 56px;
+	height: 56px;
+	position: relative;
+}
+.usage-ring svg { transform: rotate(-90deg); }
+.usage-ring-bg-circle {
+	stroke: var(--border-subtle);
+}
+.usage-ring-text {
+	position: absolute;
+	top: 50%%;
+	left: 50%%;
+	transform: translate(-50%%, -50%%);
+	font-size: 0.72rem;
+	font-weight: 700;
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+.usage-row-body { flex: 1; min-width: 0; }
+.usage-row-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 6px;
+}
+.usage-row-label {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--text);
+}
+.usage-row-pct {
+	font-size: 0.85rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	font-family: var(--font-mono);
+}
 .usage-row-pct.ok { color: var(--success); }
 .usage-row-pct.warn { color: var(--warning); }
 .usage-row-pct.danger { color: var(--danger); }
-.usage-bar-track { width: 100%%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
-.usage-bar-fill { height: 100%%; border-radius: 4px; transition: width 0.6s ease; }
+.usage-bar-track {
+	width: 100%%;
+	height: 5px;
+	background: var(--border-subtle);
+	border-radius: 3px;
+	overflow: hidden;
+	margin-bottom: 4px;
+}
+.usage-bar-fill {
+	height: 100%%;
+	border-radius: 3px;
+	transition: width 0.6s var(--ease-out-expo);
+}
 .usage-bar-fill.ok { background: var(--success); }
 .usage-bar-fill.warn { background: var(--warning); }
 .usage-bar-fill.danger { background: var(--danger); }
-.usage-row-desc { font-size: 0.75rem; color: var(--text-secondary); }
-.quota-meta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
-.quota-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.quota-error { background: rgba(207,34,46,0.08); border: 1px solid rgba(207,34,46,0.2); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; color: var(--danger); margin-bottom: 12px; }
-.timestamp { font-size: 0.7rem; color: var(--text-secondary); margin-top: 14px; font-style: italic; }
-.health-detail-table { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+.usage-row-desc {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	font-family: var(--font-mono);
+}
+.usage-row-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 4px;
+	font-size: 0.75rem;
+	font-family: var(--font-mono);
+}
+.usage-row-footer-left {
+	color: var(--text-secondary);
+}
+.usage-row-footer-right {
+	color: var(--text-tertiary);
+	font-size: 0.7rem;
+}
+.usage-row-reset {
+	font-size: 0.7rem;
+	color: var(--text-tertiary);
+	margin-top: 2px;
+}
+.quota-meta {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	margin-top: 4px;
+}
+.quota-actions {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.quota-error {
+	background: var(--danger-light);
+	border: 1px solid rgba(207,34,46,0.3);
+	border-radius: var(--radius-sm);
+	padding: 8px 12px;
+	font-size: 0.85rem;
+	color: var(--danger);
+	margin-bottom: 12px;
+}
+.timestamp {
+	font-size: 0.7rem;
+	color: var(--text-tertiary);
+	margin-top: 14px;
+	font-style: italic;
+}
+.health-detail-table {
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	border: 1px solid var(--border);
+}
+
+/* ============================================================
+   Toast Notifications
+   ============================================================ */
+#toast-container {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	z-index: 9999;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	pointer-events: none;
+}
+.toast {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 16px;
+	border-radius: var(--radius-md);
+	background: var(--surface-2);
+	border: 1px solid var(--border);
+	box-shadow: var(--shadow-lg);
+	font-size: 0.85rem;
+	font-weight: 500;
+	pointer-events: auto;
+	animation: toastIn 0.3s var(--ease-out-expo);
+	max-width: 360px;
+}
+.toast.removing { animation: toastOut 0.25s var(--ease-out-expo) forwards; }
+.toast svg { width: 18px; height: 18px; flex-shrink: 0; }
+.toast-success { border-left: 3px solid var(--success); }
+.toast-success svg { color: var(--success); }
+.toast-error { border-left: 3px solid var(--danger); }
+.toast-error svg { color: var(--danger); }
+.toast-warning { border-left: 3px solid var(--warning); }
+.toast-warning svg { color: var(--warning); }
+@keyframes toastIn {
+	from { opacity: 0; transform: translateX(100px); }
+	to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastOut {
+	to { opacity: 0; transform: translateX(100px); }
+}
+
+/* ============================================================
+   Drawer Panel
+   ============================================================ */
+#drawer-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.4);
+	z-index: 8000;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.25s ease;
+	backdrop-filter: blur(2px);
+}
+#drawer-overlay.open {
+	opacity: 1;
+	pointer-events: auto;
+}
+#drawer-panel {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 460px;
+	max-width: 100%%;
+	background: var(--bg);
+	border-left: 1px solid var(--border);
+	box-shadow: var(--shadow-lg);
+	z-index: 8001;
+	transform: translateX(100%%);
+	transition: transform 0.35s var(--ease-out-expo);
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+}
+#drawer-panel.open { transform: translateX(0); }
+.drawer-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 20px 24px;
+	border-bottom: 1px solid var(--border);
+	position: sticky;
+	top: 0;
+	background: var(--bg);
+	z-index: 1;
+}
+.drawer-header h3 {
+	font-size: 1.1rem;
+	font-weight: 700;
+	margin: 0;
+}
+.drawer-body { padding: 20px 24px; }
+.drawer-section { margin-bottom: 24px; }
+.drawer-section-title {
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 10px;
+}
+.drawer-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+.drawer-field-label {
+	font-size: 0.72rem;
+	color: var(--text-secondary);
+	font-weight: 500;
+	margin-bottom: 2px;
+}
+.drawer-field-value {
+	font-size: 0.9rem;
+	font-weight: 600;
+	font-family: var(--font-mono);
+	word-break: break-all;
+}
+.drawer-error-box {
+	background: var(--danger-light);
+	border: 1px solid rgba(207,34,46,0.3);
+	border-radius: var(--radius-md);
+	padding: 14px;
+	font-family: var(--font-mono);
+	font-size: 0.78rem;
+	color: var(--danger);
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-height: 300px;
+	overflow-y: auto;
+}
+.drawer-token-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--border-subtle);
+}
+.drawer-token-row:last-child { border-bottom: none; }
+.drawer-token-label { font-size: 0.82rem; color: var(--text-secondary); }
+.drawer-token-value {
+	font-family: var(--font-mono);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 1024px) {
+	.quota-card { padding: 20px; }
+}
 @media (max-width: 640px) {
 	body { padding: 12px; }
-	.cards { grid-template-columns: repeat(2, 1fr); }
+	.cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+	.card { padding: 14px; }
+	.card-value { font-size: 1.3rem; }
 	.header { flex-direction: column; align-items: flex-start; }
 	.header-right { width: 100%%; }
-	.quota-header { flex-direction: column; }
+	.quota-header { flex-direction: column; align-items: flex-start; }
+	.usage-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+	#drawer-panel { width: 100%%; }
+	#toast-container { left: 12px; right: 12px; bottom: 12px; }
+	.toast { max-width: none; }
+	.search-input { width: 100%%; }
+	.filter-bar { width: 100%%; }
+	.filter-bar .search-wrapper { flex: 1; }
+}
+@media (max-width: 480px) {
+	.cards { grid-template-columns: 1fr; }
+	.drawer-grid { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -180,51 +1013,109 @@ tbody tr:hover { background: var(--accent-light); }
 				<option value="1800">30m</option>
 				<option value="3600">1h</option>
 			</select>
-			<button class="btn btn-icon" id="refreshBtn" onclick="refreshAll()" title="Refresh now">&#8635;</button>
+			<button class="btn btn-icon" id="refreshBtn" onclick="refreshAll()" title="Refresh now"></button>
 		</div>
-		<button class="btn btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
+		<button class="btn btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme"></button>
 	</div>
 </div>
 
 <div class="cards" id="cards"></div>
 
-<div class="tabs">
-	<button class="tab active" onclick="switchTab('models')">By Model</button>
-	<button class="tab" onclick="switchTab('events')">All Events</button>
-	<button class="tab" onclick="switchTab('pricing')">Pricing</button>
-	<button class="tab" onclick="switchTab('health')">Health</button>
-	<button class="tab" onclick="switchTab('quota')">Quota</button>
+<div class="tabs" id="tabBar">
+	<button class="tab active" data-tab="models">By Model</button>
+	<button class="tab" data-tab="events">All Events</button>
+	<button class="tab" data-tab="pricing">Pricing</button>
+	<button class="tab" data-tab="health">Health</button>
+	<button class="tab" data-tab="quota">Quota</button>
+	<div class="tab-indicator" id="tabIndicator"></div>
 </div>
 
 <div class="panel active" id="panel-models">
 	<div class="filter-bar">
-		<label>Provider:</label>
-		<select id="providerFilter" class="refresh-select" onchange="renderModels()">
-			<option value="">All Providers</option>
-		</select>
+		<div class="filter-group-left">
+			<label>Provider:</label>
+			<select id="providerFilter" class="refresh-select" onchange="renderModels()">
+				<option value="">All Providers</option>
+			</select>
+		</div>
+		<div class="search-wrapper">
+			<span id="searchIconModels"></span>
+			<input class="search-input" type="text" id="modelSearch" placeholder="Search models..." oninput="renderModels()">
+		</div>
 	</div>
 	<div id="modelTable"></div>
 </div>
-<div class="panel" id="panel-events"></div>
-<div class="panel" id="panel-pricing"><div id="pricingTable"></div></div>
+
+<div class="panel" id="panel-events">
+	<div class="filter-bar">
+		<div class="search-wrapper">
+			<span id="searchIconEvents"></span>
+			<input class="search-input" type="text" id="eventSearch" placeholder="Search events..." oninput="renderEvents()">
+		</div>
+	</div>
+	<div id="eventTable"></div>
+</div>
+
+<div class="panel" id="panel-pricing">
+	<div class="filter-bar">
+		<div class="search-wrapper">
+			<span id="searchIconPricing"></span>
+			<input class="search-input" type="text" id="priceSearch" placeholder="Search pricing..." oninput="renderPricing()">
+		</div>
+	</div>
+	<div id="pricingTable"></div>
+</div>
+
 <div class="panel" id="panel-health">
 	<div id="healthCards" style="margin-bottom:16px;"></div>
 	<div id="healthDetails"></div>
 </div>
+
 <div class="panel" id="panel-quota"><div id="quotaList"></div></div>
 
+<div id="toast-container"></div>
+<div id="drawer-overlay" onclick="closeDrawer()"></div>
+<div id="drawer-panel" tabindex="-1"></div>
+
 <script>
-(function(){const s=localStorage.getItem('theme');if(s)document.documentElement.setAttribute('data-theme',s);updateThemeIcon();})();
-function toggleTheme(){const el=document.documentElement;const c=el.getAttribute('data-theme');const n=c==='dark'?'light':'dark';el.setAttribute('data-theme',n);localStorage.setItem('theme',n);updateThemeIcon();}
-function updateThemeIcon(){const d=document.documentElement.getAttribute('data-theme')==='dark';document.getElementById('themeToggle').innerHTML=d?'&#9790;':'&#9788;';}
+/* ============================================================
+   SVG Icon System
+   ============================================================ */
+const ICONS = {
+	sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+	moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+	refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+	x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+	check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+	plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+	search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+	checkCircle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+	xCircle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+	alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+	database: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+	clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+	tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+	shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+	monitor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+	key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+	zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+	activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+	settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+	trendingUp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'
+};
 
-const API_BASE=window.location.pathname.replace(/\/dashboard$/,'')+'/api';
+function icon(name, size) {
+	const svg = ICONS[name] || '';
+	if (size) return svg.replace('<svg ', '<svg width="' + size + '" height="' + size + '" ');
+	return svg;
+}
 
-function switchTab(name){
-	document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-	document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-	document.querySelector('[onclick="switchTab(\''+name+'\')"]').classList.add('active');
-	document.getElementById('panel-'+name).classList.add('active');
+/* ============================================================
+   Utilities
+   ============================================================ */
+function esc(s) {
+	if (s === undefined || s === null) return '';
+	return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function formatNum(n){if(n===undefined||n===null)return'0';if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toLocaleString();}
@@ -232,310 +1123,858 @@ function formatMs(ms){if(!ms||ms<=0)return'\u2014';if(ms>=1000)return(ms/1000).t
 function formatCost(c){return'$'+(c||0).toFixed(4);}
 function formatBytes(b){if(!b)return'0 B';if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
 function formatDuration(sec){if(!sec)return'\u2014';if(sec<60)return sec+'s';if(sec<3600)return Math.floor(sec/60)+'m';return Math.floor(sec/3600)+'h'+Math.floor((sec%%60)/60)+'m';}
+function formatResetTime(sec){if(!sec||sec<=0)return'';var d=Math.floor(sec/86400),h=Math.floor((sec%%86400)/3600),m=Math.floor((sec%%3600)/60);var p=[];if(d>0)p.push(d+'d');if(h>0)p.push(h+'h');if(m>0)p.push(m+'min');return p.length>0?'Resets in '+p.join(' '):'';}
 function rangeValue(){return document.getElementById('rangeSelect').value;}
 
-async function fetchJSON(path,extra){
-	var url=API_BASE+path+'?range='+rangeValue();
-	if(extra)Object.keys(extra).forEach(function(k){if(extra[k])url+='&'+k+'='+encodeURIComponent(extra[k]);});
-	const resp=await fetch(url);
-	if(!resp.ok)throw new Error('HTTP '+resp.status);
+/* ============================================================
+   Toast System
+   ============================================================ */
+function showToast(msg, type) {
+	type = type || 'success';
+	const container = document.getElementById('toast-container');
+	const iconMap = { success: 'checkCircle', error: 'xCircle', warning: 'alert' };
+	const el = document.createElement('div');
+	el.className = 'toast toast-' + type;
+	el.innerHTML = icon(iconMap[type]) + '<span>' + esc(msg) + '</span>';
+	container.appendChild(el);
+	setTimeout(function() {
+		el.classList.add('removing');
+		setTimeout(function() { el.remove(); }, 250);
+	}, 3000);
+}
+
+/* ============================================================
+   Button Loading
+   ============================================================ */
+function setBtnLoading(btn, loading, doneText) {
+	if (!btn) return;
+	if (loading) {
+		btn.dataset.origHtml = btn.innerHTML;
+		btn.classList.add('is-loading');
+		btn.innerHTML = '<svg class="btn-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round"/></svg>' + (btn.textContent.trim() || '');
+	} else {
+		btn.classList.remove('is-loading');
+		if (doneText) {
+			btn.innerHTML = icon('check') + ' ' + esc(doneText);
+			setTimeout(function() { btn.innerHTML = btn.dataset.origHtml || ''; }, 2000);
+		} else {
+			btn.innerHTML = btn.dataset.origHtml || '';
+		}
+	}
+}
+
+/* ============================================================
+   Drawer Panel
+   ============================================================ */
+function openDrawer(html) {
+	const panel = document.getElementById('drawer-panel');
+	const overlay = document.getElementById('drawer-overlay');
+	panel.innerHTML = html;
+	overlay.classList.add('open');
+	panel.classList.add('open');
+	document.body.style.overflow = 'hidden';
+	panel.focus();
+}
+function closeDrawer() {
+	document.getElementById('drawer-overlay').classList.remove('open');
+	document.getElementById('drawer-panel').classList.remove('open');
+	document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape') closeDrawer();
+});
+
+function showEventDetail(e) {
+	const badge = e.failed
+		? '<span class="badge badge-danger">FAILED</span>'
+		: '<span class="badge badge-success">OK</span>';
+	let tokenRows = '';
+	const tokenData = [
+		['Total', formatNum(e.total_tokens)],
+		['Input', formatNum(e.input_tokens)],
+		['Output', formatNum(e.output_tokens)],
+		['Cache Hit Rate', (e.cache_hit_rate||0).toFixed(1) + '%%']
+	];
+	for (const [label, val] of tokenData) {
+		tokenRows += '<div class="drawer-token-row"><span class="drawer-token-label">' + label + '</span><span class="drawer-token-value">' + val + '</span></div>';
+	}
+	let errorBox = '';
+	if (e.failed && e.failure_body) {
+		errorBox = '<div class="drawer-section"><div class="drawer-section-title">Error Details</div><div class="drawer-error-box">' + esc(e.failure_body) + '</div></div>';
+	}
+	const html = `
+		<div class="drawer-header">
+			<h3>Event Detail</h3>
+			<button class="btn btn-icon" onclick="closeDrawer()">${icon('x')}</button>
+		</div>
+		<div class="drawer-body">
+			<div class="drawer-section">
+				<div class="drawer-section-title">Overview</div>
+				<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+					${badge}
+					<span style="font-family:var(--font-mono);font-size:0.82rem;color:var(--text-secondary)">${esc(e.timestamp ? new Date(e.timestamp).toLocaleString() : '\u2014')}</span>
+				</div>
+			</div>
+			<div class="drawer-section">
+				<div class="drawer-grid">
+					<div><div class="drawer-field-label">Model</div><div class="drawer-field-value">${esc(e.model||'\u2014')}</div></div>
+					<div><div class="drawer-field-label">Provider</div><div class="drawer-field-value">${esc(e.provider||'\u2014')}</div></div>
+					<div><div class="drawer-field-label">Auth ID</div><div class="drawer-field-value">${esc(e.auth_id||'\u2014')}</div></div>
+					<div><div class="drawer-field-label">Executor</div><div class="drawer-field-value">${esc(e.executor_type||'\u2014')}</div></div>
+				</div>
+			</div>
+			<div class="drawer-section">
+				<div class="drawer-section-title">Tokens</div>
+				${tokenRows}
+			</div>
+			<div class="drawer-section">
+				<div class="drawer-token-row"><span class="drawer-token-label">Latency</span><span class="drawer-token-value">${formatMs(e.latency_ms)}</span></div>
+			</div>
+			${errorBox}
+		</div>`;
+	openDrawer(html);
+}
+
+/* ============================================================
+   SVG Sparkline (for cards)
+   ============================================================ */
+function sparkline(values, color) {
+	color = color || 'var(--accent)';
+	if (!values || values.length < 2) return '';
+	const max = Math.max.apply(null, values);
+	const min = Math.min.apply(null, values);
+	const range = max - min || 1;
+	const w = 100, h = 32;
+	const step = w / (values.length - 1);
+	let pts = '';
+	for (let i = 0; i < values.length; i++) {
+		const x = i * step;
+		const y = h - ((values[i] - min) / range) * h;
+		pts += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+	}
+	return `<svg class="card-sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${pts}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.3"/></svg>`;
+}
+
+/* ============================================================
+   SVG Circular Progress (for quota)
+   ============================================================ */
+function ringProgress(pct, cls) {
+	const r = 24, stroke = 4;
+	const circumference = 2 * Math.PI * r;
+	const fillLen = (pct / 100) * circumference;
+	const colorVar = cls === 'ok' ? 'var(--success)' : (cls === 'warn' ? 'var(--warning)' : 'var(--danger)');
+	return `<div class="usage-ring">
+		<svg width="56" height="56">
+			<circle class="usage-ring-bg-circle" cx="28" cy="28" r="${r}" fill="none" stroke-width="${stroke}"/>
+			<circle cx="28" cy="28" r="${r}" fill="none" stroke="${colorVar}" stroke-width="${stroke}"
+				stroke-dasharray="${circumference}" stroke-dashoffset="${circumference - fillLen}"
+				stroke-linecap="round" style="transition:stroke-dashoffset 0.6s var(--ease-out-expo)"/>
+		</svg>
+		<span class="usage-ring-text">${pct.toFixed(0)}%%</span>
+	</div>`;
+}
+
+/* ============================================================
+   Empty State
+   ============================================================ */
+function emptyState(iconName, text, sub) {
+	return `<div class="empty-state">
+		<div class="empty-icon">${icon(iconName)}</div>
+		<div class="empty-text">${esc(text)}</div>
+		${sub ? '<div class="empty-sub">' + esc(sub) + '</div>' : ''}
+	</div>`;
+}
+
+/* ============================================================
+   Theme
+   ============================================================ */
+(function(){
+	const s = localStorage.getItem('theme');
+	if (s) document.documentElement.setAttribute('data-theme', s);
+	updateThemeIcon();
+})();
+function toggleTheme() {
+	const el = document.documentElement;
+	const c = el.getAttribute('data-theme');
+	const n = c === 'dark' ? 'light' : 'dark';
+	el.setAttribute('data-theme', n);
+	localStorage.setItem('theme', n);
+	updateThemeIcon();
+}
+function updateThemeIcon() {
+	const d = document.documentElement.getAttribute('data-theme') === 'dark';
+	document.getElementById('themeToggle').innerHTML = d ? icon('moon') : icon('sun');
+}
+
+/* ============================================================
+   Tab System with sliding indicator
+   ============================================================ */
+const API_BASE = window.location.pathname.replace(/\/dashboard$/,'') + '/api';
+
+function moveTabIndicator(tabBtn) {
+	const indicator = document.getElementById('tabIndicator');
+	const bar = document.getElementById('tabBar');
+	const left = tabBtn.offsetLeft - bar.scrollLeft;
+	const width = tabBtn.offsetWidth;
+	indicator.style.left = left + 'px';
+	indicator.style.width = width + 'px';
+}
+
+function switchTab(name) {
+	document.querySelectorAll('.tab').forEach(function(t) {
+		t.classList.remove('active');
+		if (t.dataset.tab === name) {
+			t.classList.add('active');
+			moveTabIndicator(t);
+		}
+	});
+	document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+	const panel = document.getElementById('panel-' + name);
+	if (panel) panel.classList.add('active');
+	updateThemeIcon();
+	if (name === 'events') renderEvents();
+	if (name === 'pricing') renderPricing();
+	if (name === 'health') renderHealth();
+	if (name === 'quota') renderQuota();
+}
+
+document.querySelectorAll('.tab').forEach(function(tab) {
+	tab.addEventListener('click', function() { switchTab(this.dataset.tab); });
+});
+window.addEventListener('resize', function() {
+	const active = document.querySelector('.tab.active');
+	if (active) moveTabIndicator(active);
+});
+
+/* ============================================================
+   Init static icons
+   ============================================================ */
+document.getElementById('refreshBtn').innerHTML = icon('refresh');
+document.getElementById('searchIconModels').innerHTML = icon('search');
+document.getElementById('searchIconEvents').innerHTML = icon('search');
+document.getElementById('searchIconPricing').innerHTML = icon('search');
+
+/* ============================================================
+   Data fetching
+   ============================================================ */
+async function fetchJSON(path, extra) {
+	var url = API_BASE + path + '?range=' + rangeValue();
+	if (extra) Object.keys(extra).forEach(function(k) { if (extra[k]) url += '&' + k + '=' + encodeURIComponent(extra[k]); });
+	const resp = await fetch(url);
+	if (!resp.ok) throw new Error('HTTP ' + resp.status);
 	return resp.json();
 }
 
-function renderCards(d){
-	document.getElementById('cards').innerHTML=
-	'<div class="card"><div class="card-label">Requests</div><div class="card-value">'+formatNum(d.total_requests)+'</div><div class="card-sub">'+formatNum(d.failed_requests)+' failed</div></div>'+
-	'<div class="card"><div class="card-label">Tokens</div><div class="card-value">'+formatNum(d.total_tokens)+'</div><div class="card-sub">In '+formatNum(d.input_tokens)+' / Out '+formatNum(d.output_tokens)+'</div></div>'+
-	'<div class="card"><div class="card-label">Models</div><div class="card-value">'+formatNum(d.unique_models)+'</div><div class="card-sub">avg '+formatMs(d.avg_latency_ms)+'</div></div>'+
-	'<div class="card"><div class="card-label">Cache Hit</div><div class="card-value">'+(d.cache_hit_rate||0).toFixed(1)+'%%'+'</div><div class="card-sub">'+(d.range_hours||24)+'h window</div></div>'+
-	'<div class="card"><div class="card-label">Retention</div><div class="card-value">%d</div><div class="card-sub">days</div></div>';
+/* ============================================================
+   Render: KPI Cards
+   ============================================================ */
+function renderCards(d) {
+	const cards = [
+		{ label: 'Requests', value: formatNum(d.total_requests), sub: formatNum(d.failed_requests) + ' failed', ic: 'activity' },
+		{ label: 'Tokens', value: formatNum(d.total_tokens), sub: 'In ' + formatNum(d.input_tokens) + ' / Out ' + formatNum(d.output_tokens), ic: 'zap' },
+		{ label: 'Models', value: formatNum(d.unique_models), sub: 'avg ' + formatMs(d.avg_latency_ms), ic: 'database' },
+		{ label: 'Cache Hit', value: (d.cache_hit_rate||0).toFixed(1) + '%%', sub: (d.range_hours||24) + 'h window', ic: 'trendingUp' },
+		{ label: 'Retention', value: '%d', sub: 'days', ic: 'clock' }
+	];
+	document.getElementById('cards').innerHTML = cards.map(function(c, i) {
+		return `<div class="card">
+			${sparkline([0.3,0.5,0.4,0.7,0.6,0.8,0.9,0.7], 'var(--accent)')}
+			<div class="card-label">${c.label}</div>
+			<div class="card-value">${c.value}</div>
+			<div class="card-sub">${c.sub}</div>
+		</div>`;
+	}).join('');
 }
 
-async function renderModels(){
-	var prov=document.getElementById('providerFilter').value;
-	const models=await fetchJSON('/models',{provider:prov});
-	if(!models||models.length===0){document.getElementById('modelTable').innerHTML='<div class="empty">No usage data for this time range.</div>';return;}
-	const maxT=Math.max(...models.map(m=>m.total_tokens),1);
-	let h='<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>';
-	for(const m of models){
-		const pct=Math.max((m.total_tokens/maxT)*100,1);
-		h+='<tr><td style="font-weight:500">'+m.model+'</td><td>'+formatNum(m.requests)+'</td>'+
-		'<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:'+pct+'%%"></div></div>'+formatNum(m.total_tokens)+'</div></td>'+
-		'<td>'+formatNum(m.input_tokens)+'</td><td>'+formatNum(m.output_tokens)+'</td>'+
-		'<td class="cost-col">'+formatCost(m.cost)+'</td></tr>';
+/* ============================================================
+   Render: Models
+   ============================================================ */
+async function renderModels() {
+	var prov = document.getElementById('providerFilter').value;
+	const models = await fetchJSON('/models', { provider: prov });
+	const q = (document.getElementById('modelSearch').value || '').toLowerCase().trim();
+	const filtered = q ? models.filter(function(m) {
+		return (m.model||'').toLowerCase().includes(q) || (m.provider||'').toLowerCase().includes(q);
+	}) : models;
+	if (!filtered || filtered.length === 0) {
+		document.getElementById('modelTable').innerHTML = q
+			? emptyState('database', 'No models match "' + q + '"', 'Try a different search term.')
+			: emptyState('database', 'No usage data for this time range.', 'Data will appear here once requests are processed.');
+		buildProviderFilter(models);
+		return;
 	}
-	h+='</tbody></table>';
-	document.getElementById('modelTable').innerHTML=h;
+	const maxT = Math.max.apply(null, models.map(function(m) { return m.total_tokens; }).concat([1]));
+	document.getElementById('modelTable').innerHTML = `
+		<table><thead><tr><th>Model</th><th>Requests</th><th>Tokens</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>
+		${filtered.map(function(m) {
+			const pct = Math.max((m.total_tokens / maxT) * 100, 1);
+			return `<tr>
+				<td class="font-medium">${esc(m.model)}</td>
+				<td class="num-col">${formatNum(m.requests)}</td>
+				<td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill" style="width:${pct}%%"></div></div><span class="model-bar-value">${formatNum(m.total_tokens)}</span></div></td>
+				<td class="num-col">${formatNum(m.input_tokens)}</td>
+				<td class="num-col">${formatNum(m.output_tokens)}</td>
+				<td class="cost-col">${formatCost(m.cost)}</td>
+			</tr>`;
+		}).join('')}
+		</tbody></table>`;
 	buildProviderFilter(models);
 }
-function buildProviderFilter(models){
-	var sel=document.getElementById('providerFilter');var seen={};var cur=sel.value;
-	sel.innerHTML='<option value="">All Providers</option>';
-	models.forEach(function(m){var p=(m.provider||'Unknown').trim();if(p&&!seen[p]){seen[p]=true;var o=document.createElement('option');o.value=p;o.textContent=p.split('-').slice(-2).join('-');sel.appendChild(o);}});
-	if(cur&&seen[cur])sel.value=cur;
-}
-
-async function renderEvents(){
-	const data=await fetchJSON('/events?limit=100');
-	if(!data||!data.events||data.events.length===0){document.getElementById('panel-events').innerHTML='<div class="empty">No events for this time range.</div>';return;}
-	let h='<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>';
-	for(const e of data.events){
-		const ts=e.timestamp?new Date(e.timestamp).toLocaleTimeString():'\u2014';
-		const badge=e.failed?'<span class="badge badge-danger">FAIL</span>':'<span class="badge badge-success">OK</span>';
-		h+='<tr><td style="font-variant-numeric:tabular-nums;color:var(--text-secondary)">'+ts+'</td><td title="'+e.provider+'" style="font-weight:500">'+e.model+'</td>'+
-		'<td title="auth: '+e.auth_id+'"><span style="font-size:0.8rem">'+(e.executor_type||'\u2014')+'</span></td>'+
-		'<td>'+formatNum(e.total_tokens)+'</td><td>'+(e.cache_hit_rate||0).toFixed(1)+'%%</td><td>'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
-	}
-	h+='</tbody></table>';
-	if(data.total>100)h+='<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of '+formatNum(data.total)+' events</p>';
-	document.getElementById('panel-events').innerHTML=h;
-}
-
-async function renderPricing(){
-	const data=await fetchJSON('/prices');
-	const prices=data.prices||{};const entries=Object.entries(prices);
-	let h='<div class="form-row">';
-	h+='<input class="input" type="text" id="pricing-model" placeholder="model name" style="width:180px">';
-	h+='<input class="input" type="number" id="pricing-prompt" placeholder="prompt" step="0.0001" style="width:100px">';
-	h+='<input class="input" type="number" id="pricing-completion" placeholder="completion" step="0.0001" style="width:110px">';
-	h+='<input class="input" type="number" id="pricing-cache" placeholder="cache" step="0.0001" style="width:100px">';
-	h+='<button class="btn btn-sm" onclick="addPrice()">+ Add</button>';
-	h+='<button class="btn btn-sm" onclick="syncPrices()" id="syncBtn" style="margin-left:auto">&#8635; Sync from modelprice.boxtech.icu</button>';
-	h+='</div>';
-	if(entries.length===0){
-		h+='<div class="empty">No pricing configured yet.<br>Add model pricing above (all values in $ per 1M tokens).</div>';
-	}else{
-		h+='<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th><th></th></tr></thead><tbody>';
-		for(const[model,price]of entries){
-			h+='<tr><td style="font-weight:500">'+model+'</td><td>$'+(price.prompt||0).toFixed(4)+'</td><td>$'+(price.completion||0).toFixed(4)+'</td><td>$'+(price.cache||0).toFixed(4)+'</td>';
-			h+='<td><button class="btn btn-xs btn-danger" onclick="deletePrice(\''+model+'\')">&#10005;</button></td></tr>';
+function buildProviderFilter(models) {
+	var sel = document.getElementById('providerFilter');
+	var seen = {};
+	var cur = sel.value;
+	sel.innerHTML = '<option value="">All Providers</option>';
+	models.forEach(function(m) {
+		var p = (m.provider || 'Unknown').trim();
+		if (p && !seen[p]) {
+			seen[p] = true;
+			var o = document.createElement('option');
+			o.value = p;
+			o.textContent = p.split('-').slice(-2).join('-');
+			sel.appendChild(o);
 		}
-		h+='</tbody></table>';
+	});
+	if (cur && seen[cur]) sel.value = cur;
+}
+
+/* ============================================================
+   Render: Events
+   ============================================================ */
+let lastEventsData = null;
+async function renderEvents() {
+	let data = lastEventsData;
+	if (!data) {
+		data = await fetchJSON('/events?limit=100');
+		lastEventsData = data;
 	}
-	document.getElementById('pricingTable').innerHTML=h;
+	const q = (document.getElementById('eventSearch').value || '').toLowerCase().trim();
+	let events = data.events || [];
+	if (q) {
+		events = events.filter(function(e) {
+			return (e.model||'').toLowerCase().includes(q)
+				|| (e.auth_id||'').toLowerCase().includes(q)
+				|| (e.executor_type||'').toLowerCase().includes(q);
+		});
+	}
+	if (!events || events.length === 0) {
+		document.getElementById('eventTable').innerHTML = emptyState('clock',
+			q ? 'No events match "' + q + '"' : 'No events for this time range',
+			'Events will appear here as requests are processed.');
+		return;
+	}
+	document.getElementById('eventTable').innerHTML = `
+		<table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>
+		${events.map(function(e) {
+			const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '\u2014';
+			const badge = e.failed
+				? '<span class="badge badge-danger">FAIL</span>'
+				: '<span class="badge badge-success">OK</span>';
+			return `<tr class="clickable" onclick='showEventDetailWrapped(${JSON.stringify(JSON.stringify(e))})'>
+				<td class="num-col" style="color:var(--text-secondary)">${ts}</td>
+				<td class="font-medium" title="${esc(e.provider)}">${esc(e.model)}</td>
+				<td title="auth: ${esc(e.auth_id)}"><span style="font-size:0.8rem">${esc(e.executor_type||'\u2014')}</span></td>
+				<td class="num-col">${formatNum(e.total_tokens)}</td>
+				<td class="num-col">${(e.cache_hit_rate||0).toFixed(1)}%%</td>
+				<td class="num-col">${formatMs(e.latency_ms)}</td>
+				<td>${badge}</td>
+			</tr>`;
+		}).join('')}
+		</tbody></table>
+		${data.total > 100 ? '<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of ' + formatNum(data.total) + ' events</p>' : ''}`;
 }
-async function addPrice(){
-	var model=document.getElementById('pricing-model').value.trim();
-	var p=parseFloat(document.getElementById('pricing-prompt').value)||0;
-	var c=parseFloat(document.getElementById('pricing-completion').value)||0;
-	var ca=parseFloat(document.getElementById('pricing-cache').value)||0;
-	if(!model)return;
-	await fetch(API_BASE+'/prices?action=set&model='+encodeURIComponent(model)+'&prompt='+p+'&completion='+c+'&cache='+ca);
-	await renderPricing();
+function showEventDetailWrapped(jsonStr) {
+	try { showEventDetail(JSON.parse(jsonStr)); } catch(e) { console.error(e); }
 }
-async function deletePrice(model){await fetch(API_BASE+'/prices?action=delete&model='+encodeURIComponent(model));await renderPricing();}
-async function syncPrices(){
-	var btn=document.getElementById('syncBtn');if(btn){btn.textContent='Syncing...';btn.disabled=true;}
-	try{
-		const resp=await fetch(API_BASE+'/prices/sync');
-		const data=await resp.json();
-		if(btn)btn.textContent='\u2713 Synced '+data.synced+' models';
+
+/* ============================================================
+   Render: Pricing
+   ============================================================ */
+let lastPricesData = null;
+async function renderPricing() {
+	let data = lastPricesData;
+	if (!data) {
+		data = await fetchJSON('/prices');
+		lastPricesData = data;
+	}
+	const prices = data.prices || {};
+	let entries = Object.entries(prices);
+	const q = (document.getElementById('priceSearch').value || '').toLowerCase().trim();
+	if (q) {
+		entries = entries.filter(function(pair) { return pair[0].toLowerCase().includes(q); });
+	}
+	let formHtml = `<div class="form-row">
+		<input class="input" type="text" id="pricing-model" placeholder="model name" style="width:180px">
+		<input class="input" type="number" id="pricing-prompt" placeholder="prompt" step="0.0001" style="width:100px">
+		<input class="input" type="number" id="pricing-completion" placeholder="completion" step="0.0001" style="width:110px">
+		<input class="input" type="number" id="pricing-cache" placeholder="cache" step="0.0001" style="width:100px">
+		<button class="btn btn-sm" onclick="addPrice()">${icon('plus')} Add</button>
+		<button class="btn btn-sm" onclick="syncPrices()" id="syncBtn" style="margin-left:auto">${icon('refresh')} Sync from modelprice.boxtech.icu</button>
+	</div>`;
+	if (entries.length === 0) {
+		document.getElementById('pricingTable').innerHTML = formHtml + emptyState('tag',
+			q ? 'No pricing matches "' + q + '"' : 'No pricing configured yet',
+			'Add model pricing above (all values in $ per 1M tokens).');
+		return;
+	}
+	document.getElementById('pricingTable').innerHTML = formHtml + `
+		<table><thead><tr><th>Model</th><th>Prompt $/1M</th><th>Completion $/1M</th><th>Cache $/1M</th><th></th></tr></thead><tbody>
+		${entries.map(function(pair) {
+			const model = pair[0], price = pair[1];
+			return `<tr>
+				<td class="font-medium">${esc(model)}</td>
+				<td class="num-col">$${(price.prompt||0).toFixed(4)}</td>
+				<td class="num-col">$${(price.completion||0).toFixed(4)}</td>
+				<td class="num-col">$${(price.cache||0).toFixed(4)}</td>
+				<td><button class="btn btn-xs btn-danger" onclick='deletePrice(${JSON.stringify(model)})'>${icon('x')}</button></td>
+			</tr>`;
+		}).join('')}
+		</tbody></table>`;
+}
+async function addPrice() {
+	var model = document.getElementById('pricing-model').value.trim();
+	var p = parseFloat(document.getElementById('pricing-prompt').value) || 0;
+	var c = parseFloat(document.getElementById('pricing-completion').value) || 0;
+	var ca = parseFloat(document.getElementById('pricing-cache').value) || 0;
+	if (!model) { showToast('Model name is required', 'warning'); return; }
+	try {
+		await fetch(API_BASE + '/prices?action=set&model=' + encodeURIComponent(model) + '&prompt=' + p + '&completion=' + c + '&cache=' + ca);
+		lastPricesData = null;
 		await renderPricing();
-		setTimeout(function(){if(btn)btn.textContent='\u8635 Sync from modelprice.boxtech.icu';},3000);
-	}catch(e){
-		if(btn)btn.textContent='\u26a0 Sync failed';
-		setTimeout(function(){if(btn)btn.textContent='\u8635 Sync from modelprice.boxtech.icu';},3000);
+		showToast('Price added for ' + model, 'success');
+	} catch(e) { showToast('Failed to add price', 'error'); }
+}
+async function deletePrice(model) {
+	try {
+		await fetch(API_BASE + '/prices?action=delete&model=' + encodeURIComponent(model));
+		lastPricesData = null;
+		await renderPricing();
+		showToast('Deleted ' + model, 'success');
+	} catch(e) { showToast('Failed to delete', 'error'); }
+}
+async function syncPrices() {
+	var btn = document.getElementById('syncBtn');
+	if (!btn) return;
+	setBtnLoading(btn, true);
+	try {
+		const resp = await fetch(API_BASE + '/prices/sync');
+		const data = await resp.json();
+		lastPricesData = null;
+		await renderPricing();
+		const newBtn = document.getElementById('syncBtn');
+		setBtnLoading(newBtn, false, 'Synced ' + data.synced + ' models');
+		showToast('Synced ' + data.synced + ' models', 'success');
+	} catch(e) {
+		const newBtn = document.getElementById('syncBtn');
+		setBtnLoading(newBtn, false);
+		showToast('Sync failed', 'error');
 	}
 }
 
-async function renderHealth(){
-	try{
-		const data=await fetchJSON('/health');
-		var sc=data.status==='ok'?'var(--success)':(data.status==='warn'?'var(--warning)':'var(--danger)');
-		document.getElementById('healthCards').innerHTML='<div class="cards">'+
-		'<div class="card"><div class="card-label">Status</div><div class="card-value" style="color:'+sc+'">'+(data.status||'unknown').toUpperCase()+'</div><div class="card-sub">uptime '+formatDuration(data.runtime.uptime_seconds)+'</div></div>'+
-		'<div class="card"><div class="card-label">Ring Buffer</div><div class="card-value">'+data.runtime.ring_buffer_used+'<span style="font-size:1rem;color:var(--text-secondary)">/'+data.runtime.ring_buffer_size+'</span></div><div class="card-sub">'+formatNum(data.runtime.total_requests)+' total requests</div></div>'+
-		'<div class="card"><div class="card-label">Summary Cache</div><div class="card-value" style="color:'+(data.runtime.summary_cache_hit_rate>50?'var(--success)':'var(--warning)')+'">'+(data.runtime.summary_cache_hit_rate||0).toFixed(1)+'%%'+'</div><div class="card-sub">events '+(data.runtime.events_cache_hit_rate||0).toFixed(1)+'%%'+'</div></div>'+
-		'<div class="card"><div class="card-label">Storage</div><div class="card-value" style="color:var(--success);font-size:1.1rem">'+data.storage.status+'</div><div class="card-sub">'+formatBytes(data.storage.db_file_size)+'</div></div>'+
-		'</div>';
-		let h='<div class="health-detail-table"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
-		h+='<tr><td>Last Write Duration</td><td>'+formatMs(data.runtime.last_write_duration_ms)+'</td></tr>';
-		h+='<tr><td>Storage Write Errors</td><td style="color:'+(data.runtime.storage_write_errors>0?'var(--danger)':'var(--success)')+'">'+data.runtime.storage_write_errors+'</td></tr>';
-		h+='<tr><td>DB Path</td><td style="font-size:0.8rem;word-break:break-all">'+data.storage.db_path+'</td></tr>';
-		h+='<tr><td>WAL Size</td><td>'+formatBytes(data.storage.wal_file_size)+'</td></tr>';
-		if(data.alerts&&data.alerts.length>0){
-			h+='<tr><td colspan="2" style="padding-top:14px;font-weight:700;color:var(--warning)">Alerts</td></tr>';
-			for(const a of data.alerts){
-				var bc=a.severity==='error'?'badge-danger':'badge-warning';
-				h+='<tr><td><span class="badge '+bc+'">'+a.severity.toUpperCase()+'</span> '+a.code+'</td><td>'+a.message+'</td></tr>';
+/* ============================================================
+   Render: Health
+   ============================================================ */
+async function renderHealth() {
+	try {
+		const data = await fetchJSON('/health');
+		const sc = data.status === 'ok' ? 'var(--success)' : (data.status === 'warn' ? 'var(--warning)' : 'var(--danger)');
+		document.getElementById('healthCards').innerHTML = `
+			<div class="cards">
+				<div class="card">
+					<div class="card-label">Status</div>
+					<div class="card-value" style="color:${sc}">${esc((data.status||'unknown').toUpperCase())}</div>
+					<div class="card-sub">uptime ${formatDuration(data.runtime.uptime_seconds)}</div>
+				</div>
+				<div class="card">
+					<div class="card-label">Ring Buffer</div>
+					<div class="card-value">${data.runtime.ring_buffer_used}<span style="font-size:1rem;color:var(--text-secondary)">/${data.runtime.ring_buffer_size}</span></div>
+					<div class="card-sub">${formatNum(data.runtime.total_requests)} total requests</div>
+				</div>
+				<div class="card">
+					<div class="card-label">Summary Cache</div>
+					<div class="card-value" style="color:${data.runtime.summary_cache_hit_rate > 50 ? 'var(--success)' : 'var(--warning)'}">${(data.runtime.summary_cache_hit_rate||0).toFixed(1)}%%</div>
+					<div class="card-sub">events ${(data.runtime.events_cache_hit_rate||0).toFixed(1)}%%</div>
+				</div>
+				<div class="card">
+					<div class="card-label">Storage</div>
+					<div class="card-value" style="color:var(--success);font-size:1.1rem">${esc(data.storage.status)}</div>
+					<div class="card-sub">${formatBytes(data.storage.db_file_size)}</div>
+				</div>
+			</div>`;
+		let alertHtml = '';
+		if (data.alerts && data.alerts.length > 0) {
+			alertHtml = '<tr><td colspan="2" style="padding-top:14px;font-weight:700;color:var(--warning)">Alerts</td></tr>';
+			for (const a of data.alerts) {
+				var bc = a.severity === 'error' ? 'badge-danger' : 'badge-warning';
+				alertHtml += `<tr><td><span class="badge ${bc}">${esc(a.severity.toUpperCase())}</span> ${esc(a.code)}</td><td>${esc(a.message)}</td></tr>`;
 			}
 		}
-		h+='</tbody></table></div>';
-		document.getElementById('healthDetails').innerHTML=h;
-	}catch(e){document.getElementById('healthCards').innerHTML='<div class="empty">Health endpoint not available</div>';}
+		document.getElementById('healthDetails').innerHTML = `
+			<div class="health-detail-table"><table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>
+				<tr><td>Last Write Duration</td><td class="num-col">${formatMs(data.runtime.last_write_duration_ms)}</td></tr>
+				<tr><td>Storage Write Errors</td><td class="num-col" style="color:${data.runtime.storage_write_errors > 0 ? 'var(--danger)' : 'var(--success)'}">${data.runtime.storage_write_errors}</td></tr>
+				<tr><td>DB Path</td><td style="font-size:0.8rem;word-break:break-all;font-family:var(--font-mono)">${esc(data.storage.db_path)}</td></tr>
+				<tr><td>WAL Size</td><td class="num-col">${formatBytes(data.storage.wal_file_size)}</td></tr>
+				${alertHtml}
+			</tbody></table></div>`;
+	} catch(e) {
+		document.getElementById('healthCards').innerHTML = emptyState('shield', 'Health endpoint not available');
+	}
 }
 
-async function renderQuota(){
-	try{
-		const[ocData,glmData,dsData]=await Promise.all([
+/* ============================================================
+   Render: Quota
+   ============================================================ */
+async function renderQuota() {
+	try {
+		const [ocData, glmData, dsData] = await Promise.all([
 			fetchJSON('/opencode-quota'),
 			fetchJSON('/glmcoding-quota'),
 			fetchJSON('/deepseek-quota')
 		]);
-		const accounts=[...(ocData.accounts||[]),...(glmData.accounts||[]),...(dsData.accounts||[])];
-		let h='<div class="add-account-grid">';
-		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="quota-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">Auth cookie</label><input class="input" type="text" id="quota-acct-cookie" placeholder="optional"></div><button class="btn btn-sm" onclick="addQuotaAccount()">+ OpenCode Go</button></div></div>';
-		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="glm-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">API key</label><input class="input" type="text" id="glm-acct-key" placeholder="sk-..."></div><div class="field-group"><label class="field-label">Base URL</label><input class="input" type="text" id="glm-acct-base" value="https://api.z.ai"></div><button class="btn btn-sm" onclick="addGlmAccount()">+ GLM Plan</button></div></div>';
-		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="ds-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">DeepSeek API key</label><input class="input" type="text" id="ds-acct-key" placeholder="sk-..."></div><button class="btn btn-sm" onclick="addDsAccount()">+ DeepSeek</button></div></div>';
-		h+='</div>';
-		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Use the forms above to add OpenCode Go, GLM Coding Plan, or DeepSeek accounts.</div>';}
-		for(const acct of accounts){
-			h+='<div class="quota-card">';
-			h+='<div class="quota-header">';
-			h+='<div class="quota-header-left">';
-			var planLabel='Free';var planColor='rgba(26,127,55,0.12)';
-			if(acct.type==='glm_coding'){planLabel='GLM';planColor='rgba(26,127,55,0.12)';}
-			else if(acct.type==='deepseek'){planLabel='DeepSeek';planColor='rgba(154,103,0,0.12)';}
-			h+='<span class="badge" style="background:'+planColor+'">'+planLabel+'</span>';
-			h+='<h3>'+acct.name+'</h3>';
-			h+='</div>';
-			h+='<div class="quota-header-right">';
-			if(acct.type==='glm_coding'){
-				h+='<button class="btn btn-sm" onclick="refreshGlmAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
-				h+='<button class="btn btn-xs" onclick="toggleGlmInput(\''+acct.name+'\')">Set Key</button>';
-				h+='<button class="btn btn-xs btn-danger" onclick="removeGlmAccount(\''+acct.name+'\')">&#10005;</button>';
-			}else if(acct.type==='deepseek'){
-				h+='<button class="btn btn-sm" onclick="refreshDsAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
-				h+='<button class="btn btn-xs" onclick="toggleDsInput(\''+acct.name+'\')">Set Key</button>';
-				h+='<button class="btn btn-xs btn-danger" onclick="removeDsAccount(\''+acct.name+'\')">&#10005;</button>';
-			}else{
-				h+='<button class="btn btn-sm" onclick="refreshQuotaAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
-				h+='<button class="btn btn-xs" onclick="toggleCookieInput(\''+acct.name+'\')">Set Cookie</button>';
-				h+='<button class="btn btn-xs btn-danger" onclick="removeQuotaAccount(\''+acct.name+'\')">&#10005;</button>';
-			}
-			h+='</div></div>';
-			if(!acct.success){h+='<div class="quota-error">'+(acct.error||'Unknown error')+'</div>';}
-			if(acct.type==='glm_coding'){
-				h+='<div id="glm-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-				h+='<div class="field-group"><label class="field-label">API key</label><input class="input" type="text" id="glm-key-'+acct.name+'" placeholder="sk-..."></div>';
-				h+='<div class="field-group"><label class="field-label">Base URL</label><input class="input" type="text" id="glm-base-'+acct.name+'" value="https://api.z.ai"></div>';
-				h+='<button class="btn btn-sm" onclick="saveGlmKey(\''+acct.name+'\')">Save & Fetch</button>';
-				h+='</div>';
-			}else if(acct.type==='deepseek'){
-				h+='<div id="ds-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-				h+='<div class="field-group"><label class="field-label">DeepSeek API key</label><input class="input" type="text" id="ds-key-'+acct.name+'" placeholder="sk-..."></div>';
-				h+='<button class="btn btn-sm" onclick="saveDsKey(\''+acct.name+'\')">Save & Fetch</button>';
-				h+='</div>';
-			}else{
-				h+='<div id="cookie-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-				h+='<div class="field-group"><label class="field-label">Auth cookie</label><input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value"></div>';
-				h+='<div class="field-group"><label class="field-label">Workspace ID</label><input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="wrk_xxx or leave empty for auto"></div>';
-				h+='<button class="btn btn-sm" onclick="saveAccountConfig(\''+acct.name+'\')">Save & Fetch</button>';
-				h+='</div>';
-			}
-			if(acct.windows&&acct.windows.length>0){
-				h+='<div class="usage-list">';
-				for(const w of acct.windows){
-					if(acct.type==='deepseek'){
-						var dsCls='ok';
-						h+='<div class="usage-row '+dsCls+'">';
-						h+='<div class="usage-row-head"><span class="usage-row-label">'+w.label+'</span></div>';
-						h+='<div class="usage-row-desc">'+w.remaining.toFixed(2)+' '+w.unit+' remaining</div>';
-						h+='</div>';
-					}else{
-						var pct=w.remaining;
-						var cls=pct>50?'ok':(pct>20?'warn':'danger');
-						h+='<div class="usage-row '+cls+'">';
-						h+='<div class="usage-row-head"><span class="usage-row-label">'+w.label+'</span><span class="usage-row-pct '+cls+'">'+w.remaining.toFixed(1)+'%%</span></div>';
-						h+='<div class="usage-bar-track"><div class="usage-bar-fill '+cls+'" style="width:'+pct+'%%"></div></div>';
-						h+='<div class="usage-row-desc">'+w.used.toFixed(1)+'%% used</div>';
-						h+='</div>';
-					}
-				}
-				h+='</div>';
-			}
-			if(acct.model_usage&&acct.model_usage.length>0){
-				h+='<div style="margin-top:12px;font-size:0.8rem;color:var(--text-secondary)">Models (24h): ';
-				var mu=[];
-				for(const m of acct.model_usage){mu.push(m.model+' '+formatNum(m.tokens));}
-				h+=mu.join(', ')+'</div>';
-			}
-			if(acct.updated_at){h+='<div class="timestamp">Updated '+new Date(acct.updated_at).toLocaleString()+'</div>';}
-			h+='</div>';
+		const accounts = [].concat(ocData.accounts||[], glmData.accounts||[], dsData.accounts||[]);
+		let h = `<div class="add-account-bar">
+			<div class="field-group" style="min-width:140px">
+				<label class="field-label">Platform</label>
+				<select class="input" id="unified-platform" onchange="onPlatformChange()">
+					<option value="opencode">OpenCode Go</option>
+					<option value="glm">GLM Plan</option>
+					<option value="deepseek">DeepSeek</option>
+				</select>
+			</div>
+			<div class="field-group">
+				<label class="field-label">Account Name</label>
+				<input class="input" type="text" id="unified-acct-name" placeholder="e.g. work">
+			</div>
+			<div class="field-group">
+				<label class="field-label" id="unified-cred-label">Auth Cookie</label>
+				<input class="input" type="text" id="unified-cred" placeholder="optional">
+			</div>
+			<div class="base-url-group hidden" id="unified-base-group">
+				<div class="field-group">
+					<label class="field-label">Base URL</label>
+					<input class="input" type="text" id="unified-base" value="https://api.z.ai">
+				</div>
+			</div>
+			<button class="btn btn-sm" onclick="addUnifiedAccount()">${icon('plus')} Add</button>
+		</div>`;
+
+		if (accounts.length === 0) {
+			h += emptyState('shield', 'No accounts configured', 'Use the forms above to add OpenCode Go, GLM Coding Plan, or DeepSeek accounts.');
 		}
-		document.getElementById('quotaList').innerHTML=h;
-	}catch(e){document.getElementById('quotaList').innerHTML='<div class="empty">Quota API not available</div>';}
+
+		for (const acct of accounts) {
+			h += renderQuotaCard(acct);
+		}
+		document.getElementById('quotaList').innerHTML = h;
+	} catch(e) {
+		document.getElementById('quotaList').innerHTML = emptyState('shield', 'Quota API not available');
+	}
 }
 
-function toggleCookieInput(name){var el=document.getElementById('cookie-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
-async function saveAccountConfig(name){
-	var cookie=document.getElementById('cookie-val-'+name).value;
-	var ws=document.getElementById('ws-val-'+name).value;
-	var p='action=setcookie&account='+encodeURIComponent(name)+'&cookie='+encodeURIComponent(cookie);
-	if(ws)p+='&workspace='+encodeURIComponent(ws);
-	await fetch(API_BASE+'/opencode-quota?'+p);await renderQuota();
+function renderQuotaCard(acct) {
+	var planLabel = 'Free';
+	var planColor = 'var(--success-light)';
+	if (acct.type === 'glm_coding') { planLabel = 'GLM'; }
+	else if (acct.type === 'deepseek') { planLabel = 'DeepSeek'; planColor = 'var(--warning-light)'; }
+
+	let actions = '';
+	if (acct.type === 'glm_coding') {
+		actions = `<button class="btn btn-sm" onclick='refreshGlmAccount(${JSON.stringify(acct.name)})'>${icon('refresh')} Refresh</button>
+			<button class="btn btn-xs" onclick='toggleGlmInput(${JSON.stringify(acct.name)})'>${icon('key')} Set Key</button>
+			<button class="btn btn-xs btn-danger" onclick='removeGlmAccount(${JSON.stringify(acct.name)})'>${icon('x')}</button>`;
+	} else if (acct.type === 'deepseek') {
+		actions = `<button class="btn btn-sm" onclick='refreshDsAccount(${JSON.stringify(acct.name)})'>${icon('refresh')} Refresh</button>
+			<button class="btn btn-xs" onclick='toggleDsInput(${JSON.stringify(acct.name)})'>${icon('key')} Set Key</button>
+			<button class="btn btn-xs btn-danger" onclick='removeDsAccount(${JSON.stringify(acct.name)})'>${icon('x')}</button>`;
+	} else {
+		actions = `<button class="btn btn-sm" onclick='refreshQuotaAccount(${JSON.stringify(acct.name)})'>${icon('refresh')} Refresh</button>
+			<button class="btn btn-xs" onclick='toggleCookieInput(${JSON.stringify(acct.name)})'>${icon('key')} Set Cookie</button>
+			<button class="btn btn-xs btn-danger" onclick='removeQuotaAccount(${JSON.stringify(acct.name)})'>${icon('x')}</button>`;
+	}
+
+	let configPanel = '';
+	if (acct.type === 'glm_coding') {
+		configPanel = `<div id="glm-input-${esc(acct.name)}" class="cookie-panel" style="display:none">
+			<div class="field-group"><label class="field-label">API key</label><input class="input" type="text" id="glm-key-${esc(acct.name)}" placeholder="sk-..."></div>
+			<div class="field-group"><label class="field-label">Base URL</label><input class="input" type="text" id="glm-base-${esc(acct.name)}" value="https://api.z.ai"></div>
+			<button class="btn btn-sm" onclick='saveGlmKey(${JSON.stringify(acct.name)})'>Save & Fetch</button>
+		</div>`;
+	} else if (acct.type === 'deepseek') {
+		configPanel = `<div id="ds-input-${esc(acct.name)}" class="cookie-panel" style="display:none">
+			<div class="field-group"><label class="field-label">DeepSeek API key</label><input class="input" type="text" id="ds-key-${esc(acct.name)}" placeholder="sk-..."></div>
+			<button class="btn btn-sm" onclick='saveDsKey(${JSON.stringify(acct.name)})'>Save & Fetch</button>
+		</div>`;
+	} else {
+		configPanel = `<div id="cookie-input-${esc(acct.name)}" class="cookie-panel" style="display:none">
+			<div class="field-group"><label class="field-label">Auth cookie</label><input class="input" type="text" id="cookie-val-${esc(acct.name)}" placeholder="Paste auth cookie value"></div>
+			<div class="field-group"><label class="field-label">Workspace ID</label><input class="input" type="text" id="ws-val-${esc(acct.name)}" placeholder="wrk_xxx or leave empty for auto"></div>
+			<button class="btn btn-sm" onclick='saveAccountConfig(${JSON.stringify(acct.name)})'>Save & Fetch</button>
+		</div>`;
+	}
+
+	let windowsHtml = '';
+	if (acct.windows && acct.windows.length > 0) {
+		windowsHtml = '<div class="usage-list">';
+		for (const w of acct.windows) {
+			if (acct.type === 'deepseek') {
+				windowsHtml += `<div class="usage-row ok">
+					<div class="usage-row-body">
+						<div class="usage-row-head"><span class="usage-row-label">${esc(w.label)}</span></div>
+						<div class="usage-row-desc">${w.remaining.toFixed(2)} ${esc(w.unit)} remaining</div>
+						${w.reset_in_sec>0?`<div class="usage-row-reset">${formatResetTime(w.reset_in_sec)}</div>`:''}
+					</div>
+				</div>`;
+			} else {
+				var pct = w.remaining;
+				var cls = pct > 50 ? 'ok' : (pct > 20 ? 'warn' : 'danger');
+				windowsHtml += `<div class="usage-row ${cls}">
+					${ringProgress(pct, cls)}
+					<div class="usage-row-body">
+						<div class="usage-row-head">
+							<span class="usage-row-label">${esc(w.label)}</span>
+							<span class="usage-row-pct ${cls}">${w.remaining.toFixed(1)}%%</span>
+						</div>
+						<div class="usage-bar-track"><div class="usage-bar-fill ${cls}" style="width:${pct}%%"></div></div>
+						<div class="usage-row-footer">
+							<span class="usage-row-footer-left">${w.used.toFixed(1)}%% used</span>
+							${w.reset_in_sec>0?`<span class="usage-row-footer-right">${formatResetTime(w.reset_in_sec)}</span>`:''}
+						</div>
+					</div>
+				</div>`;
+			}
+		}
+		windowsHtml += '</div>';
+	}
+
+	let modelUsageHtml = '';
+	if (acct.model_usage && acct.model_usage.length > 0) {
+		var mu = acct.model_usage.map(function(m) { return esc(m.model) + ' ' + formatNum(m.tokens); });
+		modelUsageHtml = '<div style="margin-top:12px;font-size:0.8rem;color:var(--text-secondary)">Models (24h): ' + mu.join(', ') + '</div>';
+	}
+
+	let tsHtml = '';
+	if (acct.updated_at) {
+		tsHtml = '<div class="timestamp">Updated ' + new Date(acct.updated_at).toLocaleString() + '</div>';
+	}
+
+	let errorHtml = '';
+	if (!acct.success) {
+		errorHtml = '<div class="quota-error">' + esc(acct.error || 'Unknown error') + '</div>';
+	}
+
+	return `<div class="quota-card">
+		<div class="quota-header">
+			<div class="quota-header-left">
+				<span class="badge" style="background:${planColor}">${planLabel}</span>
+				<h3>${esc(acct.name)}</h3>
+			</div>
+			<div class="quota-header-right">${actions}</div>
+		</div>
+		${errorHtml}
+		${configPanel}
+		${windowsHtml}
+		${modelUsageHtml}
+		${tsHtml}
+	</div>`;
 }
-async function addQuotaAccount(){
-	var name=document.getElementById('quota-acct-name').value.trim();
-	var cookie=document.getElementById('quota-acct-cookie').value.trim();
-	if(!name)return;
-	await fetch(API_BASE+'/opencode-quota?action=addaccount&account='+encodeURIComponent(name)+'&cookie='+encodeURIComponent(cookie));
+
+/* ============================================================
+   Unified Add Account Bar
+   ============================================================ */
+function onPlatformChange() {
+	const platform = document.getElementById('unified-platform').value;
+	const credLabel = document.getElementById('unified-cred-label');
+	const credInput = document.getElementById('unified-cred');
+	const baseGroup = document.getElementById('unified-base-group');
+	if (platform === 'opencode') {
+		credLabel.textContent = 'Auth Cookie';
+		credInput.placeholder = 'optional';
+		baseGroup.classList.add('hidden');
+	} else if (platform === 'glm') {
+		credLabel.textContent = 'API Key';
+		credInput.placeholder = 'sk-...';
+		baseGroup.classList.remove('hidden');
+	} else if (platform === 'deepseek') {
+		credLabel.textContent = 'API Key';
+		credInput.placeholder = 'sk-...';
+		baseGroup.classList.add('hidden');
+	}
+}
+
+async function addUnifiedAccount() {
+	const platform = document.getElementById('unified-platform').value;
+	const name = document.getElementById('unified-acct-name').value.trim();
+	const cred = document.getElementById('unified-cred').value.trim();
+	const base = document.getElementById('unified-base').value.trim();
+	if (!name) { showToast('Account name required', 'warning'); return; }
+	try {
+		if (platform === 'opencode') {
+			await fetch(API_BASE + '/opencode-quota?action=addaccount&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cred));
+		} else if (platform === 'glm') {
+			await fetch(API_BASE + '/glmcoding-quota?action=addaccount&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(cred) + '&base_url=' + encodeURIComponent(base));
+		} else if (platform === 'deepseek') {
+			await fetch(API_BASE + '/deepseek-quota?action=addaccount&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(cred));
+		}
+		showToast('Added ' + name, 'success');
+		// Reset form
+		document.getElementById('unified-acct-name').value = '';
+		document.getElementById('unified-cred').value = '';
+		await renderQuota();
+	} catch(e) { showToast('Failed to add ' + name, 'error'); }
+}
+
+/* ============================================================
+   Quota actions (legacy — kept for per-account card buttons)
+   ============================================================ */
+function toggleCookieInput(name) { var el = document.getElementById('cookie-input-' + name); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+function toggleGlmInput(name) { var el = document.getElementById('glm-input-' + name); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+function toggleDsInput(name) { var el = document.getElementById('ds-input-' + name); el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+
+async function saveAccountConfig(name) {
+	var cookie = document.getElementById('cookie-val-' + name).value;
+	var ws = document.getElementById('ws-val-' + name).value;
+	var p = 'action=setcookie&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie);
+	if (ws) p += '&workspace=' + encodeURIComponent(ws);
+	try {
+		await fetch(API_BASE + '/opencode-quota?' + p);
+		await renderQuota();
+		showToast('Saved & fetched ' + name, 'success');
+	} catch(e) { showToast('Failed to save', 'error'); }
+}
+async function addQuotaAccount() {
+	var name = document.getElementById('quota-acct-name').value.trim();
+	var cookie = document.getElementById('quota-acct-cookie').value.trim();
+	if (!name) { showToast('Account name required', 'warning'); return; }
+	try {
+		await fetch(API_BASE + '/opencode-quota?action=addaccount&account=' + encodeURIComponent(name) + '&cookie=' + encodeURIComponent(cookie));
+		await renderQuota();
+		showToast('Added ' + name, 'success');
+	} catch(e) { showToast('Failed to add', 'error'); }
+}
+async function removeQuotaAccount(name) {
+	try {
+		await fetch(API_BASE + '/opencode-quota?action=removeaccount&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Removed ' + name, 'success');
+	} catch(e) { showToast('Failed to remove', 'error'); }
+}
+async function refreshQuotaAccount(name) {
+	try {
+		await fetch(API_BASE + '/opencode-quota?action=refresh&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Refreshed ' + name, 'success');
+	} catch(e) { showToast('Failed to refresh', 'error'); }
+}
+async function switchWorkspace(name, wsId) {
+	await fetch(API_BASE + '/opencode-quota?action=setworkspace&account=' + encodeURIComponent(name) + '&workspace=' + encodeURIComponent(wsId));
 	await renderQuota();
 }
-async function removeQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
-async function refreshQuotaAccount(name){await fetch(API_BASE+'/opencode-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
-async function switchWorkspace(name,wsId){await fetch(API_BASE+'/opencode-quota?action=setworkspace&account='+encodeURIComponent(name)+'&workspace='+encodeURIComponent(wsId));await renderQuota();}
 
-async function addGlmAccount(){
-	var name=document.getElementById('glm-acct-name').value.trim();
-	var key=document.getElementById('glm-acct-key').value.trim();
-	var base=document.getElementById('glm-acct-base').value.trim();
-	if(!name)return;
-	await fetch(API_BASE+'/glmcoding-quota?action=addaccount&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key)+'&base_url='+encodeURIComponent(base));
-	await renderQuota();
+async function addGlmAccount() {
+	var name = document.getElementById('glm-acct-name').value.trim();
+	var key = document.getElementById('glm-acct-key').value.trim();
+	var base = document.getElementById('glm-acct-base').value.trim();
+	if (!name) { showToast('Account name required', 'warning'); return; }
+	try {
+		await fetch(API_BASE + '/glmcoding-quota?action=addaccount&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(key) + '&base_url=' + encodeURIComponent(base));
+		await renderQuota();
+		showToast('Added ' + name, 'success');
+	} catch(e) { showToast('Failed to add', 'error'); }
 }
-async function removeGlmAccount(name){await fetch(API_BASE+'/glmcoding-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
-async function refreshGlmAccount(name){await fetch(API_BASE+'/glmcoding-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
-
-function toggleGlmInput(name){var el=document.getElementById('glm-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
-async function saveGlmKey(name){
-	var key=document.getElementById('glm-key-'+name).value;
-	var base=document.getElementById('glm-base-'+name).value;
-	await fetch(API_BASE+'/glmcoding-quota?action=setkey&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key)+'&base_url='+encodeURIComponent(base));
-	await renderQuota();
+async function removeGlmAccount(name) {
+	try {
+		await fetch(API_BASE + '/glmcoding-quota?action=removeaccount&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Removed ' + name, 'success');
+	} catch(e) { showToast('Failed to remove', 'error'); }
 }
-
-async function addDsAccount(){
-	var name=document.getElementById('ds-acct-name').value.trim();
-	var key=document.getElementById('ds-acct-key').value.trim();
-	if(!name)return;
-	await fetch(API_BASE+'/deepseek-quota?action=addaccount&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key));
-	await renderQuota();
+async function refreshGlmAccount(name) {
+	try {
+		await fetch(API_BASE + '/glmcoding-quota?action=refresh&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Refreshed ' + name, 'success');
+	} catch(e) { showToast('Failed to refresh', 'error'); }
 }
-async function removeDsAccount(name){await fetch(API_BASE+'/deepseek-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
-async function refreshDsAccount(name){await fetch(API_BASE+'/deepseek-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
-
-function toggleDsInput(name){var el=document.getElementById('ds-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
-async function saveDsKey(name){
-	var key=document.getElementById('ds-key-'+name).value;
-	await fetch(API_BASE+'/deepseek-quota?action=setkey&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key));
-	await renderQuota();
+async function saveGlmKey(name) {
+	var key = document.getElementById('glm-key-' + name).value;
+	var base = document.getElementById('glm-base-' + name).value;
+	try {
+		await fetch(API_BASE + '/glmcoding-quota?action=setkey&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(key) + '&base_url=' + encodeURIComponent(base));
+		await renderQuota();
+		showToast('Saved & fetched ' + name, 'success');
+	} catch(e) { showToast('Failed to save', 'error'); }
 }
 
-async function refreshAll(){
-	try{
-		const summary=await fetchJSON('/summary');
+async function addDsAccount() {
+	var name = document.getElementById('ds-acct-name').value.trim();
+	var key = document.getElementById('ds-acct-key').value.trim();
+	if (!name) { showToast('Account name required', 'warning'); return; }
+	try {
+		await fetch(API_BASE + '/deepseek-quota?action=addaccount&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(key));
+		await renderQuota();
+		showToast('Added ' + name, 'success');
+	} catch(e) { showToast('Failed to add', 'error'); }
+}
+async function removeDsAccount(name) {
+	try {
+		await fetch(API_BASE + '/deepseek-quota?action=removeaccount&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Removed ' + name, 'success');
+	} catch(e) { showToast('Failed to remove', 'error'); }
+}
+async function refreshDsAccount(name) {
+	try {
+		await fetch(API_BASE + '/deepseek-quota?action=refresh&account=' + encodeURIComponent(name));
+		await renderQuota();
+		showToast('Refreshed ' + name, 'success');
+	} catch(e) { showToast('Failed to refresh', 'error'); }
+}
+async function saveDsKey(name) {
+	var key = document.getElementById('ds-key-' + name).value;
+	try {
+		await fetch(API_BASE + '/deepseek-quota?action=setkey&account=' + encodeURIComponent(name) + '&api_key=' + encodeURIComponent(key));
+		await renderQuota();
+		showToast('Saved & fetched ' + name, 'success');
+	} catch(e) { showToast('Failed to save', 'error'); }
+}
+
+/* ============================================================
+   Refresh orchestrator
+   ============================================================ */
+async function refreshAll() {
+	try {
+		const summary = await fetchJSON('/summary');
 		renderCards(summary);
+		lastEventsData = null;
+		lastPricesData = null;
 		await renderModels();
-		if(document.getElementById('panel-events').classList.contains('active'))await renderEvents();
-		if(document.getElementById('panel-pricing').classList.contains('active'))await renderPricing();
-		if(document.getElementById('panel-health').classList.contains('active'))await renderHealth();
-		if(document.getElementById('panel-quota').classList.contains('active'))await renderQuota();
-	}catch(e){console.error('refresh failed',e);}
+		if (document.getElementById('panel-events').classList.contains('active')) await renderEvents();
+		if (document.getElementById('panel-pricing').classList.contains('active')) await renderPricing();
+		if (document.getElementById('panel-health').classList.contains('active')) await renderHealth();
+		if (document.getElementById('panel-quota').classList.contains('active')) await renderQuota();
+	} catch(e) { console.error('refresh failed', e); }
 }
 
-let refreshTimer=null;
-let refreshIntervalMs=%d;
-function setRefreshInterval(seconds){
-	refreshIntervalMs=parseInt(seconds)*1000;
-	if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
-	if(refreshIntervalMs>0){refreshTimer=setInterval(refreshAll,refreshIntervalMs);document.getElementById('refreshDot').classList.remove('paused');}
-	else{document.getElementById('refreshDot').classList.add('paused');}
+let refreshTimer = null;
+let refreshIntervalMs = %d;
+function setRefreshInterval(seconds) {
+	refreshIntervalMs = parseInt(seconds) * 1000;
+	if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+	if (refreshIntervalMs > 0) {
+		refreshTimer = setInterval(refreshAll, refreshIntervalMs);
+		document.getElementById('refreshDot').classList.remove('paused');
+	} else {
+		document.getElementById('refreshDot').classList.add('paused');
+	}
 }
-const origSwitchTab=switchTab;
-switchTab=function(name){origSwitchTab(name);updateThemeIcon();if(name==='events')renderEvents();if(name==='pricing')renderPricing();if(name==='health')renderHealth();if(name==='quota')renderQuota();};
-document.getElementById('refreshSelect').value='%d';
+
+/* ============================================================
+   Init
+   ============================================================ */
+document.getElementById('refreshSelect').value = '%d';
 setRefreshInterval(%d);
+moveTabIndicator(document.querySelector('.tab.active'));
 refreshAll();
 </script>
 </body>
