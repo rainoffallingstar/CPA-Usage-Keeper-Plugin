@@ -210,6 +210,7 @@ func initAllAccounts() {
 		cfg := currentConfig()
 		initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
 		initGlmCodingAccounts(cfg.GlmCodingAccounts)
+		initDeepseekAccounts(cfg.DeepSeekAccounts)
 		initModelPriceSync()
 	})
 }
@@ -224,6 +225,7 @@ func lazyInit() {
 		loadRecentIntoRing()
 		loadOpenCodeAccountsFromDB()
 		loadGlmAccountsFromDB()
+		loadDeepseekAccountsFromDB()
 		loadPricesFromDB()
 	})
 }
@@ -312,6 +314,9 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 	}
 	if len(override.GlmCodingAccounts) > 0 {
 		base.GlmCodingAccounts = override.GlmCodingAccounts
+	}
+	if len(override.DeepSeekAccounts) > 0 {
+		base.DeepSeekAccounts = override.DeepSeekAccounts
 	}
 	return base
 }
@@ -461,6 +466,11 @@ func createTables() error {
 		name TEXT PRIMARY KEY,
 		api_key TEXT NOT NULL DEFAULT '',
 		base_url TEXT NOT NULL DEFAULT ''
+	)`)
+	// Create DeepSeek accounts table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS deepseek_accounts (
+		name TEXT PRIMARY KEY,
+		api_key TEXT NOT NULL DEFAULT ''
 	)`)
 	// Create model prices table for persistence
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS model_prices (
@@ -711,6 +721,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Menu:        "",
 				Description: "GLM Coding Plan quota JSON API.",
 			},
+			{
+				Path:        "/api/deepseek-quota",
+				Menu:        "",
+				Description: "DeepSeek balance JSON API.",
+			},
 		},
 	}
 }
@@ -774,6 +789,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleOpenCodeQuotaPost(req.Body))
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/glmcoding-quota"):
 		return okEnvelope(handleGlmCodingQuotaGet(req.Query))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/deepseek-quota"):
+		return okEnvelope(handleDeepseekQuotaGet(req.Query))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}

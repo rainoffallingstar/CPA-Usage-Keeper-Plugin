@@ -31,7 +31,8 @@ const (
 	resourceAPIHealthPath      = "/v0/resource/plugins/usage-keeper/api/health"
 	resourceAPIPricesPath      = "/v0/resource/plugins/usage-keeper/api/prices"
 	resourceAPIOpenCodeQuota   = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
-	resourceAPIGlmCodingQuota  = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
+	resourceAPIGlmCodingQuota   = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
+	resourceAPIDeepSeekQuota    = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
 )
 
 var pluginVersion = "0.2.0"
@@ -44,6 +45,7 @@ type pluginConfig struct {
 	APIKeyHashSalt      string             `yaml:"api_key_hash_salt"`
 	OpenCodeGoAccounts  []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
 	GlmCodingAccounts   []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
+	DeepSeekAccounts    []deepseekAcctCfg   `yaml:"deepseek_accounts"`
 }
 
 func defaultConfig() pluginConfig {
@@ -155,6 +157,11 @@ type glmCodingAcctCfg struct {
 	Name    string `yaml:"name"`
 	APIKey  string `yaml:"api_key"`
 	BaseURL string `yaml:"base_url"`
+}
+
+type deepseekAcctCfg struct {
+	Name   string `yaml:"name"`
+	APIKey string `yaml:"api_key"`
 }
 
 type workspaceEntry struct {

@@ -99,22 +99,53 @@ tbody tr:hover { background: var(--accent-light); }
 .empty { text-align: center; padding: 48px 20px; color: var(--text-secondary); font-size: 0.9rem; }
 .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-bar label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
-.form-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-.input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 0.85rem; transition: all var(--transition); }
+.form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.add-account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.add-account-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); transition: all var(--transition); border-left: 3px solid var(--accent); }
+.add-account-card:nth-child(2) { border-left-color: var(--success); }
+.add-account-card:nth-child(3) { border-left-color: var(--warning); }
+.add-account-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+[data-theme="dark"] .add-account-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.add-account-card .field-group { flex: 1; min-width: 120px; }
+.add-account-card .form-row { margin-bottom: 0; }
+.add-account-card .btn-sm { white-space: nowrap; }
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.config-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.config-panel .form-row { margin-bottom: 0; }
+.cookie-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.cookie-panel .form-row { margin-bottom: 0; }
+.input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--text); font-size: 0.85rem; transition: all var(--transition); width: 100%%; }
 .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
 .input::placeholder { color: var(--text-secondary); opacity: 0.7; }
-.quota-card { margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
-.quota-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-.quota-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.quota-card { margin-bottom: 20px; border: none; border-radius: 16px; padding: 24px; background: var(--bg); box-shadow: 0 4px 24px rgba(0,0,0,0.06); transition: box-shadow var(--transition), transform var(--transition); }
+.quota-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.1); transform: translateY(-2px); }
+.quota-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.quota-header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.quota-header-left h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.quota-header-left .badge { font-size: 0.65rem; padding: 3px 8px; border-radius: 8px; background: rgba(26,127,55,0.12); color: var(--success); font-weight: 700; text-transform: none; letter-spacing: 0; }
+.quota-header-right { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.quota-sub { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 14px; margin-top: -10px; }
+.usage-list { display: flex; flex-direction: column; gap: 16px; }
+.usage-row { background: rgba(26,127,55,0.04); border-radius: 12px; padding: 14px 18px; }
+.usage-row.warn { background: rgba(154,103,0,0.04); }
+.usage-row.danger { background: rgba(207,34,46,0.04); }
+.usage-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.usage-row-label { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+.usage-row-pct { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.usage-row-pct.ok { color: var(--success); }
+.usage-row-pct.warn { color: var(--warning); }
+.usage-row-pct.danger { color: var(--danger); }
+.usage-bar-track { width: 100%%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+.usage-bar-fill { height: 100%%; border-radius: 4px; transition: width 0.6s ease; }
+.usage-bar-fill.ok { background: var(--success); }
+.usage-bar-fill.warn { background: var(--warning); }
+.usage-bar-fill.danger { background: var(--danger); }
+.usage-row-desc { font-size: 0.75rem; color: var(--text-secondary); }
 .quota-meta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; }
 .quota-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .quota-error { background: rgba(207,34,46,0.08); border: 1px solid rgba(207,34,46,0.2); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; color: var(--danger); margin-bottom: 12px; }
-.progress-ring { display: flex; align-items: center; gap: 12px; }
-.progress-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.progress-fill { height: 100%%; border-radius: 4px; transition: width 0.5s ease; }
-.cookie-panel { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
-.cookie-panel input { margin-bottom: 8px; }
-.timestamp { font-size: 0.7rem; color: var(--text-secondary); margin-top: 10px; font-style: italic; }
+.timestamp { font-size: 0.7rem; color: var(--text-secondary); margin-top: 14px; font-style: italic; }
 .health-detail-table { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
 @media (max-width: 640px) {
 	body { padding: 12px; }
@@ -336,40 +367,37 @@ async function renderHealth(){
 
 async function renderQuota(){
 	try{
-		const[ocData,glmData]=await Promise.all([
+		const[ocData,glmData,dsData]=await Promise.all([
 			fetchJSON('/opencode-quota'),
-			fetchJSON('/glmcoding-quota')
+			fetchJSON('/glmcoding-quota'),
+			fetchJSON('/deepseek-quota')
 		]);
-		const accounts=[...(ocData.accounts||[]),...(glmData.accounts||[])];
-		let h='<div class="form-row">';
-		h+='<input class="input" type="text" id="quota-acct-name" placeholder="Account name" style="width:150px">';
-		h+='<input class="input" type="text" id="quota-acct-cookie" placeholder="auth cookie (optional)" style="width:240px">';
-		h+='<button class="btn btn-sm" onclick="addQuotaAccount()">+ OpenCode Go</button>';
+		const accounts=[...(ocData.accounts||[]),...(glmData.accounts||[]),...(dsData.accounts||[])];
+		let h='<div class="add-account-grid">';
+		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="quota-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">Auth cookie</label><input class="input" type="text" id="quota-acct-cookie" placeholder="optional"></div><button class="btn btn-sm" onclick="addQuotaAccount()">+ OpenCode Go</button></div></div>';
+		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="glm-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">API key</label><input class="input" type="text" id="glm-acct-key" placeholder="sk-..."></div><div class="field-group"><label class="field-label">Base URL</label><input class="input" type="text" id="glm-acct-base" value="https://api.z.ai"></div><button class="btn btn-sm" onclick="addGlmAccount()">+ GLM Plan</button></div></div>';
+		h+='<div class="add-account-card"><div class="form-row"><div class="field-group"><label class="field-label">Account name</label><input class="input" type="text" id="ds-acct-name" placeholder="e.g. work"></div><div class="field-group"><label class="field-label">DeepSeek API key</label><input class="input" type="text" id="ds-acct-key" placeholder="sk-..."></div><button class="btn btn-sm" onclick="addDsAccount()">+ DeepSeek</button></div></div>';
 		h+='</div>';
-		h+='<div class="form-row">';
-		h+='<input class="input" type="text" id="glm-acct-name" placeholder="Account name" style="width:150px">';
-		h+='<input class="input" type="text" id="glm-acct-key" placeholder="API key" style="width:300px">';
-		h+='<input class="input" type="text" id="glm-acct-base" placeholder="Base URL (e.g. https://api.z.ai)" value="https://api.z.ai" style="width:240px">';
-		h+='<button class="btn btn-sm" onclick="addGlmAccount()">+ GLM Plan</button>';
-		h+='</div>';
-		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Use the forms above to add OpenCode Go or GLM Coding Plan accounts.</div>';}
+		if(accounts.length===0){h+='<div class="empty">No accounts configured.<br>Use the forms above to add OpenCode Go, GLM Coding Plan, or DeepSeek accounts.</div>';}
 		for(const acct of accounts){
 			h+='<div class="quota-card">';
-			h+='<div class="quota-header"><div>';
-			var typeBadge='';
-			if(acct.type==='glm_coding')typeBadge=' <span class="badge badge-success" style="font-size:0.65rem;vertical-align:middle">GLM</span>';
-			h+='<h3>'+acct.name+typeBadge+'</h3>';
-			if(acct.type!=='glm_coding'&&acct.workspaces&&acct.workspaces.length>0){
-				h+='<div class="quota-meta"><select onchange="switchWorkspace(\''+acct.name+'\',this.value)" class="refresh-select" style="margin-top:6px;font-size:0.75rem;padding:3px 6px">';
-				for(const ws of acct.workspaces){var sel=ws.id===acct.workspace_id?' selected':'';h+='<option value="'+ws.id+'"'+sel+'>'+ws.name+'</option>';}
-				h+='</select></div>';
-			}else if(acct.type!=='glm_coding'){h+='<div class="quota-meta">Workspace: '+(acct.workspace_id||'auto-resolve')+'</div>';}
+			h+='<div class="quota-header">';
+			h+='<div class="quota-header-left">';
+			var planLabel='Free';var planColor='rgba(26,127,55,0.12)';
+			if(acct.type==='glm_coding'){planLabel='GLM';planColor='rgba(26,127,55,0.12)';}
+			else if(acct.type==='deepseek'){planLabel='DeepSeek';planColor='rgba(154,103,0,0.12)';}
+			h+='<span class="badge" style="background:'+planColor+'">'+planLabel+'</span>';
+			h+='<h3>'+acct.name+'</h3>';
 			h+='</div>';
-			h+='<div class="quota-actions">';
+			h+='<div class="quota-header-right">';
 			if(acct.type==='glm_coding'){
 				h+='<button class="btn btn-sm" onclick="refreshGlmAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
 				h+='<button class="btn btn-xs" onclick="toggleGlmInput(\''+acct.name+'\')">Set Key</button>';
 				h+='<button class="btn btn-xs btn-danger" onclick="removeGlmAccount(\''+acct.name+'\')">&#10005;</button>';
+			}else if(acct.type==='deepseek'){
+				h+='<button class="btn btn-sm" onclick="refreshDsAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
+				h+='<button class="btn btn-xs" onclick="toggleDsInput(\''+acct.name+'\')">Set Key</button>';
+				h+='<button class="btn btn-xs btn-danger" onclick="removeDsAccount(\''+acct.name+'\')">&#10005;</button>';
 			}else{
 				h+='<button class="btn btn-sm" onclick="refreshQuotaAccount(\''+acct.name+'\')">&#8635; Refresh</button>';
 				h+='<button class="btn btn-xs" onclick="toggleCookieInput(\''+acct.name+'\')">Set Cookie</button>';
@@ -379,25 +407,40 @@ async function renderQuota(){
 			if(!acct.success){h+='<div class="quota-error">'+(acct.error||'Unknown error')+'</div>';}
 			if(acct.type==='glm_coding'){
 				h+='<div id="glm-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-				h+='<input class="input" type="text" id="glm-key-'+acct.name+'" placeholder="API key" style="width:100%%;margin-bottom:6px">';
-				h+='<input class="input" type="text" id="glm-base-'+acct.name+'" placeholder="Base URL" style="width:100%%;margin-bottom:6px" value="https://api.z.ai">';
+				h+='<div class="field-group"><label class="field-label">API key</label><input class="input" type="text" id="glm-key-'+acct.name+'" placeholder="sk-..."></div>';
+				h+='<div class="field-group"><label class="field-label">Base URL</label><input class="input" type="text" id="glm-base-'+acct.name+'" value="https://api.z.ai"></div>';
 				h+='<button class="btn btn-sm" onclick="saveGlmKey(\''+acct.name+'\')">Save & Fetch</button>';
+				h+='</div>';
+			}else if(acct.type==='deepseek'){
+				h+='<div id="ds-input-'+acct.name+'" class="cookie-panel" style="display:none">';
+				h+='<div class="field-group"><label class="field-label">DeepSeek API key</label><input class="input" type="text" id="ds-key-'+acct.name+'" placeholder="sk-..."></div>';
+				h+='<button class="btn btn-sm" onclick="saveDsKey(\''+acct.name+'\')">Save & Fetch</button>';
 				h+='</div>';
 			}else{
 				h+='<div id="cookie-input-'+acct.name+'" class="cookie-panel" style="display:none">';
-				h+='<input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value" style="width:100%%;margin-bottom:6px">';
-				h+='<input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="Workspace ID (wrk_xxx or leave empty for auto)" style="width:100%%">';
+				h+='<div class="field-group"><label class="field-label">Auth cookie</label><input class="input" type="text" id="cookie-val-'+acct.name+'" placeholder="Paste auth cookie value"></div>';
+				h+='<div class="field-group"><label class="field-label">Workspace ID</label><input class="input" type="text" id="ws-val-'+acct.name+'" placeholder="wrk_xxx or leave empty for auto"></div>';
 				h+='<button class="btn btn-sm" onclick="saveAccountConfig(\''+acct.name+'\')">Save & Fetch</button>';
 				h+='</div>';
 			}
 			if(acct.windows&&acct.windows.length>0){
-				h+='<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">';
+				h+='<div class="usage-list">';
 				for(const w of acct.windows){
-					var pct=w.remaining;var color=pct>50?'var(--success)':(pct>20?'var(--warning)':'var(--danger)');
-					h+='<div class="card"><div class="card-label">'+w.label+'</div>';
-					h+='<div class="card-value" style="color:'+color+';font-size:1.3rem">'+w.remaining.toFixed(1)+'%%'+'</div>';
-					h+='<div class="progress-ring" style="margin-top:8px"><div class="progress-track"><div class="progress-fill" style="width:'+pct+'%%;background:'+color+'"></div></div></div>';
-					h+='<div class="card-sub">'+w.used.toFixed(1)+'%% used</div></div>';
+					if(acct.type==='deepseek'){
+						var dsCls='ok';
+						h+='<div class="usage-row '+dsCls+'">';
+						h+='<div class="usage-row-head"><span class="usage-row-label">'+w.label+'</span></div>';
+						h+='<div class="usage-row-desc">'+w.remaining.toFixed(2)+' '+w.unit+' remaining</div>';
+						h+='</div>';
+					}else{
+						var pct=w.remaining;
+						var cls=pct>50?'ok':(pct>20?'warn':'danger');
+						h+='<div class="usage-row '+cls+'">';
+						h+='<div class="usage-row-head"><span class="usage-row-label">'+w.label+'</span><span class="usage-row-pct '+cls+'">'+w.remaining.toFixed(1)+'%%</span></div>';
+						h+='<div class="usage-bar-track"><div class="usage-bar-fill '+cls+'" style="width:'+pct+'%%"></div></div>';
+						h+='<div class="usage-row-desc">'+w.used.toFixed(1)+'%% used</div>';
+						h+='</div>';
+					}
 				}
 				h+='</div>';
 			}
@@ -449,6 +492,23 @@ async function saveGlmKey(name){
 	var key=document.getElementById('glm-key-'+name).value;
 	var base=document.getElementById('glm-base-'+name).value;
 	await fetch(API_BASE+'/glmcoding-quota?action=setkey&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key)+'&base_url='+encodeURIComponent(base));
+	await renderQuota();
+}
+
+async function addDsAccount(){
+	var name=document.getElementById('ds-acct-name').value.trim();
+	var key=document.getElementById('ds-acct-key').value.trim();
+	if(!name)return;
+	await fetch(API_BASE+'/deepseek-quota?action=addaccount&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key));
+	await renderQuota();
+}
+async function removeDsAccount(name){await fetch(API_BASE+'/deepseek-quota?action=removeaccount&account='+encodeURIComponent(name));await renderQuota();}
+async function refreshDsAccount(name){await fetch(API_BASE+'/deepseek-quota?action=refresh&account='+encodeURIComponent(name));await renderQuota();}
+
+function toggleDsInput(name){var el=document.getElementById('ds-input-'+name);el.style.display=el.style.display==='none'?'block':'none';}
+async function saveDsKey(name){
+	var key=document.getElementById('ds-key-'+name).value;
+	await fetch(API_BASE+'/deepseek-quota?action=setkey&account='+encodeURIComponent(name)+'&api_key='+encodeURIComponent(key));
 	await renderQuota();
 }
 
