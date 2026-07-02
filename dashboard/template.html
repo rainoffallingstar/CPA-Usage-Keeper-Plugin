@@ -309,46 +309,85 @@ body {
 }
 
 /* ============================================================
-   Tabs with sliding indicator
+   Tabs row — segmented control (capsule) + search
    ============================================================ */
+.tabs-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 20px;
+	gap: 16px;
+}
 .tabs {
 	display: flex;
-	gap: 2px;
-	margin-bottom: 20px;
-	border-bottom: 1px solid var(--border);
-	overflow-x: auto;
+	gap: 3px;
+	padding: 4px;
+	background: var(--surface);
+	border: 1px solid var(--border-subtle);
+	border-radius: 12px;
 	position: relative;
-	-webkit-overflow-scrolling: touch;
 }
-.tabs::-webkit-scrollbar { height: 0; }
 .tab {
-	padding: 9px 16px;
+	padding: 6px 16px;
 	cursor: pointer;
-	font-size: 0.88rem;
+	font-size: 0.85rem;
 	color: var(--text-secondary);
 	border: none;
-	background: none;
+	background: transparent;
 	white-space: nowrap;
 	font-weight: 500;
-	transition: color var(--transition);
-	position: relative;
-	z-index: 1;
+	border-radius: 9px;
+	transition: all var(--transition);
 }
-.tab:hover { color: var(--text); }
+.tab:hover {
+	color: var(--text);
+	background: var(--surface-hover);
+}
 .tab.active {
-	color: var(--accent);
+	color: var(--text);
 	font-weight: 600;
+	background: var(--surface-2);
+	box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
 }
-.tab-indicator {
+/* No sliding line indicator — capsule uses background fill instead */
+.tab-indicator { display: none; }
+
+/* Tab-level search (right-aligned, same row as tabs) */
+.tab-search-wrapper {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+.tab-search-wrapper svg {
 	position: absolute;
-	bottom: -1px;
-	height: 2px;
-	background: var(--accent);
-	border-radius: 2px 2px 0 0;
-	transition: left 0.35s var(--ease-out-expo), width 0.35s var(--ease-out-expo);
-	box-shadow: 0 0 8px var(--accent);
+	left: 10px;
+	width: 15px;
+	height: 15px;
+	color: var(--text-tertiary);
 	pointer-events: none;
+	transition: color var(--transition);
 }
+.tab-search-wrapper:focus-within svg {
+	color: var(--accent);
+}
+.tab-search-input {
+	padding: 7px 12px 7px 32px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--surface-2);
+	color: var(--text);
+	font-size: 0.85rem;
+	transition: all var(--transition);
+	font-family: var(--font-sans);
+	width: 200px;
+}
+.tab-search-input:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: var(--accent-glow);
+}
+.tab-search-input::placeholder { color: var(--text-tertiary); }
 
 /* ============================================================
    Panels
@@ -465,62 +504,7 @@ tbody tr:hover { background: var(--accent-light); }
 .empty-text { font-size: 0.9rem; line-height: 1.6; }
 .empty-sub { font-size: 0.78rem; color: var(--text-tertiary); margin-top: 4px; }
 
-/* ============================================================
-   Filter Bar & Search
-   ============================================================ */
-.filter-bar {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-bottom: 16px;
-}
-.filter-group-left {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
-}
-.filter-bar label {
-	font-size: 0.8rem;
-	color: var(--text-secondary);
-	font-weight: 500;
-	white-space: nowrap;
-}
-.search-wrapper {
-	position: relative;
-	display: flex;
-	align-items: center;
-}
-.search-wrapper svg {
-	position: absolute;
-	left: 10px;
-	width: 15px;
-	height: 15px;
-	color: var(--text-tertiary);
-	pointer-events: none;
-	transition: color var(--transition);
-}
-.search-wrapper:focus-within svg {
-	color: var(--accent);
-}
-.search-input {
-	padding: 7px 12px 7px 32px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: var(--surface-2);
-	color: var(--text);
-	font-size: 0.85rem;
-	transition: all var(--transition);
-	font-family: var(--font-sans);
-	width: 280px;
-	max-width: 100%%;
-}
-.search-input:focus {
-	outline: none;
-	border-color: var(--accent);
-	box-shadow: var(--accent-glow);
-}
-.search-input::placeholder { color: var(--text-tertiary); }
+
 
 /* ============================================================
    Forms & Unified Add Account Bar
@@ -588,19 +572,13 @@ tbody tr:hover { background: var(--accent-light); }
 		width: 100%%;
 		margin-top: 4px;
 	}
-	.filter-bar {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 8px;
+	.tabs-row {
+		flex-wrap: wrap;
 	}
-	.filter-group-left {
+	.tab-search-wrapper {
 		width: 100%%;
 	}
-	.search-wrapper {
-		width: 100%%;
-		margin-left: 0;
-	}
-	.search-input {
+	.tab-search-input {
 		width: 100%%;
 	}
 }
@@ -1021,48 +999,30 @@ tbody tr:hover { background: var(--accent-light); }
 
 <div class="cards" id="cards"></div>
 
-<div class="tabs" id="tabBar">
-	<button class="tab active" data-tab="models">By Model</button>
-	<button class="tab" data-tab="events">All Events</button>
-	<button class="tab" data-tab="pricing">Pricing</button>
-	<button class="tab" data-tab="health">Health</button>
-	<button class="tab" data-tab="quota">Quota</button>
-	<div class="tab-indicator" id="tabIndicator"></div>
+<div class="tabs-row">
+	<div class="tabs" id="tabBar">
+		<button class="tab active" data-tab="models">By Model</button>
+		<button class="tab" data-tab="events">All Events</button>
+		<button class="tab" data-tab="pricing">Pricing</button>
+		<button class="tab" data-tab="health">Health</button>
+		<button class="tab" data-tab="quota">Quota</button>
+		<div class="tab-indicator" id="tabIndicator"></div>
+	</div>
+	<div class="tab-search-wrapper" id="tabSearchWrapper">
+		<span id="globalSearchIcon"></span>
+		<input class="tab-search-input" type="text" id="globalSearch" placeholder="Search models..." oninput="handleGlobalSearch()">
+	</div>
 </div>
 
 <div class="panel active" id="panel-models">
-	<div class="filter-bar">
-		<div class="filter-group-left">
-			<label>Provider:</label>
-			<select id="providerFilter" class="refresh-select" onchange="renderModels()">
-				<option value="">All Providers</option>
-			</select>
-		</div>
-		<div class="search-wrapper">
-			<span id="searchIconModels"></span>
-			<input class="search-input" type="text" id="modelSearch" placeholder="Search models..." oninput="renderModels()">
-		</div>
-	</div>
 	<div id="modelTable"></div>
 </div>
 
 <div class="panel" id="panel-events">
-	<div class="filter-bar">
-		<div class="search-wrapper">
-			<span id="searchIconEvents"></span>
-			<input class="search-input" type="text" id="eventSearch" placeholder="Search events..." oninput="renderEvents()">
-		</div>
-	</div>
 	<div id="eventTable"></div>
 </div>
 
 <div class="panel" id="panel-pricing">
-	<div class="filter-bar">
-		<div class="search-wrapper">
-			<span id="searchIconPricing"></span>
-			<input class="search-input" type="text" id="priceSearch" placeholder="Search pricing..." oninput="renderPricing()">
-		</div>
-	</div>
 	<div id="pricingTable"></div>
 </div>
 
@@ -1325,34 +1285,52 @@ function switchTab(name) {
 		t.classList.remove('active');
 		if (t.dataset.tab === name) {
 			t.classList.add('active');
-			moveTabIndicator(t);
 		}
 	});
 	document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
 	const panel = document.getElementById('panel-' + name);
 	if (panel) panel.classList.add('active');
 	updateThemeIcon();
+	updateSearchPlaceholder(name);
+	const searchWrapper = document.getElementById('tabSearchWrapper');
+	if (searchWrapper) {
+		searchWrapper.style.display = (name === 'models' || name === 'events' || name === 'pricing') ? '' : 'none';
+	}
+	if (name === 'models') renderModels();
 	if (name === 'events') renderEvents();
 	if (name === 'pricing') renderPricing();
 	if (name === 'health') renderHealth();
 	if (name === 'quota') renderQuota();
 }
 
+function updateSearchPlaceholder(tabName) {
+	var input = document.getElementById('globalSearch');
+	if (!input) return;
+	var map = { models: 'Search models...', events: 'Search events...', pricing: 'Search pricing...' };
+	input.placeholder = map[tabName] || '';
+	if (!map[tabName]) input.value = '';
+}
+
+function handleGlobalSearch() {
+	var name = (document.querySelector('.tab.active') || {}).dataset || {};
+	var tab = name.tab;
+	if (tab === 'models') renderModels();
+	else if (tab === 'events') renderEvents();
+	else if (tab === 'pricing') renderPricing();
+}
+
 document.querySelectorAll('.tab').forEach(function(tab) {
 	tab.addEventListener('click', function() { switchTab(this.dataset.tab); });
 });
 window.addEventListener('resize', function() {
-	const active = document.querySelector('.tab.active');
-	if (active) moveTabIndicator(active);
+	// Capsule tabs — no indicator to reposition on resize
 });
 
 /* ============================================================
    Init static icons
    ============================================================ */
 document.getElementById('refreshBtn').innerHTML = icon('refresh');
-document.getElementById('searchIconModels').innerHTML = icon('search');
-document.getElementById('searchIconEvents').innerHTML = icon('search');
-document.getElementById('searchIconPricing').innerHTML = icon('search');
+document.getElementById('globalSearchIcon').innerHTML = icon('search');
 
 /* ============================================================
    Data fetching
@@ -1390,9 +1368,8 @@ function renderCards(d) {
    Render: Models
    ============================================================ */
 async function renderModels() {
-	var prov = document.getElementById('providerFilter').value;
-	const models = await fetchJSON('/models', { provider: prov });
-	const q = (document.getElementById('modelSearch').value || '').toLowerCase().trim();
+	const models = await fetchJSON('/models', {});
+	const q = (document.getElementById('globalSearch').value || '').toLowerCase().trim();
 	const filtered = q ? models.filter(function(m) {
 		return (m.model||'').toLowerCase().includes(q) || (m.provider||'').toLowerCase().includes(q);
 	}) : models;
@@ -1400,7 +1377,6 @@ async function renderModels() {
 		document.getElementById('modelTable').innerHTML = q
 			? emptyState('database', 'No models match "' + q + '"', 'Try a different search term.')
 			: emptyState('database', 'No usage data for this time range.', 'Data will appear here once requests are processed.');
-		buildProviderFilter(models);
 		return;
 	}
 	const maxT = Math.max.apply(null, models.map(function(m) { return m.total_tokens; }).concat([1]));
@@ -1418,24 +1394,6 @@ async function renderModels() {
 			</tr>`;
 		}).join('')}
 		</tbody></table>`;
-	buildProviderFilter(models);
-}
-function buildProviderFilter(models) {
-	var sel = document.getElementById('providerFilter');
-	var seen = {};
-	var cur = sel.value;
-	sel.innerHTML = '<option value="">All Providers</option>';
-	models.forEach(function(m) {
-		var p = (m.provider || 'Unknown').trim();
-		if (p && !seen[p]) {
-			seen[p] = true;
-			var o = document.createElement('option');
-			o.value = p;
-			o.textContent = p.split('-').slice(-2).join('-');
-			sel.appendChild(o);
-		}
-	});
-	if (cur && seen[cur]) sel.value = cur;
 }
 
 /* ============================================================
@@ -1448,7 +1406,7 @@ async function renderEvents() {
 		data = await fetchJSON('/events?limit=100');
 		lastEventsData = data;
 	}
-	const q = (document.getElementById('eventSearch').value || '').toLowerCase().trim();
+	const q = (document.getElementById('globalSearch').value || '').toLowerCase().trim();
 	let events = data.events || [];
 	if (q) {
 		events = events.filter(function(e) {
@@ -1499,7 +1457,7 @@ async function renderPricing() {
 	}
 	const prices = data.prices || {};
 	let entries = Object.entries(prices);
-	const q = (document.getElementById('priceSearch').value || '').toLowerCase().trim();
+	const q = (document.getElementById('globalSearch').value || '').toLowerCase().trim();
 	if (q) {
 		entries = entries.filter(function(pair) { return pair[0].toLowerCase().includes(q); });
 	}
@@ -1718,19 +1676,22 @@ function renderQuotaCard(acct) {
 		windowsHtml = '<div class="usage-list">';
 		for (const w of acct.windows) {
 			if (acct.type === 'deepseek') {
-				var ceiling = Math.max(100, Math.ceil(w.remaining / 100) * 100);
-				var pct = Math.min(100, (w.remaining / ceiling) * 100);
+				// Tiered total: 1-100 → total=100, 100-200 → total=200, etc.
+				var total = Math.max(100, Math.ceil(w.remaining / 100) * 100);
+				var used = total - w.remaining;
+				var pct = (w.remaining / total) * 100;
 				var cls = pct > 50 ? 'ok' : (pct > 20 ? 'warn' : 'danger');
 				windowsHtml += `<div class="usage-row ${cls}">
 					${ringProgress(pct, cls)}
 					<div class="usage-row-body">
 						<div class="usage-row-head">
 							<span class="usage-row-label">${esc(w.label)}</span>
-							<span class="usage-row-pct ${cls}">${pct.toFixed(1)}%%</span>
+							<span class="usage-row-pct ${cls}">${w.remaining.toFixed(2)} ${esc(w.unit)}</span>
 						</div>
 						<div class="usage-bar-track"><div class="usage-bar-fill ${cls}" style="width:${pct}%%"></div></div>
 						<div class="usage-row-footer">
-							<span class="usage-row-footer-left">${w.remaining.toFixed(2)} / ${ceiling} ${esc(w.unit)}</span>
+							<span class="usage-row-footer-left">${used.toFixed(2)} ${esc(w.unit)} used of ${total.toFixed(0)}</span>
+							${w.reset_in_sec>0?`<span class="usage-row-footer-right">${formatResetTime(w.reset_in_sec)}</span>`:''}
 						</div>
 					</div>
 				</div>`;
@@ -1983,7 +1944,6 @@ function setRefreshInterval(seconds) {
    ============================================================ */
 document.getElementById('refreshSelect').value = '%d';
 setRefreshInterval(%d);
-moveTabIndicator(document.querySelector('.tab.active'));
 refreshAll();
 </script>
 </body>

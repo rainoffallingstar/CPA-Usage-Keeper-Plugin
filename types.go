@@ -35,7 +35,7 @@ const (
 	resourceAPIDeepSeekQuota    = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
 )
 
-var pluginVersion = "0.2.0"
+var pluginVersion = "0.8.0"
 
 type pluginConfig struct {
 	DBPath              string             `yaml:"db_path"`
