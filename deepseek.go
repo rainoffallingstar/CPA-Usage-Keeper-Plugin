@@ -117,28 +117,47 @@ func refreshDeepseekBalance(acct *deepseekAccountRuntime) {
 	acct.Cache.Success = true
 	acct.Cache.UpdatedAt = now
 	acct.Cache.Error = ""
-	acct.Cache.Windows = make([]quotaWindow, 0, len(bal.BalanceInfos)*3)
+	acct.Cache.Windows = make([]quotaWindow, 0, 3)
 	for _, info := range bal.BalanceInfos {
 		total, _ := strconv.ParseFloat(strings.TrimSpace(info.TotalBalance), 64)
 		granted, _ := strconv.ParseFloat(strings.TrimSpace(info.GrantedBalance), 64)
 		toppedUp, _ := strconv.ParseFloat(strings.TrimSpace(info.ToppedUpBalance), 64)
 
+		// Tiered pricing: cap jumps in $100 increments
+		// E.g., topped_up = 37 CN¥ → tier cap = 100; topped_up = 145 → tier cap = 200
+		tierCap := 100.0
+		if toppedUp > 0 {
+			tierCap = (float64(int(toppedUp)/100) + 1) * 100
+		}
+		// Used = tier cap - remaining topped_up (i.e., how much of the tier is consumed)
+		used := tierCap - toppedUp
+		if used < 0 {
+			used = 0
+		}
+		// Total displayed = tier cap (next $100 boundary)
+		acct.Cache.Windows = append(acct.Cache.Windows, quotaWindow{
+			Label:     fmt.Sprintf("%s Tier (CN¥%.0f)", info.Currency, tierCap),
+			Used:      used,
+			Total:     tierCap,
+			Remaining: toppedUp,
+			Unit:      info.Currency,
+		})
+		// Granted (free)
+		if granted > 0 {
+			acct.Cache.Windows = append(acct.Cache.Windows, quotaWindow{
+				Label:     "Granted (Free)",
+				Used:      0,
+				Total:     granted,
+				Remaining: granted,
+				Unit:      info.Currency,
+			})
+		}
+		// Total combined balance
 		acct.Cache.Windows = append(acct.Cache.Windows, quotaWindow{
 			Label:     "Total Balance",
+			Used:      total - toppedUp - granted + used,
+			Total:     total + used,
 			Remaining: total,
-			Total:     total,
-			Unit:      info.Currency,
-		})
-		acct.Cache.Windows = append(acct.Cache.Windows, quotaWindow{
-			Label:     "Granted",
-			Remaining: granted,
-			Total:     granted,
-			Unit:      info.Currency,
-		})
-		acct.Cache.Windows = append(acct.Cache.Windows, quotaWindow{
-			Label:     "Topped Up",
-			Remaining: toppedUp,
-			Total:     toppedUp,
 			Unit:      info.Currency,
 		})
 	}

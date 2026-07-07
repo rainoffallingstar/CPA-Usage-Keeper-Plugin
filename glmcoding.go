@@ -59,11 +59,6 @@ func fetchGlmCodingQuota(apiKey, baseURL string) (*quotaAccount, error) {
 	if strings.HasSuffix(base, "/api") {
 		base = strings.TrimSuffix(base, "/api")
 	}
-	// Monitoring endpoints are at https://domain/api/monitor/...
-	// Strip LLM API path segments (/paas/v4, /paas/v3, etc.)
-	if idx := strings.Index(base, "/paas/"); idx > 0 {
-		base = base[:idx]
-	}
 
 	// Time window: yesterday at current hour to now
 	now := time.Now()
@@ -126,15 +121,15 @@ func fetchGlmQuotaLimits(url, key string) ([]glmQuotaLimitItem, error) {
 	}
 
 	var r glmQuotaLimitResp
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(bodyBytes, &r); err != nil {
 		return nil, err
 	}
+
 	var limits []glmQuotaLimitItem
 	for _, l := range r.Data.Limits {
-		l.Percentage = 100 - l.Percentage // API returns used%, we want remaining%
-		if l.Percentage < 0 {
-			l.Percentage = 0
-		}
+		l.Percentage = 100 - l.Percentage // API returns used%, flip to remaining%
+		if l.Percentage < 0 { l.Percentage = 0 }
 		limits = append(limits, l)
 	}
 	return limits, nil
@@ -269,7 +264,7 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 				},
 			}
 			if r.BaseURL == "" {
-				r.BaseURL = "https://open.bigmodel.cn/api/paas/v4"
+				r.BaseURL = "https://open.bigmodel.cn"
 			}
 			glmAccounts = append(glmAccounts, r)
 			glmAcctMu.Unlock()

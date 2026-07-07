@@ -336,7 +336,7 @@ function buildQuotaFields(provider){
 	} else if (provider === 'glm') {
 		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
 		f += '<div class="field-group"><label>API Key</label><input class="input" id="qa-key" placeholder="sk-..." style="width:100%%"></div>';
-		f += '<div class="field-group"><label>Base URL</label><input class="input" id="qa-base" value="https://open.bigmodel.cn/api/paas/v4" style="width:100%%"></div>';
+		f += '<div class="field-group"><label>Base URL</label><input class="input" id="qa-base" value="https://open.bigmodel.cn" style="width:100%%"></div>';
 		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
 	} else {
 		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
@@ -365,6 +365,16 @@ function renderQuotaSection(title, provider, accounts, buildBars){
 	return html;
 }
 
+function formatReset(secs){
+	if(!secs||secs<=0) return 'now';
+	var d=Math.floor(secs/86400), h=Math.floor((secs%%86400)/3600), m=Math.floor((secs%%3600)/60);
+	var parts=[];
+	if(d>0) parts.push(d+'d');
+	if(h>0||d>0) parts.push(h+'h');
+	if(m>0||parts.length===0) parts.push(m+'m');
+	return parts.join(' ');
+}
+
 function buildOpenCodeBars(a){
 	var bars='';
 	(a.windows||[]).forEach(function(w){
@@ -372,7 +382,7 @@ function buildOpenCodeBars(a){
 		var warn='';
 		if(pct>90) warn='<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
 		else if(pct>70) warn='<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
-		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+' / '+w.total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Resets in '+(w.reset_in_sec>3600?Math.round(w.reset_in_sec/3600)+'h':Math.round(w.reset_in_sec/60)+'m')+'</div>'+warn+'</div>';
+		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+' / '+w.total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Resets in '+formatReset(w.reset_in_sec)+'</div>'+warn+'</div>';
 	});
 	return bars;
 }
@@ -380,20 +390,39 @@ function buildOpenCodeBars(a){
 function buildGlmBars(a){
 	var bars='';
 	(a.windows||[]).forEach(function(w){
-		var pct=w.total>0?Math.round(w.used/w.total*100):0, cls=pct>90?'red':(pct>70?'yellow':'green');
-		var warn='';
-		if(pct>90) warn='<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
-		else if(pct>70) warn='<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
-		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+' / '+w.total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Quota usage: '+pct+'%% consumed</div>'+warn+'</div>';
+		var remain = w.remaining || 0;
+		var used = w.used || 0;
+		var total = w.total || 0;
+		if (total === 0) { total = 100; var r = Math.max(0, Math.min(100, remain)); used = 100 - r; }
+		var pct = total > 0 ? Math.round(used / total * 100) : 0;
+		var cls = pct > 90 ? 'red' : (pct > 70 ? 'yellow' : 'green');
+		var warn = '';
+		if (pct > 90) warn = '<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
+		else if (pct > 70) warn = '<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
+		bars += '<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+used.toFixed(1)+' / '+total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100, pct)+'%%"></div></div><div class="progress-reset">Remaining: '+remain.toFixed(1)+'%%</div>'+warn+'</div>';
 	});
 	(a.model_usage||[]).forEach(function(mu){
-		bars+='<div class="usage-row"><span class="usage-label">'+esc(mu.model)+'</span><span class="usage-value">'+formatNum(mu.tokens)+' tokens</span></div>';
+		bars += '<div class="usage-row"><span class="usage-label">'+esc(mu.model)+'</span><span class="usage-value">'+formatNum(mu.tokens)+' tokens</span></div>';
 	});
 	return bars;
 }
 
 function buildDeepSeekBars(a){
-	return buildOpenCodeBars(a);
+	var bars='';
+	(a.windows||[]).forEach(function(w){
+		var remain = w.remaining || 0;
+		var used = w.used || 0;
+		var total = w.total || 0;
+		if (total === 0) { total = 100; var r = Math.max(0, Math.min(100, remain)); used = 100 - r; }
+		var pct = total > 0 ? Math.round(used / total * 100) : 0;
+		var cls = pct > 90 ? 'red' : (pct > 70 ? 'yellow' : 'green');
+		var warn = '';
+		if (pct > 90) warn = '<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
+		else if (pct > 70) warn = '<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
+		var reset = w.reset_in_sec > 0 ? 'Resets in '+formatReset(w.reset_in_sec) : 'Remaining balance: '+remain.toFixed(1)+' '+w.unit;
+		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+used.toFixed(1)+' / '+total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">'+reset+'</div>'+warn+'</div>';
+	});
+	return bars;
 }
 
 function doAddQuotaAccount(){
