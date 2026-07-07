@@ -406,8 +406,8 @@ func ensureDB() {
 		if err != nil {
 			panic(fmt.Sprintf("usage-keeper: failed to open database: %v", err))
 		}
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
+		db.SetMaxOpenConns(3)
+		db.SetMaxIdleConns(3)
 
 		if errCreate := createTables(); errCreate != nil {
 			panic(fmt.Sprintf("usage-keeper: failed to create tables: %v", errCreate))
@@ -452,6 +452,7 @@ func createTables() error {
 		CREATE INDEX IF NOT EXISTS idx_usage_events_model ON usage_events(model);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_provider ON usage_events(provider);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_failed ON usage_events(failed);
+		CREATE INDEX IF NOT EXISTS idx_usage_events_ts_id ON usage_events(timestamp, id DESC);
 	`)
 	// Schema migration: add hashed_api_key for existing databases
 	_, _ = db.Exec(`ALTER TABLE usage_events ADD COLUMN hashed_api_key TEXT NOT NULL DEFAULT ''`)
@@ -501,7 +502,7 @@ func loadRecentIntoRing() {
 	}()
 
 	rows, err := db.Query(
-		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY id DESC LIMIT ?",
+		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY timestamp DESC, id DESC LIMIT ?",
 		cfg.MaxInMemoryEvents,
 	)
 	if err != nil {
@@ -817,7 +818,7 @@ func parseRangeHours(query map[string][]string) int {
 	case "30d", "month":
 		return 30 * 24
 	default:
-		return 24
+		return 30 * 24
 	}
 }
 
@@ -876,8 +877,8 @@ func handleQuotioUsage() pluginapi.ManagementResponse {
 		return jsonResponse(http.StatusOK, quotioUsageResponse{})
 	}
 
-	// Use 24h window by default
-	since := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	// Use 30-day window by default
+	since := time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
 	var total, failed, totalToks, inputToks, outputToks int64
 	_ = d.QueryRow(
 		"SELECT COUNT(*), COALESCE(SUM(failed),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0) FROM usage_events WHERE timestamp >= ?",
@@ -944,7 +945,7 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 func handleEvents(query map[string][]string, headers map[string][]string) pluginapi.ManagementResponse {
 	limit := 50
 	offset := 0
-	rangeHours := 24
+	rangeHours := 30 * 24
 
 	if vals, ok := query["limit"]; ok && len(vals) > 0 {
 		if n, errParse := parseInt(vals[0]); errParse == nil && n > 0 && n <= 500 {
@@ -972,23 +973,34 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 		authFilter = strings.TrimSpace(vals[0])
 	}
 
-	// ETag conditional caching
+	// ETag for response caching (checked inside the response cache layer)
 	etag := dashboardWeakETag("events", fmt.Sprintf("%d-%d-%d-%s-%s-%s", limit, offset, rangeHours, modelFilter, sourceFilter, authFilter))
-	if checkETag(headers, etag) {
-		cacheMu.Lock()
-		eventsCacheHits++
-		cacheMu.Unlock()
-		return notModifiedResponse(etag)
-	}
-	cacheMu.Lock()
-	eventsCacheMisses++
-	cacheMu.Unlock()
 
 	since := time.Now().Add(-time.Duration(rangeHours) * time.Hour).Format(time.RFC3339)
 
 	var resp eventsResponse
 	resp.Limit = limit
 	resp.Offset = offset
+
+	// Check in-memory response cache (keyed by all query parameters)
+	cacheKey := fmt.Sprintf("ev-%d-%d-%d-%s-%s-%s", limit, offset, rangeHours, modelFilter, sourceFilter, authFilter)
+	responseCacheMu.RLock()
+	if cached, ok := eventsResponseCache[cacheKey]; ok && time.Since(cached.cachedAt) < responseCacheTTL {
+		// Check ETag for 304 response
+		if checkETag(headers, cached.etag) {
+			responseCacheMu.RUnlock()
+			cacheMu.Lock()
+			eventsCacheHits++
+			cacheMu.Unlock()
+			return notModifiedResponse(cached.etag)
+		}
+		responseCacheMu.RUnlock()
+		cacheMu.Lock()
+		eventsCacheHits++
+		cacheMu.Unlock()
+		return jsonResponseWithETag(http.StatusOK, cached.response, cached.etag)
+	}
+	responseCacheMu.RUnlock()
 
 	dbMu.RLock()
 	d := db
@@ -1011,12 +1023,14 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 			args = append(args, authFilter)
 		}
 
+		// Capped count: only scan up to 10001 rows to determine if total exceeds 10000.
+		// The frontend only shows "Showing 100 of N", so an exact count for large N is unnecessary.
 		countArgs := append([]interface{}{}, args...)
-		_ = d.QueryRow("SELECT COUNT(*) FROM usage_events "+where, countArgs...).Scan(&resp.Total)
+		_ = d.QueryRow("SELECT COUNT(*) FROM (SELECT 1 FROM usage_events "+where+" LIMIT 10001)", countArgs...).Scan(&resp.Total)
 
 		queryArgs := append(args, limit, offset)
 		rows, err := d.Query(
-			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events "+where+" ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
 			queryArgs...,
 		)
 		if err == nil {
@@ -1032,7 +1046,16 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 		}
 	}
 
-	return jsonResponse(http.StatusOK, resp)
+	// Store in response cache
+	responseCacheMu.Lock()
+	eventsResponseCache[cacheKey] = eventsCacheEntry{response: resp, etag: etag, cachedAt: time.Now()}
+	responseCacheMu.Unlock()
+
+	cacheMu.Lock()
+	eventsCacheMisses++
+	cacheMu.Unlock()
+
+	return jsonResponseWithETag(http.StatusOK, resp, etag)
 }
 
 func handleCleanup() pluginapi.ManagementResponse {
@@ -1210,6 +1233,13 @@ func jsonResponse(statusCode int, body any) pluginapi.ManagementResponse {
 		Headers:    http.Header{"Content-Type": {contentTypeJSON}},
 		Body:       raw,
 	}
+}
+
+func jsonResponseWithETag(statusCode int, body any, etag string) pluginapi.ManagementResponse {
+	resp := jsonResponse(statusCode, body)
+	resp.Headers["ETag"] = []string{etag}
+	resp.Headers["Cache-Control"] = []string{"private, no-cache"}
+	return resp
 }
 
 func htmlResponse(statusCode int, body string) pluginapi.ManagementResponse {

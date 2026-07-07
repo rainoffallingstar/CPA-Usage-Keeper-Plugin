@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.8.0** — Capsule segmented-control tabs, global search on tab row, DeepSeek ring progress with tiered total.
+**v0.8.2** — Fix pricing tab blank: persist auto-synced prices to SQLite, protect manually-added prices, prevent DB-load race overwrite.
 
 ## ⚠️ Before Building — Version Checklist
 
@@ -150,6 +150,8 @@ v7.2.42/
 
 | Version | Changes |
 |---------|---------|
+| v0.8.2 | Fix pricing tab blank: auto-sync now persists to SQLite (survives restart), manually-added prices protected from auto-sync overwrite, DB load no longer races with auto-sync goroutine |
+| v0.8.1 | Default 30-day range for all endpoints, composite `(timestamp, id DESC)` index, capped COUNT(*) at 10K, SQLite 3-conn pool, server response cache (2s TTL), ETag caching (304 Not Modified), frontend ETag support |
 | v0.8.0 | Capsule segmented-control tabs, global search on tab row, DeepSeek ring progress with tiered total |
 | v0.7.0 | Remove provider filter, unified search box with dynamic placeholder, DeepSeek tiered ring |
 | v0.6.4 | Reset-time display in quota progress bars (left/right aligned) |

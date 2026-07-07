@@ -45,7 +45,7 @@ type storageHealthStatus struct {
 }
 
 var (
-	startTime         = time.Now()
+	startTime          = time.Now()
 	summaryCacheHits   int64
 	summaryCacheMisses int64
 	eventsCacheHits    int64
@@ -54,7 +54,26 @@ var (
 	lastWriteMs        int64
 	cacheMu            sync.Mutex
 	dashboardVersion   uint64
+
+	// In-memory response cache for expensive dashboard queries.
+	// Keyed by cache key string, stores serialized JSON with TTL.
+	eventsResponseCache   = map[string]eventsCacheEntry{}
+	summaryResponseCache  = map[string]summaryCacheEntry{}
+	responseCacheMu       sync.RWMutex
+	responseCacheTTL      = 2 * time.Second
 )
+
+type eventsCacheEntry struct {
+	response  eventsResponse
+	etag      string
+	cachedAt  time.Time
+}
+
+type summaryCacheEntry struct {
+	response  summaryResponse
+	etag      string
+	cachedAt  time.Time
+}
 
 func handleHealthCheck() pluginapi.ManagementResponse {
 	cfg := currentConfig()

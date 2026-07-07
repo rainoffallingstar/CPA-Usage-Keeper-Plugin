@@ -51,7 +51,11 @@ func loadPricesFromDB() {
 		var as int
 		if rows.Scan(&model, &mp.Prompt, &mp.Completion, &mp.Cache, &as) == nil {
 			mp.AutoSynced = as != 0
-			pricesStore[model] = mp
+			// Only set if not already present — auto-sync goroutine may have
+			// already loaded this model from the remote API into pricesStore.
+			if _, exists := pricesStore[model]; !exists {
+				pricesStore[model] = mp
+			}
 		}
 	}
 	pricesMu.Unlock()
@@ -106,6 +110,7 @@ func handlePutPrice(body []byte) pluginapi.ManagementResponse {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "model is required"})
 	}
 	pricesMu.Lock()
+	payload.Price.AutoSynced = false
 	pricesStore[payload.Model] = payload.Price
 	pricesMu.Unlock()
 	persistPrice(payload.Model, payload.Price)
@@ -191,6 +196,7 @@ func handlePricesPost(body []byte) pluginapi.ManagementResponse {
 		if req.Price.Prompt == 0 && req.Price.Completion == 0 && req.Price.Cache == 0 {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "at least one price field is required"})
 		}
+		req.Price.AutoSynced = false
 		pricesMu.Lock()
 		pricesStore[model] = req.Price
 		pricesMu.Unlock()
@@ -324,7 +330,12 @@ func syncModelPrices() (int, error) {
 		if e.Primary.Pricing.CacheRead != nil {
 			mp.Cache = *e.Primary.Pricing.CacheRead
 		}
+		// Never overwrite a manually-added price (AutoSynced == false) with an auto-synced one.
+		if existing, ok := pricesStore[e.Slug]; ok && !existing.AutoSynced {
+			continue
+		}
 		pricesStore[e.Slug] = mp
+		persistPrice(e.Slug, mp)
 		// Add common spelling aliases (dot↔dash, no separators)
 		for _, alias := range modelVariants(e.Slug) {
 			if _, exists := pricesStore[alias]; !exists {

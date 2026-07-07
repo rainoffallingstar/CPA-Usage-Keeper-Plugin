@@ -975,9 +975,9 @@ tbody tr:hover { background: var(--accent-light); }
 		<select class="range-select" id="rangeSelect" onchange="refreshAll()">
 			<option value="1h">Last hour</option>
 			<option value="6h">Last 6 hours</option>
-			<option value="24h" selected>Last 24 hours</option>
+			<option value="24h">Last 24 hours</option>
 			<option value="7d">Last 7 days</option>
-			<option value="30d">Last 30 days</option>
+			<option value="30d" selected>Last 30 days</option>
 		</select>
 		<div class="auto-refresh">
 			<span class="dot" id="refreshDot"></span>
@@ -1333,14 +1333,34 @@ document.getElementById('refreshBtn').innerHTML = icon('refresh');
 document.getElementById('globalSearchIcon').innerHTML = icon('search');
 
 /* ============================================================
-   Data fetching
+   Data fetching with ETag caching
    ============================================================ */
+const etagCache = {};
 async function fetchJSON(path, extra) {
 	var url = API_BASE + path + '?range=' + rangeValue();
 	if (extra) Object.keys(extra).forEach(function(k) { if (extra[k]) url += '&' + k + '=' + encodeURIComponent(extra[k]); });
-	const resp = await fetch(url);
+
+	var opts = {};
+	if (etagCache[url]) {
+		opts.headers = { 'If-None-Match': etagCache[url] };
+	}
+	const resp = await fetch(url, opts);
+	if (resp.status === 304 && etagCache[url]) {
+		// Server says data hasn't changed, return cached data
+		return etagCache[url + '::data'];
+	}
 	if (!resp.ok) throw new Error('HTTP ' + resp.status);
-	return resp.json();
+
+	// Store ETag for future conditional requests
+	var etag = resp.headers.get('ETag');
+	if (etag) {
+		etagCache[url] = etag;
+	}
+	var data = await resp.json();
+	if (etag) {
+		etagCache[url + '::data'] = data;
+	}
+	return data;
 }
 
 /* ============================================================
@@ -1916,8 +1936,7 @@ async function refreshAll() {
 	try {
 		const summary = await fetchJSON('/summary');
 		renderCards(summary);
-		lastEventsData = null;
-		lastPricesData = null;
+		// Don't clear local caches; ETag+server-cache handles freshness.
 		await renderModels();
 		if (document.getElementById('panel-events').classList.contains('active')) await renderEvents();
 		if (document.getElementById('panel-pricing').classList.contains('active')) await renderPricing();
