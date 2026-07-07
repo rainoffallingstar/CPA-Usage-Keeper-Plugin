@@ -59,6 +59,11 @@ func fetchGlmCodingQuota(apiKey, baseURL string) (*quotaAccount, error) {
 	if strings.HasSuffix(base, "/api") {
 		base = strings.TrimSuffix(base, "/api")
 	}
+	// Monitoring endpoints are at https://domain/api/monitor/...
+	// Strip LLM API path segments (/paas/v4, /paas/v3, etc.)
+	if idx := strings.Index(base, "/paas/"); idx > 0 {
+		base = base[:idx]
+	}
 
 	// Time window: yesterday at current hour to now
 	now := time.Now()
@@ -262,6 +267,9 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 					Windows: []quotaWindow{},
 					Error:   "not fetched yet",
 				},
+			}
+			if r.BaseURL == "" {
+				r.BaseURL = "https://open.bigmodel.cn/api/paas/v4"
 			}
 			glmAccounts = append(glmAccounts, r)
 			glmAcctMu.Unlock()

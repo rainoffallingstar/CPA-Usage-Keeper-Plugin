@@ -149,6 +149,36 @@ tr:hover .filter-link{opacity:1}
 .quota-card .section-header h2 .status-dot.ok{background:var(--success);animation:breathe 2s infinite}
 .quota-card .section-header h2 .status-dot.warn{background:var(--warning)}
 .quota-card .section-header h2 .status-dot.err{background:var(--danger)}
+/* Unified add-account panel */
+.add-panel{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-card);margin-bottom:20px}
+.add-panel:hover{border-color:var(--accent);box-shadow:var(--shadow-card-hover)}
+.add-panel .provider-select{display:flex;gap:4px;margin-bottom:16px}
+.add-panel .provider-select button{padding:7px 18px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md);font-size:0.82rem;cursor:pointer;color:var(--text-secondary);font-weight:500;transition:all var(--transition);font-family:var(--font-sans)}
+.add-panel .provider-select button:hover{background:var(--surface-hover);color:var(--text)}
+.add-panel .provider-select button.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.add-panel .add-fields{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.add-panel .add-fields .field-group{flex:1;min-width:140px}
+.add-panel .add-fields .field-group label{display:block;font-size:0.7rem;color:var(--text-secondary);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
+.add-panel .add-fields .field-group input{width:100%%}
+/* Account card */
+.acct-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-card);margin-bottom:14px;transition:all var(--transition)}
+.acct-card:hover{box-shadow:var(--shadow-card-hover)}
+.acct-card .acct-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.acct-card .acct-header .acct-provider{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;padding:2px 8px;border-radius:4px}
+.acct-card .acct-header .acct-provider.opencode{background:rgba(59,130,246,0.1);color:#3b82f6}
+.acct-card .acct-header .acct-provider.glm{background:rgba(139,92,246,0.1);color:#8b5cf6}
+.acct-card .acct-header .acct-provider.deepseek{background:rgba(16,185,129,0.1);color:#059669}
+.acct-card .acct-header .acct-name{font-weight:700;font-size:0.95rem}
+.acct-card .acct-header .acct-actions{margin-left:auto;display:flex;gap:6px}
+.acct-card .acct-header .acct-time{font-size:0.7rem;color:var(--text-tertiary)}
+/* Outline action buttons for cards — always visible with filled background */
+.btn-outline{padding:5px 12px;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-sm);font-size:0.73rem;cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:var(--text);transition:all var(--transition);font-family:var(--font-sans);font-weight:600}
+.btn-outline:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent);box-shadow:var(--shadow-xs)}
+.btn-outline.danger{color:var(--danger);border-color:var(--danger-border);background:var(--danger-soft)}
+/* Limit icon sizes in quota components */
+.add-panel svg, .btn-outline svg, .quota-alert svg, .acct-card .acct-header .badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+.btn-outline svg { width: 13px; height: 13px; }
+
 .quota-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .quota-row .field-group{flex:1;min-width:150px}
 .quota-row .field-group label{display:block;font-size:0.72rem;color:var(--text-secondary);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
@@ -162,6 +192,9 @@ tr:hover .filter-link{opacity:1}
 .progress-bar-fill.red{background:linear-gradient(90deg,#ef4444,#f87171)}
 .progress-bar-fill.accent{background:linear-gradient(90deg,var(--accent),var(--accent-hover))}
 .progress-reset{font-size:0.68rem;color:var(--text-tertiary);margin-top:4px}
+.quota-alert{font-size:0.7rem;margin-top:4px;padding:3px 8px;border-radius:4px;display:flex;align-items:center;gap:4px;font-weight:500}
+.quota-alert.warning{background:var(--warning-light);color:var(--warning)}
+.quota-alert.danger{background:var(--danger-soft);color:var(--danger)}
 .usage-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:0.82rem}
 .usage-row:last-child{border-bottom:none}
 .usage-label{color:var(--text-secondary)}
@@ -238,14 +271,14 @@ var executorColors={},executorColorIdx=0,executorPalette=["#3b82f6","#8b5cf6","#
 function executorColor(name){if(!executorColors[name]){executorColors[name]=executorPalette[executorColorIdx%%executorPalette.length];executorColorIdx++}return executorColors[name]}
 function executorTag(name){if(!name)return '<span style="color:var(--text-tertiary)">\u2014</span>';var short=name.replace(/Executor$/i,"").replace(/^OpenAI/,"OpenAI").replace(/^Claude/,"Claude").replace(/^Gemini/,"Gemini").replace(/^DeepSeek/,"DeepSeek").replace(/^Codex/,"Codex");var c=executorColor(name);return '<span class="executor-tag"><span class="exec-dot" style="background:'+c+'"></span>'+esc(short)+"</span>"}
 function sparkline(values,color,filled){color=color||"var(--accent)";if(!values||values.length<2)return"";var max=Math.max.apply(null,values),min=Math.min.apply(null,values),range=max-min||1,w=120,h=40,step=w/(values.length-1);var pts="",areaPts="M0 "+h+" ";for(var i=0;i<values.length;i++){var x=i*step,y=h-((values[i]-min)/range)*(h-4)-2;pts+=(i===0?"M":"L")+x.toFixed(1)+" "+y.toFixed(1)+" ";areaPts+="L"+x.toFixed(1)+" "+y.toFixed(1)+" "}areaPts+="L"+w+" "+h+" Z";var cls=filled?"card-sparkline filled":"card-sparkline";return '<svg class="'+cls+'" viewBox="0 0 '+w+" "+h+'" preserveAspectRatio="none">'+(filled?'<path d="'+areaPts+'" fill="'+color+'" opacity="0.15"/>':"")+'<path d="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" opacity="0.4"/></svg>'}
-function renderCards(d){document.getElementById("cards").innerHTML=[{label:"Requests",value:formatNum(d.total_requests),sub:(d.failed_requests||0)+" failed",badge:d.failed_requests>0?{cls:"danger",text:formatNum(d.failed_requests)+" fail"}:null,spark:true,sparkColor:"var(--accent)"},{label:"Tokens",value:formatNum(d.total_tokens),sub:"In "+formatNum(d.input_tokens)+" / Out "+formatNum(d.output_tokens),spark:true,sparkColor:"#8b5cf6"},{label:"Models",value:formatNum(d.unique_models),sub:"avg "+formatMs(d.avg_latency_ms),spark:true,sparkColor:"#10b981"},{label:"Cache Hit",value:(d.cache_hit_rate||0).toFixed(1)+"%%",sub:(d.range_hours||720)+"h window",progress:{val:(d.cache_hit_rate||0),cls:"success"}},{label:"Retention",value:"%d",sub:"days"}].map(function(c,i){return '<div class="card">'+(c.spark?sparkline(Array.from({length:8},function(_,j){return Math.random()}),c.sparkColor,true):"")+(c.badge?'<span class="card-badge '+c.badge.cls+'">'+c.badge.text+"</span>":"")+(c.progress?'<div class="card-progress"><div class="card-progress-fill '+c.progress.cls+'" style="width:'+Math.min(100,c.progress.val)+'%%"></div></div><div class="card-mini-label"><span>0%%</span><span>100%%</span></div>':"")+'<div class="card-label">'+c.label+'</div><div class="card-value">'+c.value+'</div><div class="card-sub">'+c.sub+"</div></div>"}).join("")}
+function renderCards(d){document.getElementById("cards").innerHTML=[{label:"Requests",value:formatNum(d.total_requests),sub:(d.failed_requests||0)+" failed",badge:d.failed_requests>0?{cls:"danger",text:formatNum(d.failed_requests)+" fail"}:null,spark:true,sparkColor:"var(--accent)"},{label:"Tokens",value:formatNum(d.total_tokens),sub:"In "+formatNum(d.input_tokens)+" / Out "+formatNum(d.output_tokens),spark:true,sparkColor:"#8b5cf6"},{label:"Models",value:formatNum(d.unique_models),sub:"avg "+formatMs(d.avg_latency_ms),spark:true,sparkColor:"#10b981"},{label:"Cache Hit",value:(d.cache_hit_rate||0).toFixed(1)+"%%",sub:(d.range_hours||720)+"h window",badge:(d.cache_hit_rate||0)>0?{cls:"success",text:(d.cache_hit_rate||0).toFixed(1)+"%%"}:null,spark:true,sparkColor:"#10b981"},{label:"Retention",value:"%d",sub:"days"}].map(function(c,i){return '<div class="card">'+(c.spark?sparkline(Array.from({length:8},function(_,j){return Math.random()}),c.sparkColor,true):"")+(c.badge?'<span class="card-badge '+c.badge.cls+'">'+c.badge.text+"</span>":"")+(c.progress?'<div class="card-progress"><div class="card-progress-fill '+c.progress.cls+'" style="width:'+Math.min(100,c.progress.val)+'%%"></div></div><div class="card-mini-label"><span>0%%</span><span>100%%</span></div>':"")+'<div class="card-label">'+c.label+'</div><div class="card-value">'+c.value+'</div><div class="card-sub">'+c.sub+"</div></div>"}).join("")}
 var lastModelsData=null
 async function renderModels(){var data=lastModelsData;if(!data){data=await fetchJSON("/models");lastModelsData=data}var q=(document.getElementById("globalSearch").value||"").toLowerCase().trim();var filtered=q?data.filter(function(m){return(m.model||"").toLowerCase().includes(q)||(m.provider||"").toLowerCase().includes(q)}):data;if(!filtered||filtered.length===0){document.getElementById("modelTable").innerHTML=emptyState("database",q?'No models match "'+q+'"':"No usage data for this time range.","Data will appear here once requests are processed.");return}var maxT=Math.max.apply(null,filtered.map(function(m){return m.total_tokens}).concat([1]));var maxC=Math.max.apply(null,filtered.map(function(m){return m.cost}).concat([0.001]));document.getElementById("modelTable").innerHTML='<div class="table-wrap"><table><thead><tr><th>Model</th><th>Requests</th><th>Tokens (In / Out)</th><th>Cost</th></tr></thead><tbody>'+filtered.map(function(m){var inpPct=Math.max((m.input_tokens/maxT)*100,1),outPct=Math.max((m.output_tokens/maxT)*100,0);var costCls=m.cost>maxC*0.5?"high":(m.cost>maxC*0.1?"medium":(m.cost>0?"low":"zero"));return '<tr><td class="font-medium">'+esc(m.model)+' <span class="filter-link" onclick="quickFilterEvents(\''+esc(m.model)+'\')" title="View events">'+icon("search")+'</span></td><td class="num-col">'+formatNum(m.requests)+'</td><td><div class="model-bar"><div class="model-bar-bg"><div class="model-bar-fill input" style="width:'+inpPct+'%%"></div><div class="model-bar-fill output" style="width:'+outPct+'%%"></div></div><span class="model-bar-value">'+formatNum(m.total_tokens)+'</span></div></td><td class="cost-col '+costCls+'">'+formatCost(m.cost)+"</td></tr>"}).join("")+"</tbody></table></div>"}
 function quickFilterEvents(model){switchTab("events");setTimeout(function(){document.getElementById("globalSearch").value=model;renderEvents()},300)}
 var lastEventsData=null
 var currentEvents=[];
 function showEventByIndex(i){if(currentEvents[i]){showEventDetail(currentEvents[i])}}
-async function renderEvents(){var data=lastEventsData;if(!data){data=await fetchJSON("/events?limit=100");lastEventsData=data}var q=(document.getElementById("globalSearch").value||"").toLowerCase().trim();var events=data.events||[];if(q){events=events.filter(function(e){return(e.model||"").toLowerCase().includes(q)||(e.auth_id||"").toLowerCase().includes(q)||(e.executor_type||"").toLowerCase().includes(q)})}if(!events||events.length===0){document.getElementById("eventTable").innerHTML=emptyState("clock",q?'No events match "'+q+'"':"No events for this time range","Events will appear here as requests are processed.");return}currentEvents=events;var rows="";for(var i=0;i<events.length;i++){var e=events[i],eid="evt"+i;var ts=e.timestamp?new Date(e.timestamp).toLocaleTimeString():"\u2014";var badge=e.failed?'<span class="badge badge-danger">FAIL</span>':'<span class="badge badge-success">OK</span>';var click=e.failed&&e.failure_body?'onclick="toggleErrorRow(\''+eid+'\')"':'onclick="showEventByIndex('+i+')"';var cls=e.failed?"clickable error-row":"clickable";rows+='<tr class="'+cls+'" '+click+'><td class="num-col" style="color:var(--text-secondary)">'+ts+'</td><td class="font-medium" title="'+esc(e.provider||"")+'">'+esc(e.model)+'</td><td>'+executorTag(e.executor_type)+'</td><td class="num-col">'+formatNum(e.total_tokens)+'</td><td class="num-col">'+(e.cache_hit_rate||0).toFixed(1)+'%%</td><td class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+"</td></tr>";if(e.failed&&e.failure_body)rows+='<tr class="error-detail-row" id="'+eid+'" style="display:none"><td colspan="7"><div class="error-detail-box">'+esc(e.failure_body.substring(0,600))+(e.failure_body.length>600?"\u2026":"")+'</div><button class="btn btn-xs" style="margin-top:6px" onclick="event.stopPropagation();showEventByIndex('+JSON.stringify(JSON.stringify(e))+')">Full detail \u2192</button></td></tr>'}document.getElementById("eventTable").innerHTML='<div class="table-wrap"><table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>'+rows+"</tbody></table></div>"+(data.total>100?'<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of '+formatNum(data.total)+" events</p>":"")}
+async function renderEvents(){var data=lastEventsData;if(!data){data=await fetchJSON("/events?limit=100");lastEventsData=data}var q=(document.getElementById("globalSearch").value||"").toLowerCase().trim();var events=data.events||[];if(q){events=events.filter(function(e){return(e.model||"").toLowerCase().includes(q)||(e.auth_id||"").toLowerCase().includes(q)||(e.executor_type||"").toLowerCase().includes(q)})}if(!events||events.length===0){document.getElementById("eventTable").innerHTML=emptyState("clock",q?'No events match "'+q+'"':"No events for this time range","Events will appear here as requests are processed.");return}currentEvents=events;var rows="";for(var i=0;i<events.length;i++){var e=events[i],eid="evt"+i;var ts=e.timestamp?new Date(e.timestamp).toLocaleTimeString():"\u2014";var badge=e.failed?'<span class="badge badge-danger">FAIL</span>':'<span class="badge badge-success">OK</span>';var click=e.failed&&e.failure_body?'onclick="toggleErrorRow(\''+eid+'\')"':'onclick="showEventByIndex('+i+')"';var cls=e.failed?"clickable error-row":"clickable";rows+='<tr class="'+cls+'" '+click+'><td class="num-col" style="color:var(--text-secondary)">'+ts+'</td><td class="font-medium" title="'+esc(e.provider||"")+'">'+esc(e.model)+'</td><td>'+executorTag(e.executor_type)+'</td><td class="num-col">'+formatNum(e.total_tokens)+'</td><td class="num-col">'+(e.cache_hit_rate||0).toFixed(1)+'%%</td><td class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+"</td></tr>";if(e.failed&&e.failure_body)rows+='<tr class="error-detail-row" id="'+eid+'" style="display:none"><td colspan="7"><div class="error-detail-box">'+esc(e.failure_body.substring(0,600))+(e.failure_body.length>600?"\u2026":"")+'</div><button class="btn btn-xs" style="margin-top:6px" onclick="event.stopPropagation();showEventByIndex('+i+')">Full detail \u2192</button></td></tr>'}document.getElementById("eventTable").innerHTML='<div class="table-wrap"><table><thead><tr><th>Time</th><th>Model</th><th>Source</th><th>Tokens</th><th>Cache</th><th>Latency</th><th>Status</th></tr></thead><tbody>'+rows+"</tbody></table></div>"+(data.total>100?'<p style="text-align:center;color:var(--text-secondary);margin-top:12px;font-size:0.8rem">Showing 100 of '+formatNum(data.total)+" events</p>":"")}
 function toggleErrorRow(eid){var el=document.getElementById(eid);if(!el)return;el.style.display=el.style.display==="none"?"":"none"}
 function showEventDetailWrapped(jsonStr){try{showEventDetail(JSON.parse(jsonStr))}catch(e){console.error(e)}}
 function classifyProvider(model){var m=model.toLowerCase();if(/^claude|^anthropic/.test(m))return"Anthropic";if(/^gemini|^google|^palm|^imagen/.test(m))return"Google";if(/^gpt|^o1|^o3|^o4|^openai|^text-davinci|^dall-e|^whisper/.test(m))return"OpenAI";if(/^deepseek/.test(m))return"DeepSeek";if(/^qwen|^qwq/.test(m))return"Qwen";if(/^llama|^meta/.test(m))return"Meta";if(/^grok|xai/.test(m))return"xAI";if(/^mistral|^mixtral|^codestral/.test(m))return"Mistral";if(/^glm|^chatglm/.test(m))return"GLM";if(/^yi-/.test(m))return"Yi";if(/^minimax|^abab/.test(m))return"MiniMax";if(/^moonshot|^kimi/.test(m))return"Moonshot";if(/^doubao|^bytedance/.test(m))return"ByteDance";if(/^ernie|^baidu/.test(m))return"Baidu";if(/^cohere|^command/.test(m))return"Cohere";if(/^nova|^amazon|^titan/.test(m))return"Amazon";return"Others"}
@@ -255,16 +288,141 @@ async function addPrice(){var model=document.getElementById("pricing-model").val
 async function deletePrice(model){try{await fetch(API_BASE+"/prices?action=delete&model="+encodeURIComponent(model));lastPricesData=null;await renderPricing();showToast("Deleted "+model,"success")}catch(e){showToast("Failed to delete","error")}}
 async function syncPrices(){var btn=document.getElementById("syncBtn");if(!btn)return;setBtnLoading(btn,true);try{var resp=await fetch(API_BASE+"/prices/sync"),data=await resp.json();lastPricesData=null;await renderPricing();var nb=document.getElementById("syncBtn");setBtnLoading(nb,false,"Synced "+data.synced+" models");showToast("Synced "+data.synced+" models","success")}catch(e){var nb=document.getElementById("syncBtn");setBtnLoading(nb,false);showToast("Sync failed","error")}}
 async function renderHealth(){try{var data=await fetchJSON("/health");var sc=data.status==="ok"?"var(--success)":(data.status==="warn"?"var(--warning)":"var(--danger)");var alertsHtml=data.alerts&&data.alerts.length?data.alerts.map(function(a){return '<div class="health-stat" style="border-color:'+(a.severity==="error"?"var(--danger)":"var(--warning)")+'"><div class="hs-label">'+a.code+'</div><div class="hs-value" style="font-size:0.82rem;font-family:var(--font-sans)">'+esc(a.message)+"</div></div>"}).join(""):"";var rt=data.runtime||{},st=data.storage||{};var ringPct=rt.ring_buffer_size>0?Math.round(rt.ring_buffer_used/rt.ring_buffer_size*100):0;document.getElementById("healthCards").innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><div style="width:10px;height:10px;border-radius:50%%;background:'+sc+';animation:breathe 2s infinite"></div><span style="font-size:1rem;font-weight:700">Status: '+data.status.toUpperCase()+'</span><span style="font-size:0.78rem;color:var(--text-secondary)">Uptime: '+Math.floor(rt.uptime_seconds/3600)+'h '+Math.floor((rt.uptime_seconds%%3600)/60)+'m</span></div>'+alertsHtml+'<div class="health-grid"><div class="health-stat"><div class="hs-label">Total Events</div><div class="hs-value">'+formatNum(rt.total_requests)+'</div></div><div class="health-stat"><div class="hs-label">Ring Buffer</div><div class="hs-value">'+rt.ring_buffer_used+" / "+rt.ring_buffer_size+'</div><div class="card-progress" style="margin-top:8px"><div class="card-progress-fill accent" style="width:'+ringPct+'%%"></div></div></div><div class="health-stat"><div class="hs-label">Summary Cache</div><div class="hs-value">'+(rt.summary_cache_hit_rate||0).toFixed(1)+'%%</div><div class="hs-sub">hit rate</div></div><div class="health-stat"><div class="hs-label">Events Cache</div><div class="hs-value">'+(rt.events_cache_hit_rate||0).toFixed(1)+'%%</div><div class="hs-sub">hit rate</div></div><div class="health-stat"><div class="hs-label">Last Write</div><div class="hs-value">'+formatMs(rt.last_write_duration_ms)+'</div><div class="hs-sub">'+rt.storage_write_errors+' errors</div></div><div class="health-stat"><div class="hs-label">DB Size</div><div class="hs-value">'+formatNum(st.db_file_size)+' B</div><div class="hs-sub">'+esc(st.db_path)+"</div></div></div>"}catch(e){document.getElementById("healthCards").innerHTML=emptyState("server","Health data unavailable",e.message)}}
-async function renderQuota(){try{var data=await fetchJSON("/opencode-quota");var ocAccounts=(data.accounts)||[];var glmData=await fetchJSON("/glmcoding-quota");var glmAccounts=(glmData.accounts)||[];var dsData=await fetchJSON("/deepseek-quota");var dsAccounts=(dsData.accounts)||[];var html="";html+='<div class="quota-card"><div class="section-header"><h2><span class="status-dot ok"></span> OpenCode Go</h2></div><div class="quota-row"><div class="field-group"><label>Account Name</label><input class="input" id="quota-acct-name" placeholder="e.g. personal" style="width:100%%"></div><div class="field-group"><label>Auth Cookie</label><input class="input" id="quota-acct-cookie" placeholder="session cookie" style="width:100%%"></div><div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="addQuotaAccount()">'+icon("plus")+' Add</button></div></div>';ocAccounts.forEach(function(a){var bars="";(a.windows||[]).forEach(function(w){var pct=w.total>0?Math.round(w.used/w.total*100):0,cls=pct>80?"red":(pct>50?"yellow":"green");bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+" / "+w.total.toFixed(1)+" "+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Resets in '+(w.reset_in_sec>3600?Math.round(w.reset_in_sec/3600)+"h":Math.round(w.reset_in_sec/60)+"m")+"</div></div>"});html+='<div style="border-top:1px solid var(--border-subtle);padding-top:12px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-weight:700">'+esc(a.name)+'</span>'+(!a.success?'<span class="badge badge-danger">Error</span>':"")+'<span style="font-size:0.7rem;color:var(--text-tertiary);margin-left:auto">'+esc(a.updated_at||"N/A")+'</span><button class="btn btn-xs" onclick="refreshQuotaAccount(\''+esc(a.name)+'\')">'+icon("refresh")+'</button><button class="btn btn-xs btn-danger" onclick="removeQuotaAccount(\''+esc(a.name)+'\')">'+icon("x")+"</button></div>"+bars+"</div>";if(a.error)html+='<div class="error-detail-box" style="margin:8px 0">'+esc(a.error)+"</div>"});html+="</div>";html+='<div class="quota-card"><div class="section-header"><h2><span class="status-dot ok"></span> GLM Coding</h2></div><div class="quota-row"><div class="field-group"><label>Name</label><input class="input" id="glm-acct-name" placeholder="Name" style="width:100%%"></div><div class="field-group"><label>API Key</label><input class="input" id="glm-acct-key" placeholder="sk-..." style="width:100%%"></div><div class="field-group"><label>Base URL</label><input class="input" id="glm-acct-base" placeholder="https://..." style="width:100%%"></div><div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="addGlmAccount()">'+icon("plus")+' Add</button></div></div>';glmAccounts.forEach(function(a){html+='<div style="border-top:1px solid var(--border-subtle);padding-top:8px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-weight:700">'+esc(a.name)+'</span>'+(!a.success?'<span class="badge badge-danger">Error</span>':'<span class="badge badge-success">OK</span>')+'<button class="btn btn-xs" onclick="refreshGlmAccount(\''+esc(a.name)+'\')" style="margin-left:auto">'+icon("refresh")+'</button><button class="btn btn-xs btn-danger" onclick="removeGlmAccount(\''+esc(a.name)+'\')">'+icon("x")+"</button></div>";(a.model_usage||[]).forEach(function(mu){html+='<div class="usage-row"><span class="usage-label">'+esc(mu.model)+'</span><span class="usage-value">'+formatNum(mu.tokens)+" tokens</span></div>"});html+="</div>"});html+="</div>";html+='<div class="quota-card"><div class="section-header"><h2><span class="status-dot ok"></span> DeepSeek</h2></div><div class="quota-row"><div class="field-group"><label>Name</label><input class="input" id="ds-acct-name" placeholder="Name" style="width:100%%"></div><div class="field-group"><label>API Key</label><input class="input" id="ds-acct-key" placeholder="sk-..." style="width:100%%"></div><div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="addDsAccount()">'+icon("plus")+' Add</button></div></div>';dsAccounts.forEach(function(a){var bars="";(a.windows||[]).forEach(function(w){var pct=w.total>0?Math.round(w.used/w.total*100):0,cls=pct>80?"red":(pct>50?"yellow":"green");bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+" / "+w.total.toFixed(1)+" "+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Resets in '+(w.reset_in_sec>3600?Math.round(w.reset_in_sec/3600)+"h":Math.round(w.reset_in_sec/60)+"m")+"</div></div>"});html+='<div style="border-top:1px solid var(--border-subtle);padding-top:12px;margin-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-weight:700">'+esc(a.name)+'</span>'+(!a.success?'<span class="badge badge-danger">Error</span>':"")+'<button class="btn btn-xs" onclick="refreshDsAccount(\''+esc(a.name)+'\')" style="margin-left:auto">'+icon("refresh")+'</button><button class="btn btn-xs btn-danger" onclick="removeDsAccount(\''+esc(a.name)+'\')">'+icon("x")+"</button></div>"+bars+"</div>"});html+="</div>";document.getElementById("quotaContent").innerHTML=html}catch(e){console.error("quota render failed",e)}}
-async function addQuotaAccount(){var n=document.getElementById("quota-acct-name").value.trim(),c=document.getElementById("quota-acct-cookie").value.trim();if(!n){showToast("Name required","warning");return}try{await fetch(API_BASE+"/opencode-quota?action=addaccount&account="+encodeURIComponent(n)+"&cookie="+encodeURIComponent(c));await renderQuota();showToast("Added "+n,"success")}catch(e){showToast("Failed","error")}}
-async function removeQuotaAccount(n){try{await fetch(API_BASE+"/opencode-quota?action=removeaccount&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
-async function refreshQuotaAccount(n){try{await fetch(API_BASE+"/opencode-quota?action=refresh&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
-async function addGlmAccount(){var n=document.getElementById("glm-acct-name").value.trim(),k=document.getElementById("glm-acct-key").value.trim(),b=document.getElementById("glm-acct-base").value.trim();if(!n){showToast("Name required","warning");return}try{await fetch(API_BASE+"/glmcoding-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(k)+"&base_url="+encodeURIComponent(b));await renderQuota();showToast("Added "+n,"success")}catch(e){showToast("Failed","error")}}
-async function removeGlmAccount(n){try{await fetch(API_BASE+"/glmcoding-quota?action=removeaccount&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
-async function refreshGlmAccount(n){try{await fetch(API_BASE+"/glmcoding-quota?action=refresh&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
-async function addDsAccount(){var n=document.getElementById("ds-acct-name").value.trim(),k=document.getElementById("ds-acct-key").value.trim();if(!n){showToast("Name required","warning");return}try{await fetch(API_BASE+"/deepseek-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(k));await renderQuota();showToast("Added "+n,"success")}catch(e){showToast("Failed","error")}}
-async function removeDsAccount(n){try{await fetch(API_BASE+"/deepseek-quota?action=removeaccount&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
-async function refreshDsAccount(n){try{await fetch(API_BASE+"/deepseek-quota?action=refresh&account="+encodeURIComponent(n));await renderQuota()}catch(e){showToast("Failed","error")}}
+var currentQuotaProvider = 'opencode';
+async function renderQuota(){
+	try{
+		var ocData=await fetchJSON("/opencode-quota"); var ocAccounts=(ocData.accounts)||[];
+		var glmData=await fetchJSON("/glmcoding-quota"); var glmAccounts=(glmData.accounts)||[];
+		var dsData=await fetchJSON("/deepseek-quota"); var dsAccounts=(dsData.accounts)||[];
+
+		var html = '';
+		// Unified add-account panel
+		html += '<div class="add-panel"><div class="section-header"><h2>'+icon('plus')+' Add Account</h2></div>';
+		html += '<div class="provider-select">';
+		var providers = [{id:'opencode',label:'OpenCode Go'},{id:'glm',label:'GLM Coding'},{id:'deepseek',label:'DeepSeek'}];
+		providers.forEach(function(p){
+			html += '<button class="qv-provider-btn'+(currentQuotaProvider===p.id?' active':'')+'" onclick="setQuotaProvider(\''+p.id+'\')">'+esc(p.label)+'</button>';
+		});
+		html += '</div>';
+		html += '<div class="add-fields" id="quotaFields">'+buildQuotaFields(currentQuotaProvider)+'</div>';
+		html += '</div>';
+
+		// Account cards — render each provider section
+		html += renderQuotaSection('OpenCode Go', 'opencode', ocAccounts, buildOpenCodeBars);
+		html += renderQuotaSection('GLM Coding', 'glm', glmAccounts, buildGlmBars);
+		html += renderQuotaSection('DeepSeek', 'deepseek', dsAccounts, buildDeepSeekBars);
+
+		document.getElementById("quotaContent").innerHTML = html;
+	}catch(e){console.error("quota render failed",e);}
+}
+
+function setQuotaProvider(pid){
+	currentQuotaProvider = pid;
+	document.getElementById('quotaFields').innerHTML = buildQuotaFields(pid);
+	// Highlight active provider button
+	var btns = document.querySelectorAll('.qv-provider-btn');
+	var labels = {opencode:'OpenCode', glm:'GLM', deepseek:'DeepSeek'};
+	btns.forEach(function(b){ 
+		b.classList.toggle('active', b.textContent.trim().indexOf(labels[pid]) >= 0);
+	});
+}
+
+function buildQuotaFields(provider){
+	var f = '';
+	if (provider === 'opencode') {
+		f += '<div class="field-group"><label>Account Name</label><input class="input" id="qa-name" placeholder="e.g. personal" style="width:100%%"></div>';
+		f += '<div class="field-group"><label>Auth Cookie</label><input class="input" id="qa-cookie" placeholder="session cookie" style="width:100%%"></div>';
+		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
+	} else if (provider === 'glm') {
+		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
+		f += '<div class="field-group"><label>API Key</label><input class="input" id="qa-key" placeholder="sk-..." style="width:100%%"></div>';
+		f += '<div class="field-group"><label>Base URL</label><input class="input" id="qa-base" value="https://open.bigmodel.cn/api/paas/v4" style="width:100%%"></div>';
+		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
+	} else {
+		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
+		f += '<div class="field-group"><label>API Key</label><input class="input" id="qa-key" placeholder="sk-..." style="width:100%%"></div>';
+		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
+	}
+	return f;
+}
+
+function renderQuotaSection(title, provider, accounts, buildBars){
+	var html = '';
+	// Provider header with count
+	var statusCls = accounts.length > 0 ? 'ok' : '';
+	html += '<div class="quota-card"><div class="section-header"><h2><span class="status-dot '+statusCls+'"></span> '+esc(title)+' <span style="font-weight:400;color:var(--text-tertiary);font-size:0.78rem">('+accounts.length+' accounts)</span></h2></div>';
+	if (accounts.length === 0) {
+		html += '<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:0.82rem">No accounts yet. Add one above.</div>';
+	} else {
+		accounts.forEach(function(a){
+			html += '<div class="acct-card"><div class="acct-header"><span class="acct-provider '+provider+'">'+provider.toUpperCase()+'</span><span class="acct-name">'+esc(a.name)+'</span>'+(!a.success?'<span class="badge badge-danger">Error</span>':'<span class="badge badge-success">OK</span>')+'<span class="acct-time">'+esc(a.updated_at||'N/A')+'</span><div class="acct-actions"><button class="btn-outline" onclick="refreshQuota(\''+provider+'\',\''+esc(a.name)+'\')">'+icon('refresh')+' Refresh</button><button class="btn-outline danger" onclick="removeQuota(\''+provider+'\',\''+esc(a.name)+'\')">'+icon('x')+' Remove</button></div></div>';
+			if (buildBars) html += buildBars(a);
+			if (a.error) html += '<div class="error-detail-box" style="margin-top:8px">'+esc(a.error)+'</div>';
+			html += '</div>';
+		});
+	}
+	html += '</div>';
+	return html;
+}
+
+function buildOpenCodeBars(a){
+	var bars='';
+	(a.windows||[]).forEach(function(w){
+		var pct=w.total>0?Math.round(w.used/w.total*100):0, cls=pct>90?'red':(pct>70?'yellow':'green');
+		var warn='';
+		if(pct>90) warn='<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
+		else if(pct>70) warn='<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
+		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+' / '+w.total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Resets in '+(w.reset_in_sec>3600?Math.round(w.reset_in_sec/3600)+'h':Math.round(w.reset_in_sec/60)+'m')+'</div>'+warn+'</div>';
+	});
+	return bars;
+}
+
+function buildGlmBars(a){
+	var bars='';
+	(a.windows||[]).forEach(function(w){
+		var pct=w.total>0?Math.round(w.used/w.total*100):0, cls=pct>90?'red':(pct>70?'yellow':'green');
+		var warn='';
+		if(pct>90) warn='<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
+		else if(pct>70) warn='<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
+		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+'</span><span class="val">'+w.used.toFixed(1)+' / '+w.total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div><div class="progress-reset">Quota usage: '+pct+'%% consumed</div>'+warn+'</div>';
+	});
+	(a.model_usage||[]).forEach(function(mu){
+		bars+='<div class="usage-row"><span class="usage-label">'+esc(mu.model)+'</span><span class="usage-value">'+formatNum(mu.tokens)+' tokens</span></div>';
+	});
+	return bars;
+}
+
+function buildDeepSeekBars(a){
+	return buildOpenCodeBars(a);
+}
+
+function doAddQuotaAccount(){
+	var n=document.getElementById('qa-name').value.trim();
+	if(!n){showToast('Name required','warning');return;}
+	var p=currentQuotaProvider;
+	if (p==='opencode'){
+		var c=document.getElementById('qa-cookie').value.trim();
+		fetchQ('/opencode-quota?action=addaccount&account='+encodeURIComponent(n)+'&cookie='+encodeURIComponent(c)).then(function(){renderQuota();showToast('Added '+n,'success');});
+	} else if (p==='glm'){
+		var k=(document.getElementById('qa-key')||{}).value||'';
+		var b=(document.getElementById('qa-base')||{}).value||'';
+		fetchQ('/glmcoding-quota?action=addaccount&account='+encodeURIComponent(n)+'&api_key='+encodeURIComponent(k)+'&base_url='+encodeURIComponent(b)).then(function(){renderQuota();showToast('Added '+n,'success');});
+	} else {
+		var dk=(document.getElementById('qa-key')||{}).value||'';
+		fetchQ('/deepseek-quota?action=addaccount&account='+encodeURIComponent(n)+'&api_key='+encodeURIComponent(dk)).then(function(){renderQuota();showToast('Added '+n,'success');});
+	}
+}
+
+async function fetchQ(path){ var r=await fetch(API_BASE+path); if(!r.ok) throw new Error('HTTP '+r.status); return r; }
+
+function refreshQuota(provider, name){
+	var path = provider==='opencode'?'/opencode-quota':(provider==='glm'?'/glmcoding-quota':'/deepseek-quota');
+	fetchQ(path+'?action=refresh&account='+encodeURIComponent(name)).then(function(){renderQuota();}).catch(function(){showToast('Failed','error');});
+}
+function removeQuota(provider, name){
+	var path = provider==='opencode'?'/opencode-quota':(provider==='glm'?'/glmcoding-quota':'/deepseek-quota');
+	fetchQ(path+'?action=removeaccount&account='+encodeURIComponent(name)).then(function(){renderQuota();}).catch(function(){showToast('Failed','error');});
+}
 function emptyState(iconName,text,sub){return '<div class="empty-state"><div class="empty-icon">'+icon(iconName)+'</div><div class="empty-text">'+esc(text)+(sub?'</div><div class="empty-sub">'+esc(sub):"")+"</div></div>"}
 async function refreshAll(){try{var summary=await fetchJSON("/summary");renderCards(summary);await renderModels();if(document.getElementById("panel-events").classList.contains("active"))await renderEvents();if(document.getElementById("panel-pricing").classList.contains("active"))await renderPricing();if(document.getElementById("panel-health").classList.contains("active"))await renderHealth();if(document.getElementById("panel-quota").classList.contains("active"))await renderQuota()}catch(e){console.error("refresh failed",e)}}
 var refreshTimer=null,refreshIntervalMs=%d;
