@@ -1176,7 +1176,9 @@ func handleImportUsage(body []byte) pluginapi.ManagementResponse {
 
 func renderDashboard() string {
 	cfg := currentConfig()
-	return fmt.Sprintf(dashboardHTML, cfg.RetentionDays, cfg.RefreshSeconds*1000, cfg.RefreshSeconds, cfg.RefreshSeconds)
+	// Two %%d placeholders in template: one for RetentionDays card value,
+	// one for refreshIntervalMs initial value in ms.
+	return fmt.Sprintf(dashboardHTML, cfg.RetentionDays, cfg.RefreshSeconds*1000)
 }
 
 // ---------------------------------------------------------------------------

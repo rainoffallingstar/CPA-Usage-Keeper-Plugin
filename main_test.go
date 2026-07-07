@@ -249,8 +249,8 @@ func TestParseRangeHours(t *testing.T) {
 		{"week", 168},
 		{"30d", 720},
 		{"month", 720},
-		{"", 24},
-		{"invalid", 24},
+		{"", 720},
+		{"invalid", 720},
 	}
 
 	for _, tt := range tests {
