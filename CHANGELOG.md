@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.12 (2026-07-22)
+
+### Features
+- **Dashboard**: Manual refresh buttons on "By Model" and "All Events" capsule tabs
+- **Dashboard**: Fuzzy model name aggregation — similar models (e.g. `gpt-4o-2024-05-13`, `gpt-4o-2024-08-06`) are grouped by normalized name with summed tokens/requests/cost
+- **Dashboard**: Detailed / Aggregated view toggle on By Model table
+- **Dashboard**: Total cost summary shown above the model table
+
 ## v0.2.0 (2026-06-30)
 
 ### Features
