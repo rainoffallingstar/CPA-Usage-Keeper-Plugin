@@ -55,3 +55,17 @@ plugins:
       # Default: 0 (auto-refresh disabled)
       # -----------------------------------------------------------------------
       refresh_seconds: 0
+
+      # -----------------------------------------------------------------------
+      # write_batch_size — Usage events committed in each SQLite transaction.
+      # Valid range: 1–1000. Larger batches reduce WAL write frequency.
+      # Default: 100
+      # -----------------------------------------------------------------------
+      write_batch_size: 100
+
+      # -----------------------------------------------------------------------
+      # write_flush_seconds — Maximum time an incomplete batch remains in memory.
+      # Valid range: 1–300 seconds.
+      # Default: 10
+      # -----------------------------------------------------------------------
+      write_flush_seconds: 10

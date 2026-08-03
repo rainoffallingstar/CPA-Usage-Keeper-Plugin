@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 	_ "modernc.org/sqlite"
 )
 
@@ -370,8 +371,8 @@ func TestPluginRegistration(t *testing.T) {
 	if !reg.Capabilities.ManagementAPI {
 		t.Fatal("management_api capability should be true")
 	}
-	if len(reg.Metadata.ConfigFields) != 4 {
-		t.Errorf("expected 4 config fields, got %d", len(reg.Metadata.ConfigFields))
+	if len(reg.Metadata.ConfigFields) != 6 {
+		t.Errorf("expected 6 config fields, got %d", len(reg.Metadata.ConfigFields))
 	}
 }
 
@@ -506,6 +507,55 @@ func insertTestEvent(t *testing.T, d *sql.DB, provider, model string, input, out
 	)
 	if err != nil {
 		t.Fatalf("failed to insert test event: %v", err)
+	}
+}
+
+func TestPersistUsageBatchWritesAllEventsInOneTransaction(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	requestedAt := time.Now().UTC()
+	batch := []queuedUsageEvent{
+		{
+			record: pluginapi.UsageRecord{
+				RequestedAt: requestedAt,
+				Provider:    "openai",
+				Model:       "gpt-5",
+			},
+			event: usageEvent{Provider: "openai", Model: "gpt-5"},
+		},
+		{
+			record: pluginapi.UsageRecord{
+				RequestedAt: requestedAt,
+				Provider:    "openai",
+				Model:       "gpt-5-mini",
+			},
+			event: usageEvent{Provider: "openai", Model: "gpt-5-mini"},
+		},
+	}
+
+	if err := persistUsageBatch(batch); err != nil {
+		t.Fatalf("persistUsageBatch() error = %v", err)
+	}
+
+	var persistedCount int
+	if err := database.QueryRow("SELECT COUNT(*) FROM usage_events").Scan(&persistedCount); err != nil {
+		t.Fatalf("count persisted events: %v", err)
+	}
+	if persistedCount != len(batch) {
+		t.Fatalf("persisted event count = %d, want %d", persistedCount, len(batch))
+	}
+	for index, event := range batch {
+		if event.event.ID == 0 {
+			t.Errorf("batch event %d did not receive a SQLite row ID", index)
+		}
+	}
+
+	ringMu.RLock()
+	persistedRingCount := ringCount
+	ringMu.RUnlock()
+	if persistedRingCount != len(batch) {
+		t.Errorf("ring buffer count = %d, want %d", persistedRingCount, len(batch))
 	}
 }
 

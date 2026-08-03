@@ -11,41 +11,45 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	pluginID                   = "usage-keeper"
-	defaultDBPath              = "usage-keeper.db"
-	defaultRetentionDays       = 90
-	defaultRefreshSeconds      = 0
-	defaultMaxInMemoryEvents   = 1000
-	contentTypeJSON            = "application/json; charset=utf-8"
-	contentTypeHTML            = "text/html; charset=utf-8"
-	managementSummaryPath      = "/v0/management/usage-keeper/summary"
-	managementModelsPath       = "/v0/management/usage-keeper/models"
-	managementEventsPath       = "/v0/management/usage-keeper/events"
-	managementCleanupPath      = "/v0/management/usage-keeper/cleanup"
-	resourceDashboardPath      = "/v0/resource/plugins/usage-keeper/dashboard"
-	resourceAPISummaryPath     = "/v0/resource/plugins/usage-keeper/api/summary"
-	resourceAPIModelsPath      = "/v0/resource/plugins/usage-keeper/api/models"
-	resourceAPIEventsPath      = "/v0/resource/plugins/usage-keeper/api/events"
-	managementUsageCompatPath  = "/v0/management/usage"
-	resourceAPIUsagePath       = "/v0/resource/plugins/usage-keeper/api/usage"
-	resourceAPIHealthPath      = "/v0/resource/plugins/usage-keeper/api/health"
-	resourceAPIPricesPath      = "/v0/resource/plugins/usage-keeper/api/prices"
-	resourceAPIOpenCodeQuota   = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
-	resourceAPIGlmCodingQuota   = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
-	resourceAPIDeepSeekQuota    = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
+	pluginID                  = "usage-keeper"
+	defaultDBPath             = "usage-keeper.db"
+	defaultRetentionDays      = 90
+	defaultRefreshSeconds     = 0
+	defaultMaxInMemoryEvents  = 1000
+	defaultWriteBatchSize     = 100
+	defaultWriteFlushSeconds  = 10
+	contentTypeJSON           = "application/json; charset=utf-8"
+	contentTypeHTML           = "text/html; charset=utf-8"
+	managementSummaryPath     = "/v0/management/usage-keeper/summary"
+	managementModelsPath      = "/v0/management/usage-keeper/models"
+	managementEventsPath      = "/v0/management/usage-keeper/events"
+	managementCleanupPath     = "/v0/management/usage-keeper/cleanup"
+	resourceDashboardPath     = "/v0/resource/plugins/usage-keeper/dashboard"
+	resourceAPISummaryPath    = "/v0/resource/plugins/usage-keeper/api/summary"
+	resourceAPIModelsPath     = "/v0/resource/plugins/usage-keeper/api/models"
+	resourceAPIEventsPath     = "/v0/resource/plugins/usage-keeper/api/events"
+	managementUsageCompatPath = "/v0/management/usage"
+	resourceAPIUsagePath      = "/v0/resource/plugins/usage-keeper/api/usage"
+	resourceAPIHealthPath     = "/v0/resource/plugins/usage-keeper/api/health"
+	resourceAPIPricesPath     = "/v0/resource/plugins/usage-keeper/api/prices"
+	resourceAPIOpenCodeQuota  = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
+	resourceAPIGlmCodingQuota = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
+	resourceAPIDeepSeekQuota  = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
 )
 
-var pluginVersion = "0.10.15"
+var pluginVersion = "0.10.16"
 
 type pluginConfig struct {
-	DBPath              string             `yaml:"db_path"`
-	RetentionDays       int                `yaml:"retention_days"`
-	MaxInMemoryEvents   int                `yaml:"max_in_memory_events"`
-	RefreshSeconds      int                `yaml:"refresh_seconds"`
-	APIKeyHashSalt      string             `yaml:"api_key_hash_salt"`
-	OpenCodeGoAccounts  []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
-	GlmCodingAccounts   []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
-	DeepSeekAccounts    []deepseekAcctCfg   `yaml:"deepseek_accounts"`
+	DBPath             string              `yaml:"db_path"`
+	RetentionDays      int                 `yaml:"retention_days"`
+	MaxInMemoryEvents  int                 `yaml:"max_in_memory_events"`
+	RefreshSeconds     int                 `yaml:"refresh_seconds"`
+	WriteBatchSize     int                 `yaml:"write_batch_size"`
+	WriteFlushSeconds  int                 `yaml:"write_flush_seconds"`
+	APIKeyHashSalt     string              `yaml:"api_key_hash_salt"`
+	OpenCodeGoAccounts []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
+	GlmCodingAccounts  []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
+	DeepSeekAccounts   []deepseekAcctCfg   `yaml:"deepseek_accounts"`
 }
 
 func defaultConfig() pluginConfig {
@@ -54,6 +58,8 @@ func defaultConfig() pluginConfig {
 		RetentionDays:     defaultRetentionDays,
 		MaxInMemoryEvents: defaultMaxInMemoryEvents,
 		RefreshSeconds:    defaultRefreshSeconds,
+		WriteBatchSize:    defaultWriteBatchSize,
+		WriteFlushSeconds: defaultWriteFlushSeconds,
 	}
 }
 
@@ -100,14 +106,14 @@ type summaryResponse struct {
 	RangeHours     int     `json:"range_hours"`
 }
 type modelBreakdown struct {
-	Provider      string  `json:"provider"`
-	Model         string  `json:"model"`
-	Requests      int64   `json:"requests"`
-	InputTokens   int64   `json:"input_tokens"`
-	OutputTokens  int64   `json:"output_tokens"`
-	TotalTokens   int64   `json:"total_tokens"`
-	CachedTokens  int64   `json:"cached_tokens"`
-	Cost          float64 `json:"cost"`
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model"`
+	Requests     int64   `json:"requests"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	TotalTokens  int64   `json:"total_tokens"`
+	CachedTokens int64   `json:"cached_tokens"`
+	Cost         float64 `json:"cost"`
 }
 type usageEvent struct {
 	ID           int64   `json:"id"`

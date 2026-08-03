@@ -49,6 +49,8 @@ plugins:
       retention_days: 90
       max_in_memory_events: 1000
       refresh_seconds: 0
+      write_batch_size: 100
+      write_flush_seconds: 10
       # 可选：在 config 中预定义 OpenCode 账号
       opencode_go_accounts:
         - name: "我的 Go 套餐"
@@ -62,6 +64,8 @@ plugins:
 | retention_days | integer | 90 | 数据保留天数 |
 | max_in_memory_events | integer | 1000 | Dashboard 环缓冲大小（最大 10000） |
 | refresh_seconds | integer | 0 | 自动刷新间隔（0 = 关闭, ≤3600） |
+| write_batch_size | integer | 100 | 每个 SQLite 事务写入的用量事件数（≤1000） |
+| write_flush_seconds | integer | 10 | 未满批次的最长内存停留时间（≤300 秒） |
 | opencode_go_accounts | list | [] | OpenCode Go 账号预定义（也可在 Dashboard 中直接添加） |
 
 ## API 端点

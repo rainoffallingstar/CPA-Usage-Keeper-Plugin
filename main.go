@@ -127,6 +127,7 @@ func cliproxyPluginFree(ptr unsafe.Pointer, len C.size_t) {
 //export cliproxyPluginShutdown
 func cliproxyPluginShutdown() {
 	shutdownOnce.Do(func() {
+		stopUsageWriter()
 		dbMu.Lock()
 		if db != nil {
 			_ = db.Close()
@@ -192,6 +193,12 @@ func configure(raw []byte) error {
 		}
 		if v, ok := intConfig(values, "refresh_seconds"); ok {
 			decoded.RefreshSeconds = v
+		}
+		if v, ok := intConfig(values, "write_batch_size"); ok {
+			decoded.WriteBatchSize = v
+		}
+		if v, ok := intConfig(values, "write_flush_seconds"); ok {
+			decoded.WriteFlushSeconds = v
 		}
 		if v, ok := stringConfig(values, "api_key_hash_salt"); ok {
 			decoded.APIKeyHashSalt = v
@@ -309,6 +316,12 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 		base.RefreshSeconds = override.RefreshSeconds
 		base.MaxInMemoryEvents = override.MaxInMemoryEvents
 	}
+	if override.WriteBatchSize > 0 {
+		base.WriteBatchSize = override.WriteBatchSize
+	}
+	if override.WriteFlushSeconds > 0 {
+		base.WriteFlushSeconds = override.WriteFlushSeconds
+	}
 	if len(override.OpenCodeGoAccounts) > 0 {
 		base.OpenCodeGoAccounts = override.OpenCodeGoAccounts
 	}
@@ -339,6 +352,17 @@ func normalizeConfig(cfg pluginConfig) pluginConfig {
 		cfg.RefreshSeconds = defaultRefreshSeconds
 	} else if cfg.RefreshSeconds > 3600 {
 		cfg.RefreshSeconds = defaultRefreshSeconds
+	}
+	if cfg.WriteBatchSize <= 0 {
+		cfg.WriteBatchSize = defaultWriteBatchSize
+	}
+	if cfg.WriteBatchSize > 1000 {
+		cfg.WriteBatchSize = 1000
+	}
+	if cfg.WriteFlushSeconds <= 0 {
+		cfg.WriteFlushSeconds = defaultWriteFlushSeconds
+	} else if cfg.WriteFlushSeconds > 300 {
+		cfg.WriteFlushSeconds = defaultWriteFlushSeconds
 	}
 	return cfg
 }
@@ -384,6 +408,16 @@ func pluginRegistration() registration {
 					Type:        pluginapi.ConfigFieldTypeInteger,
 					Description: "Dashboard auto-refresh interval in seconds. 0 disables auto-refresh. Max 3600.",
 				},
+				{
+					Name:        "write_batch_size",
+					Type:        pluginapi.ConfigFieldTypeInteger,
+					Description: "Usage events per SQLite transaction. Default 100; max 1000.",
+				},
+				{
+					Name:        "write_flush_seconds",
+					Type:        pluginapi.ConfigFieldTypeInteger,
+					Description: "Maximum seconds an idle usage event waits before its batch is persisted. Default 10; max 300.",
+				},
 			},
 		},
 		Capabilities: registrationCapabilities{
@@ -417,6 +451,7 @@ func ensureDB() {
 		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0")
 		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_creation_tokens INTEGER NOT NULL DEFAULT 0")
 	})
+	startUsageWriter()
 }
 
 func createTables() error {
@@ -537,6 +572,239 @@ func loadRecentIntoRing() {
 // Usage event handling
 // ---------------------------------------------------------------------------
 
+type queuedUsageEvent struct {
+	record pluginapi.UsageRecord
+	event  usageEvent
+}
+
+var usageWriterState struct {
+	sync.Mutex
+	queue   chan queuedUsageEvent
+	stop    chan struct{}
+	done    chan struct{}
+	started bool
+}
+
+func startUsageWriter() {
+	usageWriterState.Lock()
+	defer usageWriterState.Unlock()
+	if usageWriterState.started {
+		return
+	}
+
+	queueCapacity := currentConfig().WriteBatchSize * 10
+	if queueCapacity < 1000 {
+		queueCapacity = 1000
+	}
+	usageWriterState.queue = make(chan queuedUsageEvent, queueCapacity)
+	usageWriterState.stop = make(chan struct{})
+	usageWriterState.done = make(chan struct{})
+	usageWriterState.started = true
+	go runUsageWriter(usageWriterState.queue, usageWriterState.stop, usageWriterState.done)
+}
+
+func stopUsageWriter() {
+	usageWriterState.Lock()
+	if !usageWriterState.started {
+		usageWriterState.Unlock()
+		return
+	}
+	stop := usageWriterState.stop
+	done := usageWriterState.done
+	usageWriterState.started = false
+	close(stop)
+	usageWriterState.Unlock()
+
+	<-done
+
+	usageWriterState.Lock()
+	usageWriterState.queue = nil
+	usageWriterState.stop = nil
+	usageWriterState.done = nil
+	usageWriterState.Unlock()
+}
+
+func enqueueUsageEvent(event queuedUsageEvent) {
+	usageWriterState.Lock()
+	defer usageWriterState.Unlock()
+	if !usageWriterState.started || usageWriterState.queue == nil {
+		return
+	}
+	select {
+	case usageWriterState.queue <- event:
+	default:
+		cacheMu.Lock()
+		storageQueueDrops++
+		cacheMu.Unlock()
+	}
+}
+
+func runUsageWriter(queue <-chan queuedUsageEvent, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
+	config := currentConfig()
+	batchSize := config.WriteBatchSize
+	flushInterval := time.Duration(config.WriteFlushSeconds) * time.Second
+	timer := time.NewTimer(flushInterval)
+	defer timer.Stop()
+
+	batch := make([]queuedUsageEvent, 0, batchSize)
+	persistedEventsSinceCleanup := 0
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		batchLength := len(batch)
+		if err := persistUsageBatch(batch); err != nil {
+			cacheMu.Lock()
+			storageErrCount++
+			cacheMu.Unlock()
+		} else {
+			persistedEventsSinceCleanup += batchLength
+			if persistedEventsSinceCleanup >= 1000 {
+				persistedEventsSinceCleanup = 0
+				go cleanupOldRecords(currentConfig().RetentionDays)
+			}
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case event := <-queue:
+			batch = append(batch, event)
+			if len(batch) >= batchSize {
+				flush()
+				resetUsageWriterTimer(timer, flushInterval)
+			}
+		case <-timer.C:
+			flush()
+			resetUsageWriterTimer(timer, flushInterval)
+		case <-stop:
+			for {
+				select {
+				case event := <-queue:
+					batch = append(batch, event)
+				default:
+					flush()
+					return
+				}
+			}
+		}
+	}
+}
+
+func resetUsageWriterTimer(timer *time.Timer, interval time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(interval)
+}
+
+func persistUsageBatch(batch []queuedUsageEvent) error {
+	startedAt := time.Now()
+	dbMu.RLock()
+	database := db
+	dbMu.RUnlock()
+	if database == nil {
+		return fmt.Errorf("usage database is not available")
+	}
+
+	transaction, errBegin := database.Begin()
+	if errBegin != nil {
+		return errBegin
+	}
+	defer transaction.Rollback()
+
+	statement, errPrepare := transaction.Prepare(`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key, hashed_api_key,
+		input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
+		latency_ms, ttft_ms, failed, failure_status_code, failure_body,
+		executor_type, source, service_tier)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if errPrepare != nil {
+		return errPrepare
+	}
+	defer statement.Close()
+
+	for index := range batch {
+		record := batch[index].record
+		result, errExecute := statement.Exec(
+			record.RequestedAt.Format(time.RFC3339),
+			record.Provider,
+			record.Model,
+			record.Alias,
+			record.AuthID,
+			record.AuthType,
+			record.AuthIndex,
+			maskedAPIKey(record.APIKey),
+			hashedAPIKey(record.APIKey),
+			record.Detail.InputTokens,
+			record.Detail.OutputTokens,
+			record.Detail.ReasoningTokens,
+			record.Detail.TotalTokens,
+			record.Detail.CachedTokens,
+			record.Detail.CacheReadTokens,
+			record.Detail.CacheCreationTokens,
+			record.Latency.Milliseconds(),
+			record.TTFT.Milliseconds(),
+			boolToInt(record.Failed),
+			record.Failure.StatusCode,
+			record.Failure.Body,
+			record.ExecutorType,
+			record.Source,
+			record.ServiceTier,
+		)
+		if errExecute != nil {
+			return errExecute
+		}
+		batch[index].event.ID, _ = result.LastInsertId()
+	}
+
+	if errCommit := transaction.Commit(); errCommit != nil {
+		return errCommit
+	}
+
+	for _, queuedEvent := range batch {
+		appendUsageEventToRing(queuedEvent.event)
+	}
+	cacheMu.Lock()
+	lastWriteMs = time.Since(startedAt).Milliseconds()
+	dashboardVersion++
+	cacheMu.Unlock()
+	return nil
+}
+
+func maskedAPIKey(apiKey string) string {
+	if looksLikeSecretKey(apiKey) {
+		return maskAPIKey(apiKey)
+	}
+	return apiKey
+}
+
+func hashedAPIKey(apiKey string) string {
+	if apiKey == "" {
+		return ""
+	}
+	return hashAPIKey(apiKey)
+}
+
+func appendUsageEventToRing(event usageEvent) {
+	ringMu.Lock()
+	defer ringMu.Unlock()
+	if len(ringBuf) == 0 {
+		return
+	}
+	ringBuf[ringHead] = event
+	ringHead = (ringHead + 1) % len(ringBuf)
+	ringCount++
+	if ringCount > len(ringBuf) {
+		ringCount = len(ringBuf)
+	}
+}
+
 func handleUsage(raw []byte) ([]byte, error) {
 	ensureDB()
 	lazyInit()
@@ -546,7 +814,6 @@ func handleUsage(raw []byte) ([]byte, error) {
 		return okEnvelopeJSON("{}")
 	}
 
-	// Build the usage event
 	event := usageEvent{
 		Timestamp:    record.RequestedAt.Format(time.RFC3339),
 		Provider:     record.Provider,
@@ -564,71 +831,7 @@ func handleUsage(raw []byte) ([]byte, error) {
 		event.FailureBody = record.Failure.Body
 	}
 
-	// Hash API key for privacy before storing
-	hashedKey := ""
-	maskedKey := record.APIKey
-	if record.APIKey != "" {
-		if looksLikeSecretKey(record.APIKey) {
-			maskedKey = maskAPIKey(record.APIKey)
-		}
-		hashedKey = hashAPIKey(record.APIKey)
-	}
-
-	// Insert into SQLite
-	result, errInsert := db.Exec(
-		`INSERT INTO usage_events (timestamp, provider, model, alias, auth_id, auth_type, auth_index, api_key, hashed_api_key,
-		 input_tokens, output_tokens, reasoning_tokens, total_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens,
-		 latency_ms, ttft_ms, failed, failure_status_code, failure_body,
-		 executor_type, source, service_tier)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		record.RequestedAt.Format(time.RFC3339),
-		record.Provider,
-		record.Model,
-		record.Alias,
-		record.AuthID,
-		record.AuthType,
-		record.AuthIndex,
-		maskedKey,
-		hashedKey,
-		record.Detail.InputTokens,
-		record.Detail.OutputTokens,
-		record.Detail.ReasoningTokens,
-		record.Detail.TotalTokens,
-		record.Detail.CachedTokens,
-		record.Detail.CacheReadTokens,
-		record.Detail.CacheCreationTokens,
-		record.Latency.Milliseconds(),
-		record.TTFT.Milliseconds(),
-		boolToInt(record.Failed),
-		record.Failure.StatusCode,
-		record.Failure.Body,
-		record.ExecutorType,
-		record.Source,
-		record.ServiceTier,
-	)
-	if errInsert != nil {
-		return okEnvelopeJSON("{}")
-	}
-
-	lastID, _ := result.LastInsertId()
-	event.ID = lastID
-
-	// Add to ring buffer
-	cfg := currentConfig()
-	ringMu.Lock()
-	ringBuf[ringHead] = event
-	ringHead = (ringHead + 1) % len(ringBuf)
-	ringCount++
-	if ringCount > len(ringBuf) {
-		ringCount = len(ringBuf)
-	}
-	ringMu.Unlock()
-
-	// Periodically clean old records (probabilistic to avoid overhead)
-	if ringCount%100 == 0 {
-		go cleanupOldRecords(cfg.RetentionDays)
-	}
-
+	enqueueUsageEvent(queuedUsageEvent{record: record, event: event})
 	return okEnvelopeJSON("{}")
 }
 

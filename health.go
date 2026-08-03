@@ -26,14 +26,15 @@ type healthResponse struct {
 }
 
 type runtimeHealthStatus struct {
-	UptimeSeconds        int64   `json:"uptime_seconds"`
-	TotalRequests        int64   `json:"total_requests"`
-	RingBufferSize       int     `json:"ring_buffer_size"`
-	RingBufferUsed       int     `json:"ring_buffer_used"`
-	SummaryCacheHitRate  float64 `json:"summary_cache_hit_rate"`
-	EventsCacheHitRate   float64 `json:"events_cache_hit_rate"`
-	LastWriteDurationMs  int64   `json:"last_write_duration_ms"`
-	StorageWriteErrors   int64   `json:"storage_write_errors"`
+	UptimeSeconds       int64   `json:"uptime_seconds"`
+	TotalRequests       int64   `json:"total_requests"`
+	RingBufferSize      int     `json:"ring_buffer_size"`
+	RingBufferUsed      int     `json:"ring_buffer_used"`
+	SummaryCacheHitRate float64 `json:"summary_cache_hit_rate"`
+	EventsCacheHitRate  float64 `json:"events_cache_hit_rate"`
+	LastWriteDurationMs int64   `json:"last_write_duration_ms"`
+	StorageWriteErrors  int64   `json:"storage_write_errors"`
+	DroppedUsageEvents  int64   `json:"dropped_usage_events"`
 }
 
 type storageHealthStatus struct {
@@ -51,28 +52,29 @@ var (
 	eventsCacheHits    int64
 	eventsCacheMisses  int64
 	storageErrCount    int64
+	storageQueueDrops  int64
 	lastWriteMs        int64
 	cacheMu            sync.Mutex
 	dashboardVersion   uint64
 
 	// In-memory response cache for expensive dashboard queries.
 	// Keyed by cache key string, stores serialized JSON with TTL.
-	eventsResponseCache   = map[string]eventsCacheEntry{}
-	summaryResponseCache  = map[string]summaryCacheEntry{}
-	responseCacheMu       sync.RWMutex
-	responseCacheTTL      = 2 * time.Second
+	eventsResponseCache  = map[string]eventsCacheEntry{}
+	summaryResponseCache = map[string]summaryCacheEntry{}
+	responseCacheMu      sync.RWMutex
+	responseCacheTTL     = 2 * time.Second
 )
 
 type eventsCacheEntry struct {
-	response  eventsResponse
-	etag      string
-	cachedAt  time.Time
+	response eventsResponse
+	etag     string
+	cachedAt time.Time
 }
 
 type summaryCacheEntry struct {
-	response  summaryResponse
-	etag      string
-	cachedAt  time.Time
+	response summaryResponse
+	etag     string
+	cachedAt time.Time
 }
 
 func handleHealthCheck() pluginapi.ManagementResponse {
@@ -98,11 +100,15 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	evtMisses := eventsCacheMisses
 	lastWrite := lastWriteMs
 	storeErrs := storageErrCount
+	queueDrops := storageQueueDrops
 	cacheMu.Unlock()
 
 	alerts := make([]healthAlert, 0)
 	if storeErrs > 0 {
 		alerts = append(alerts, healthAlert{Severity: "error", Code: "storage_write_errors", Message: fmt.Sprintf("%d storage write errors detected", storeErrs)})
+	}
+	if queueDrops > 0 {
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "usage_events_dropped", Message: fmt.Sprintf("%d usage events dropped because the persistence queue was full", queueDrops)})
 	}
 	if lastWrite > 1000 {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "storage_writer_slow", Message: fmt.Sprintf("Last write took %dms", lastWrite)})
@@ -122,14 +128,15 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 		Status: status,
 		Alerts: alerts,
 		Runtime: runtimeHealthStatus{
-			UptimeSeconds:        int64(time.Since(startTime).Seconds()),
-			TotalRequests:        totalEvents,
-			RingBufferSize:       ringCap,
-			RingBufferUsed:       ringUsed,
-			SummaryCacheHitRate:  hitRate(sumHits, sumMisses),
-			EventsCacheHitRate:   hitRate(evtHits, evtMisses),
-			LastWriteDurationMs:  lastWrite,
-			StorageWriteErrors:   storeErrs,
+			UptimeSeconds:       int64(time.Since(startTime).Seconds()),
+			TotalRequests:       totalEvents,
+			RingBufferSize:      ringCap,
+			RingBufferUsed:      ringUsed,
+			SummaryCacheHitRate: hitRate(sumHits, sumMisses),
+			EventsCacheHitRate:  hitRate(evtHits, evtMisses),
+			LastWriteDurationMs: lastWrite,
+			StorageWriteErrors:  storeErrs,
+			DroppedUsageEvents:  queueDrops,
 		},
 		Storage: storageHealthStatus{
 			DBPath:      dbPath,
