@@ -3,7 +3,9 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,6 +181,66 @@ func TestCurrentConfig(t *testing.T) {
 
 	// Reset for other tests
 	activeConfig.Store(defaultConfig())
+}
+
+func TestSQLiteDatabaseDSNUsesSupportedPragmas(t *testing.T) {
+	databasePath := "/tmp/usage-keeper.db"
+	databaseDSN := sqliteDatabaseDSN(databasePath)
+
+	if !strings.HasPrefix(databaseDSN, databasePath+"?") {
+		t.Fatalf("database DSN = %q, want path prefix %q", databaseDSN, databasePath+"?")
+	}
+	for _, expectedParameter := range []string{
+		"_pragma=journal_mode(WAL)",
+		"_pragma=busy_timeout(5000)",
+		"_pragma=synchronous(NORMAL)",
+		"_txlock=immediate",
+	} {
+		if !strings.Contains(databaseDSN, expectedParameter) {
+			t.Errorf("database DSN = %q, missing %q", databaseDSN, expectedParameter)
+		}
+	}
+}
+
+func TestSQLiteDatabaseDSNEnablesContentionPragmas(t *testing.T) {
+	database, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	var journalMode string
+	if err := database.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		t.Fatalf("read journal mode: %v", err)
+	}
+	if journalMode != "wal" {
+		t.Errorf("journal mode = %q, want wal", journalMode)
+	}
+
+	var busyTimeoutMilliseconds int
+	if err := database.QueryRow("PRAGMA busy_timeout").Scan(&busyTimeoutMilliseconds); err != nil {
+		t.Fatalf("read busy timeout: %v", err)
+	}
+	if busyTimeoutMilliseconds != 5000 {
+		t.Errorf("busy timeout = %d, want 5000", busyTimeoutMilliseconds)
+	}
+}
+
+func TestIsSQLiteBusyError(t *testing.T) {
+	testCases := []struct {
+		name  string
+		error error
+		want  bool
+	}{
+		{name: "locked", error: errors.New("database is locked"), want: true},
+		{name: "busy", error: errors.New("SQLITE_BUSY: database is busy"), want: true},
+		{name: "other error", error: errors.New("disk I/O error"), want: false},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := isSQLiteBusyError(testCase.error); got != testCase.want {
+				t.Errorf("isSQLiteBusyError(%v) = %t, want %t", testCase.error, got, testCase.want)
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -415,7 +477,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 	tmpFile.Close()
 
-	d, err := sql.Open("sqlite", tmpFile.Name())
+	d, err := sql.Open("sqlite", sqliteDatabaseDSN(tmpFile.Name()))
 	if err != nil {
 		os.Remove(tmpFile.Name())
 		t.Fatalf("failed to open test db: %v", err)

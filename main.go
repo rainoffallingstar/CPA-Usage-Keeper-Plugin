@@ -56,11 +56,12 @@ import (
 // ---------------------------------------------------------------------------
 
 var (
-	activeConfig atomic.Value
-	db           *sql.DB
-	dbMu         sync.RWMutex
-	initOnce     sync.Once
-	shutdownOnce sync.Once
+	activeConfig       atomic.Value
+	db                 *sql.DB
+	dbMu               sync.RWMutex
+	initOnce           sync.Once
+	shutdownOnce       sync.Once
+	usageEventsWriteMu sync.Mutex
 
 	// In-memory ring buffer for recent events (serves dashboard instantly).
 	ringBuf   []usageEvent
@@ -431,12 +432,16 @@ func pluginRegistration() registration {
 // Database initialization
 // ---------------------------------------------------------------------------
 
+func sqliteDatabaseDSN(databasePath string) string {
+	return databasePath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_txlock=immediate"
+}
+
 func ensureDB() {
 	defer func() { recover() }()
 	initOnce.Do(func() {
 		cfg := currentConfig()
 		var err error
-		db, err = sql.Open("sqlite", cfg.DBPath+"?_journal_mode=WAL&_busy_timeout=5000")
+		db, err = sql.Open("sqlite", sqliteDatabaseDSN(cfg.DBPath))
 		if err != nil {
 			panic(fmt.Sprintf("usage-keeper: failed to open database: %v", err))
 		}
@@ -655,7 +660,7 @@ func runUsageWriter(queue <-chan queuedUsageEvent, stop <-chan struct{}, done ch
 			return
 		}
 		batchLength := len(batch)
-		if err := persistUsageBatch(batch); err != nil {
+		if err := persistUsageBatchWithRetry(batch); err != nil {
 			cacheMu.Lock()
 			storageErrCount++
 			cacheMu.Unlock()
@@ -663,7 +668,7 @@ func runUsageWriter(queue <-chan queuedUsageEvent, stop <-chan struct{}, done ch
 			persistedEventsSinceCleanup += batchLength
 			if persistedEventsSinceCleanup >= 1000 {
 				persistedEventsSinceCleanup = 0
-				go cleanupOldRecords(currentConfig().RetentionDays)
+				cleanupOldRecords(currentConfig().RetentionDays)
 			}
 		}
 		batch = batch[:0]
@@ -704,7 +709,34 @@ func resetUsageWriterTimer(timer *time.Timer, interval time.Duration) {
 	timer.Reset(interval)
 }
 
+func persistUsageBatchWithRetry(batch []queuedUsageEvent) error {
+	const maximumAttempts = 3
+	const initialRetryDelay = 100 * time.Millisecond
+
+	var persistError error
+	for attempt := 0; attempt < maximumAttempts; attempt++ {
+		persistError = persistUsageBatch(batch)
+		if persistError == nil {
+			return nil
+		}
+		if !isSQLiteBusyError(persistError) || attempt == maximumAttempts-1 {
+			return persistError
+		}
+
+		time.Sleep(initialRetryDelay << attempt)
+	}
+	return persistError
+}
+
+func isSQLiteBusyError(err error) bool {
+	errorMessage := strings.ToLower(err.Error())
+	return strings.Contains(errorMessage, "database is locked") || strings.Contains(errorMessage, "database is busy")
+}
+
 func persistUsageBatch(batch []queuedUsageEvent) error {
+	usageEventsWriteMu.Lock()
+	defer usageEventsWriteMu.Unlock()
+
 	startedAt := time.Now()
 	dbMu.RLock()
 	database := db
@@ -836,6 +868,9 @@ func handleUsage(raw []byte) ([]byte, error) {
 }
 
 func cleanupOldRecords(retentionDays int) {
+	usageEventsWriteMu.Lock()
+	defer usageEventsWriteMu.Unlock()
+
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()
