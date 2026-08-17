@@ -8,6 +8,7 @@ AI API 用量统计与费用核算插件，运行在 [CLIProxyAPI](https://githu
 - 浏览器 Dashboard：摘要卡片、模型拆分、事件历史、暗色主题、时间范围筛选
 - 模型定价：手动添加 或 自动从 modelprice.boxtech.icu 同步 650+ 模型
 - OpenCode Go 套餐余额监控（支持工作区切换）
+- Ollama Cloud 用量监控（Session / Weekly 额度 + 按模型拆分）
 - 健康监控：缓存命中率、写入延迟、环缓冲使用率、告警
 - 导入/导出、后台导出任务管理（JSON/JSONL/CSV+gzip）
 - API Key 脱敏（SHA-224 哈希 + 显示掩码）
@@ -33,7 +34,7 @@ cp dist/usage-keeper.dylib 你的CPA目录/plugins/darwin/arm64/
 | All Events | 分页事件列表（时间、模型、来源、Token、缓存命中率、延迟） |
 | Pricing | 添加/删除/自动同步模型定价 |
 | Health | 运行状态、环缓冲、缓存命中率、存储信息、告警 |
-| Quota | OpenCode Go 套餐余额（5小时滚动/本周/本月）+ 工作区切换 |
+| Quota | OpenCode Go 套餐余额（5小时滚动/本周/本月）+ 工作区切换、Ollama Cloud 用量（Session/Weekly） |
 
 ## 配置
 
@@ -55,6 +56,12 @@ plugins:
       opencode_go_accounts:
         - name: "我的 Go 套餐"
           auth_cookie: ""
+        # 可选：在 config 中预定义 Ollama Cloud 账号
+        ollama_accounts:
+          - name: "我的 Ollama 账号"
+            session_cookie: "aid=...; __Secure-session=..."
+            show_session: true
+            show_weekly: true
           workspace_id: ""
 ```
 
@@ -67,6 +74,7 @@ plugins:
 | write_batch_size | integer | 100 | 每个 SQLite 事务写入的用量事件数（≤1000） |
 | write_flush_seconds | integer | 10 | 未满批次的最长内存停留时间（≤300 秒） |
 | opencode_go_accounts | list | [] | OpenCode Go 账号预定义（也可在 Dashboard 中直接添加） |
+| ollama_accounts | list | [] | Ollama Cloud 账号预定义（也可在 Dashboard 中直接添加） |
 
 ## API 端点
 
@@ -84,6 +92,7 @@ plugins:
 | `/api/prices` | — | 模型定价 |
 | `/api/prices/sync` | — | 触发从 modelprice.boxtech.icu 同步定价 |
 | `/api/opencode-quota` | — | OpenCode Go 套餐配额 |
+| `/api/ollama-quota` | — | Ollama Cloud 用量配额 |
 
 ### Management API（需要管理密钥）
 
@@ -102,6 +111,7 @@ plugins:
 | `/export-jobs` | GET/POST/DELETE | 导出任务管理 |
 | `/export-download` | GET | 下载导出文件 |
 | `/opencode-quota` | GET/POST | OpenCode Go 配额 |
+| `/ollama-quota` | GET/POST | Ollama Cloud 配额 |
 
 兼容端点：`/v0/management/usage` (Quotio 聚合)
 
@@ -124,6 +134,18 @@ Pricing 标签页中点击 **Sync** 按钮可手动触发。同步后的定价�
 3. 点击 **Set Cookie**，粘贴浏览器中的 `auth=xxx` cookie
 4. 保存后自动拉取 5 小时滚动 / 本周 / 本月用量百分比
 5. 支持多工作区切换（自动解析或手动指定 `wrk_xxx`）
+
+已保存的账号存储在 SQLite 中，重启 CPA 后自动恢复。
+
+## Ollama Cloud 用量监控
+
+1. 打开 Dashboard，切换到 **Quota** 标签页
+2. 在 Add Account 面板选择 **Ollama Cloud**
+3. 输入账号名，粘贴浏览器中的 `aid=...; __Secure-session=...` cookie
+4. 保存后自动抓取 `https://ollama.com/settings` 页面，解析 Session / Weekly 用量百分比
+5. 展示套餐名（Plan）、每个窗口的用量进度条、以及按模型拆分的请求数
+
+实现参考 [ollama-cloud-quota-monitor](https://github.com/jacklee-code/ollama-cloud-quota-monitor)。
 
 已保存的账号存储在 SQLite 中，重启 CPA 后自动恢复。
 

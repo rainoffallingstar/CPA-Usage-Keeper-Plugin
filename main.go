@@ -219,6 +219,7 @@ func initAllAccounts() {
 		initOpenCodeAccounts(cfg.OpenCodeGoAccounts)
 		initGlmCodingAccounts(cfg.GlmCodingAccounts)
 		initDeepseekAccounts(cfg.DeepSeekAccounts)
+		initOllamaAccounts(cfg.OllamaAccounts)
 		initModelPriceSync()
 	})
 }
@@ -234,6 +235,7 @@ func lazyInit() {
 		loadOpenCodeAccountsFromDB()
 		loadGlmAccountsFromDB()
 		loadDeepseekAccountsFromDB()
+		loadOllamaAccountsFromDB()
 		loadPricesFromDB()
 	})
 }
@@ -512,6 +514,13 @@ func createTables() error {
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS deepseek_accounts (
 		name TEXT PRIMARY KEY,
 		api_key TEXT NOT NULL DEFAULT ''
+	)`)
+	// Create Ollama accounts table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS ollama_accounts (
+		name TEXT PRIMARY KEY,
+		session_cookie TEXT NOT NULL DEFAULT '',
+		show_session INTEGER NOT NULL DEFAULT 1,
+		show_weekly INTEGER NOT NULL DEFAULT 1
 	)`)
 	// Create model prices table for persistence
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS model_prices (
@@ -908,6 +917,8 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodPost, Path: "/usage-keeper/opencode-quota"},
 			{Method: http.MethodGet, Path: "/usage-keeper/glmcoding-quota"},
 			{Method: http.MethodPost, Path: "/usage-keeper/glmcoding-quota"},
+			{Method: http.MethodGet, Path: "/usage-keeper/ollama-quota"},
+			{Method: http.MethodPost, Path: "/usage-keeper/ollama-quota"},
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
@@ -964,6 +975,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Path:        "/api/deepseek-quota",
 				Menu:        "",
 				Description: "DeepSeek balance JSON API.",
+			},
+			{
+				Path:        "/api/ollama-quota",
+				Menu:        "",
+				Description: "Ollama Cloud quota JSON API.",
 			},
 		},
 	}
@@ -1030,6 +1046,10 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleGlmCodingQuotaGet(req.Query))
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/deepseek-quota"):
 		return okEnvelope(handleDeepseekQuotaGet(req.Query))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/ollama-quota"):
+		return okEnvelope(handleOllamaQuotaGet(req.Query))
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/ollama-quota"):
+		return okEnvelope(handleOllamaQuotaPost(req.Body))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}

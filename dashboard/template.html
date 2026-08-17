@@ -198,6 +198,7 @@ tr:hover .filter-link{opacity:1}
 .acct-card .acct-header .acct-provider.opencode{background:rgba(59,130,246,0.1);color:#3b82f6}
 .acct-card .acct-header .acct-provider.glm{background:rgba(139,92,246,0.1);color:#8b5cf6}
 .acct-card .acct-header .acct-provider.deepseek{background:rgba(16,185,129,0.1);color:#059669}
+.acct-card .acct-header .acct-provider.ollama{background:rgba(245,158,11,0.12);color:#d97706}
 .acct-card .acct-header .acct-name{font-weight:700;font-size:0.95rem}
 .acct-card .acct-header .acct-actions{margin-left:auto;display:flex;gap:6px}
 .acct-card .acct-header .acct-time{font-size:0.7rem;color:var(--text-tertiary)}
@@ -377,12 +378,13 @@ async function renderQuota(){
 		var ocData=await fetchJSON("/opencode-quota"); var ocAccounts=(ocData.accounts)||[];
 		var glmData=await fetchJSON("/glmcoding-quota"); var glmAccounts=(glmData.accounts)||[];
 		var dsData=await fetchJSON("/deepseek-quota"); var dsAccounts=(dsData.accounts)||[];
+		var olData=await fetchJSON("/ollama-quota"); var olAccounts=(olData.accounts)||[];
 
 		var html = '';
 		// Unified add-account panel
 		html += '<div class="add-panel"><div class="section-header"><h2>'+icon('plus')+' Add Account</h2></div>';
 		html += '<div class="provider-select">';
-		var providers = [{id:'opencode',label:'OpenCode Go'},{id:'glm',label:'GLM Coding'},{id:'deepseek',label:'DeepSeek'}];
+		var providers = [{id:'opencode',label:'OpenCode Go'},{id:'glm',label:'GLM Coding'},{id:'deepseek',label:'DeepSeek'},{id:'ollama',label:'Ollama Cloud'}];
 		providers.forEach(function(p){
 			html += '<button class="qv-provider-btn'+(currentQuotaProvider===p.id?' active':'')+'" onclick="setQuotaProvider(\''+p.id+'\')">'+esc(p.label)+'</button>';
 		});
@@ -394,6 +396,7 @@ async function renderQuota(){
 		html += renderQuotaSection('OpenCode Go', 'opencode', ocAccounts, buildOpenCodeBars);
 		html += renderQuotaSection('GLM Coding', 'glm', glmAccounts, buildGlmBars);
 		html += renderQuotaSection('DeepSeek', 'deepseek', dsAccounts, buildDeepSeekBars);
+		html += renderQuotaSection('Ollama Cloud', 'ollama', olAccounts, buildOllamaBars);
 
 		document.getElementById("quotaContent").innerHTML = html;
 	}catch(e){console.error("quota render failed",e);}
@@ -404,7 +407,7 @@ function setQuotaProvider(pid){
 	document.getElementById('quotaFields').innerHTML = buildQuotaFields(pid);
 	// Highlight active provider button
 	var btns = document.querySelectorAll('.qv-provider-btn');
-	var labels = {opencode:'OpenCode', glm:'GLM', deepseek:'DeepSeek'};
+	var labels = {opencode:'OpenCode', glm:'GLM', deepseek:'DeepSeek', ollama:'Ollama'};
 	btns.forEach(function(b){ 
 		b.classList.toggle('active', b.textContent.trim().indexOf(labels[pid]) >= 0);
 	});
@@ -420,6 +423,10 @@ function buildQuotaFields(provider){
 		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
 		f += '<div class="field-group"><label>API Key</label><input class="input" id="qa-key" placeholder="sk-..." style="width:100%%"></div>';
 		f += '<div class="field-group"><label>Base URL</label><input class="input" id="qa-base" value="https://open.bigmodel.cn" style="width:100%%"></div>';
+		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
+	} else if (provider === 'ollama') {
+		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
+		f += '<div class="field-group"><label>Session Cookie</label><input class="input" id="qa-cookie" placeholder="aid=...; __Secure-session=..." style="width:100%%"></div>';
 		f += '<div class="field-group" style="display:flex;align-items:flex-end"><button class="btn btn-primary btn-sm" onclick="doAddQuotaAccount()">'+icon('plus')+' Add</button></div>';
 	} else {
 		f += '<div class="field-group"><label>Name</label><input class="input" id="qa-name" placeholder="Name" style="width:100%%"></div>';
@@ -508,6 +515,29 @@ function buildDeepSeekBars(a){
 	return bars;
 }
 
+function buildOllamaBars(a){
+	var bars='';
+	if(a.plan) bars+='<div class="usage-row"><span class="usage-label">Plan</span><span class="usage-value">'+esc(a.plan)+'</span></div>';
+	(a.windows||[]).forEach(function(w){
+		var used = w.used || 0;
+		var total = w.total || 0;
+		if (total === 0) total = 100;
+		var pct = total > 0 ? Math.round(used / total * 100) : 0;
+		var cls = pct > 90 ? 'red' : (pct > 70 ? 'yellow' : 'green');
+		var warn = '';
+		if (pct > 90) warn = '<div class="quota-alert danger">'+icon('alertCircle')+' Quota exhausted — exceeded 90%%</div>';
+		else if (pct > 70) warn = '<div class="quota-alert warning">'+icon('alertCircle')+' Warning: usage above 70%%</div>';
+		var status = w.status_text ? ' · '+esc(w.status_text) : '';
+		var reset = w.reset_in_sec > 0 ? 'Resets in '+formatReset(w.reset_in_sec) : '';
+		bars+='<div class="progress-bar-wrap"><div class="progress-info"><span>'+esc(w.label)+status+'</span><span class="val">'+used.toFixed(1)+' / '+total.toFixed(1)+' '+w.unit+'</span></div><div class="progress-bar"><div class="progress-bar-fill '+cls+'" style="width:'+Math.min(100,pct)+'%%"></div></div>'+(reset?'<div class="progress-reset">'+reset+'</div>':'')+warn+'</div>';
+		(w.models||[]).forEach(function(m){
+			var share = (m.share_percent!=null && m.share_percent!==undefined) ? ' · '+m.share_percent.toFixed(1)+'%%' : '';
+			bars += '<div class="usage-row"><span class="usage-label">'+esc(m.model)+'</span><span class="usage-value">'+formatNum(m.requests)+' requests'+share+'</span></div>';
+		});
+	});
+	return bars;
+}
+
 function doAddQuotaAccount(){
 	var n=document.getElementById('qa-name').value.trim();
 	if(!n){showToast('Name required','warning');return;}
@@ -519,6 +549,9 @@ function doAddQuotaAccount(){
 		var k=(document.getElementById('qa-key')||{}).value||'';
 		var b=(document.getElementById('qa-base')||{}).value||'';
 		fetchQ('/glmcoding-quota?action=addaccount&account='+encodeURIComponent(n)+'&api_key='+encodeURIComponent(k)+'&base_url='+encodeURIComponent(b)).then(function(){renderQuota();showToast('Added '+n,'success');});
+	} else if (p==='ollama'){
+		var oc=(document.getElementById('qa-cookie')||{}).value||'';
+		fetchQ('/ollama-quota?action=addaccount&account='+encodeURIComponent(n)+'&cookie='+encodeURIComponent(oc)).then(function(){renderQuota();showToast('Added '+n,'success');});
 	} else {
 		var dk=(document.getElementById('qa-key')||{}).value||'';
 		fetchQ('/deepseek-quota?action=addaccount&account='+encodeURIComponent(n)+'&api_key='+encodeURIComponent(dk)).then(function(){renderQuota();showToast('Added '+n,'success');});
@@ -527,12 +560,18 @@ function doAddQuotaAccount(){
 
 async function fetchQ(path){ var r=await fetch(API_BASE+path); if(!r.ok) throw new Error('HTTP '+r.status); return r; }
 
+function quotaPath(provider){
+	if(provider==='opencode') return '/opencode-quota';
+	if(provider==='glm') return '/glmcoding-quota';
+	if(provider==='ollama') return '/ollama-quota';
+	return '/deepseek-quota';
+}
 function refreshQuota(provider, name){
-	var path = provider==='opencode'?'/opencode-quota':(provider==='glm'?'/glmcoding-quota':'/deepseek-quota');
+	var path = quotaPath(provider);
 	fetchQ(path+'?action=refresh&account='+encodeURIComponent(name)).then(function(){renderQuota();}).catch(function(){showToast('Failed','error');});
 }
 function removeQuota(provider, name){
-	var path = provider==='opencode'?'/opencode-quota':(provider==='glm'?'/glmcoding-quota':'/deepseek-quota');
+	var path = quotaPath(provider);
 	fetchQ(path+'?action=removeaccount&account='+encodeURIComponent(name)).then(function(){renderQuota();}).catch(function(){showToast('Failed','error');});
 }
 function emptyState(iconName,text,sub){return '<div class="empty-state"><div class="empty-icon">'+icon(iconName)+'</div><div class="empty-text">'+esc(text)+(sub?'</div><div class="empty-sub">'+esc(sub):"")+"</div></div>"}

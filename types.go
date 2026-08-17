@@ -35,9 +35,10 @@ const (
 	resourceAPIOpenCodeQuota  = "/v0/resource/plugins/usage-keeper/api/opencode-quota"
 	resourceAPIGlmCodingQuota = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
 	resourceAPIDeepSeekQuota  = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
+	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.10.17"
+var pluginVersion = "0.10.18"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -50,6 +51,7 @@ type pluginConfig struct {
 	OpenCodeGoAccounts []openCodeGoAcctCfg `yaml:"opencode_go_accounts"`
 	GlmCodingAccounts  []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
 	DeepSeekAccounts   []deepseekAcctCfg   `yaml:"deepseek_accounts"`
+	OllamaAccounts     []ollamaAcctCfg     `yaml:"ollama_accounts"`
 }
 
 func defaultConfig() pluginConfig {
@@ -170,23 +172,39 @@ type deepseekAcctCfg struct {
 	APIKey string `yaml:"api_key"`
 }
 
+type ollamaAcctCfg struct {
+	Name          string `yaml:"name"`
+	SessionCookie string `yaml:"session_cookie"`
+	ShowSession   bool   `yaml:"show_session"`
+	ShowWeekly    bool   `yaml:"show_weekly"`
+}
+
 type workspaceEntry struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
 type quotaWindow struct {
-	Label      string  `json:"label"`
-	Used       float64 `json:"used"`
-	Remaining  float64 `json:"remaining"`
-	Total      float64 `json:"total"`
-	Unit       string  `json:"unit"`
-	ResetInSec int     `json:"reset_in_sec"`
+	Label      string             `json:"label"`
+	Used       float64            `json:"used"`
+	Remaining  float64            `json:"remaining"`
+	Total      float64            `json:"total"`
+	Unit       string             `json:"unit"`
+	ResetInSec int                `json:"reset_in_sec"`
+	ResetAt    string             `json:"reset_at,omitempty"`
+	StatusText string             `json:"status_text,omitempty"`
+	Models     []ollamaModelUsage `json:"models,omitempty"`
 }
 
 type glmModelUsage struct {
 	Model  string `json:"model"`
 	Tokens int64  `json:"tokens"`
+}
+
+type ollamaModelUsage struct {
+	Model        string  `json:"model"`
+	Requests     int64   `json:"requests"`
+	SharePercent float64 `json:"share_percent,omitempty"`
 }
 
 type quotaAccount struct {
@@ -196,6 +214,7 @@ type quotaAccount struct {
 	Workspaces  []workspaceEntry `json:"workspaces,omitempty"`
 	Success     bool             `json:"success"`
 	UpdatedAt   string           `json:"updated_at"`
+	Plan        string           `json:"plan,omitempty"`
 	Windows     []quotaWindow    `json:"windows"`
 	ModelUsage  []glmModelUsage  `json:"model_usage,omitempty"`
 	Error       string           `json:"error,omitempty"`

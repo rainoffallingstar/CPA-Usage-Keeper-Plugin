@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.10.12** — Manual refresh on By Model/All Events tabs, fuzzy model aggregation with Detailed/Aggregated view toggle, total cost summary.
+**v0.10.18** — Ollama Cloud 用量监控（Session / Weekly 额度 + 按模型拆分），Quota 标签页新增 Ollama Cloud 账号管理。
 
 ## ⚠️ Before Building — Version Checklist
 
@@ -199,6 +199,7 @@ upstream/
 
 | Version | Changes |
 |---------|---------|
+| v0.10.18 | Ollama Cloud 用量监控：抓取 `ollama.com/settings` 解析 Session/Weekly 额度、套餐名与按模型拆分；新增 `ollama_accounts` 配置、`/api/ollama-quota` 端点、Quota 标签页 Ollama 账号管理 |
 | v0.10.12 | Manual refresh on By Model/All Events tabs, fuzzy model aggregation with Detailed/Aggregated view toggle, total cost summary |
 | v0.10.11 | apple-design dashboard refresh: interruptible drag-to-dismiss drawer with velocity handoff + momentum projection, translucent tab/drawer chrome (`backdrop-filter`), spring + symmetric easing tokens, size-specific typography (`font-optical-sizing`, `--tracking-*`), `:active` instant press feedback, `prefers-reduced-motion`/`prefers-reduced-transparency`/`prefers-contrast` support |
 | v0.10.10 | Tiered DeepSeek pricing, consistent time formatting, quota provider documentation |

@@ -185,7 +185,66 @@ secs < 3600    → "45m"
 
 ---
 
-## 4. Frontend Progress Bar Rendering (Shared)
+## 4. Ollama Cloud — Session / Weekly Quota Monitoring
+
+### API
+
+Ollama Cloud does **not** expose a public quota API. Instead we fetch the
+`https://ollama.com/settings` page with the user's session cookie and parse the
+"Cloud usage" block out of the returned HTML.
+
+```
+GET https://ollama.com/settings
+Cookie: aid=...; __Secure-session=...
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ...
+```
+
+Reference implementation: https://github.com/jacklee-code/ollama-cloud-quota-monitor
+
+### HTML Structure Parsed
+
+The settings page embeds a "Cloud usage" block containing:
+
+| Element | Extracted Field | Notes |
+|---------|-----------------|-------|
+| `rounded-full ... capitalize ...` span | `plan` | Plan name (e.g. "Free", "Pro") |
+| `data-usage-track aria-label="...% used"` | `used` (Session / Weekly) | Two tracks: Session + Weekly |
+| `data-usage-segment` buttons | `models[]` | Per-model `data-model`, `data-requests`, `width:%` |
+| `flex justify-between mb-2` header spans | `status_text` | Period status text |
+| `local-time data-time="..."` | `reset_at` / `reset_in_sec` | Window reset timestamp |
+
+### Field Mapping
+
+| HTML Field | quotaWindow Field | Notes |
+|-----------|-------------------|-------|
+| `aria-label` "% used" | `used` | Parsed via `(\d+(?:\.\d+)?)\s*%\s*used` |
+| `100 - used` | `remaining` | Percentage-based |
+| `100` | `total` | Always 100 (percentage) |
+| `%` | `unit` | Percentage |
+| `data-time` (ISO 8601) | `reset_at` / `reset_in_sec` | `reset_in_sec = reset_at - now` |
+| `data-model` / `data-requests` / `width:%` | `models[]` | Per-model request counts + share % |
+
+### Cookie Normalization
+
+```go
+func buildOllamaCookieHeader(sessionCookie string) string {
+    // strips "Cookie:" prefix, wraps bare value as __Secure-session=...
+    // accepts "aid=...; __Secure-session=..." or a bare session value
+}
+```
+
+### Pitfalls
+
+1. **No public API** — relies on scraping the settings page; page structure changes
+   can break parsing (guarded by "Cloud usage" block detection).
+2. **Cookie-based auth** — `aid` + `__Secure-session` cookies; expiry or missing
+   cookies yield a "sign in" page (detected and reported as "未登录或 cookie 无效").
+3. **Two windows only** — Session and Weekly (no monthly window). Each window can
+   be independently hidden via `show_session` / `show_weekly` config flags.
+
+---
+
+## 5. Frontend Progress Bar Rendering (Shared)
 
 ### Color Thresholds
 
@@ -212,24 +271,26 @@ function formatReset(secs) {
 
 ---
 
-## 5. API Route Registration for Quota
+## 6. API Route Registration for Quota
 
-All three providers are registered as resource API routes:
+All four providers are registered as resource API routes:
 
 | Provider | Resource Path |
 |----------|--------------|
 | OpenCode | `/v0/resource/plugins/usage-keeper/api/opencode-quota` |
 | GLM | `/v0/resource/plugins/usage-keeper/api/glmcoding-quota` |
 | DeepSeek | `/v0/resource/plugins/usage-keeper/api/deepseek-quota` |
+| Ollama | `/v0/resource/plugins/usage-keeper/api/ollama-quota` |
 
 ---
 
-## 6. DB Persistence
+## 7. DB Persistence
 
 | Provider | Table | Columns |
 |----------|-------|---------|
 | OpenCode | `opencode_quota_accounts` | `name`, `auth_cookie`, `workspace_id` |
 | GLM | `glm_coding_accounts` | `name`, `api_key`, `base_url` |
 | DeepSeek | `deepseek_accounts` | `name`, `api_key` |
+| Ollama | `ollama_accounts` | `name`, `session_cookie`, `show_session`, `show_weekly` |
 
 All accounts survive plugin restarts via SQLite `ON CONFLICT ... DO UPDATE`.

@@ -69,3 +69,18 @@ plugins:
       # Default: 10
       # -----------------------------------------------------------------------
       write_flush_seconds: 10
+
+      # -----------------------------------------------------------------------
+      # ollama_accounts — Ollama Cloud 账号（可选，也可在 Dashboard 中直接添加）。
+      # 每个账号通过 session_cookie 抓取 https://ollama.com/settings 页面，
+      # 解析 "Cloud usage" 区块中的 Session / Weekly 用量。
+      #   name           — 展示名称
+      #   session_cookie — 登录 Cookie（"aid=...; __Secure-session=..."）
+      #   show_session   — 是否显示 Session 额度（默认 true）
+      #   show_weekly    — 是否显示周额度（默认 true）
+      # -----------------------------------------------------------------------
+      # ollama_accounts:
+      #   - name: "我的 Ollama 账号"
+      #     session_cookie: "aid=YOUR_AID; __Secure-session=YOUR_SESSION_VALUE"
+      #     show_session: true
+      #     show_weekly: true
