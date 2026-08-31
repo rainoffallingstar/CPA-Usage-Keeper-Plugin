@@ -383,6 +383,20 @@ func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
 	}
 
 	if len(windows) == 0 {
+		// If page is returned with HTTP 200 but no rolling/weekly usage fields exist,
+		// the user is authenticated but has no active Go subscription.
+		if strings.Contains(html, "opencode") || strings.Contains(html, "workspace") {
+			return []quotaWindow{
+				{
+					Label:      "订阅状态",
+					Used:       0,
+					Total:      0,
+					Remaining:  0,
+					Unit:       "",
+					StatusText: "未开通 Go 订阅 (无可用配额)",
+				},
+			}, nil
+		}
 		return nil, fmt.Errorf("could not parse quota data from dashboard HTML")
 	}
 	return windows, nil

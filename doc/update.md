@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.10.18** — Ollama Cloud 用量监控（Session / Weekly 额度 + 按模型拆分），Quota 标签页新增 Ollama Cloud 账号管理。
+**v0.10.23** — 修复定价规则表分组栏数据库图标与操作按钮图标异常放大问题。
 
 ## ⚠️ Before Building — Version Checklist
 
@@ -199,6 +199,11 @@ upstream/
 
 | Version | Changes |
 |---------|---------|
+| v0.10.23 | 修复定价规则表分组栏数据库图标与操作按钮图标异常放大问题 |
+| v0.10.22 | 修复 OpenCode 未订阅用户报错问题；修复 Ollama 模型调用次数精准归属到 Session/Weekly 各自窗口下方 |
+| v0.10.21 | 订阅配额页 1:1 对齐原型（Provider 切换 + 独立账号卡片 + 折叠添加），Provider 成本环形图清洗优化与彩色色板适配 |
+| v0.10.20 | 前端全面重构为 Apple 设计系统：新增 Overview 首屏、真实数据 SVG 图表体系（时间序列面积/折线图、Provider 环形图、Top 5 模型条形图、缓冲区圆环仪表）、全站中文化、定价模态框与滑动抽屉体验优化 |
+| v0.10.19 | 模型定价匹配规则优化：冒号模型名自动映射、带变体后缀模型自动回退基础价格 |
 | v0.10.18 | Ollama Cloud 用量监控：抓取 `ollama.com/settings` 解析 Session/Weekly 额度、套餐名与按模型拆分；新增 `ollama_accounts` 配置、`/api/ollama-quota` 端点、Quota 标签页 Ollama 账号管理 |
 | v0.10.12 | Manual refresh on By Model/All Events tabs, fuzzy model aggregation with Detailed/Aggregated view toggle, total cost summary |
 | v0.10.11 | apple-design dashboard refresh: interruptible drag-to-dismiss drawer with velocity handoff + momentum projection, translucent tab/drawer chrome (`backdrop-filter`), spring + symmetric easing tokens, size-specific typography (`font-optical-sizing`, `--tracking-*`), `:active` instant press feedback, `prefers-reduced-motion`/`prefers-reduced-transparency`/`prefers-contrast` support |

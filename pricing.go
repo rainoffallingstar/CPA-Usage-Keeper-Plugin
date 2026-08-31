@@ -20,9 +20,9 @@ type modelPrice struct {
 }
 
 type pricesResponse struct {
-	Prices    map[string]modelPrice `json:"prices"`
-	LastSync  string                `json:"last_sync,omitempty"`
-	SyncedAt  string                `json:"synced_at,omitempty"`
+	Prices   map[string]modelPrice `json:"prices"`
+	LastSync string                `json:"last_sync,omitempty"`
+	SyncedAt string                `json:"synced_at,omitempty"`
 }
 
 var pricesMu sync.RWMutex
@@ -231,36 +231,105 @@ func computeCost(model string, inputTokens, outputTokens, cachedTokens int64) fl
 
 // matchPrice looks up a model name with fuzzy matching against pricesStore.
 func matchPrice(model string) (modelPrice, bool) {
+	price, _, ok := matchPriceDetailed(model)
+	return price, ok
+}
+
+// matchPriceDetailed is like matchPrice but also reports the store key that
+// was matched ("" when no price was found).
+func matchPriceDetailed(model string) (modelPrice, string, bool) {
 	model = strings.TrimSpace(model)
 	if model == "" {
-		return modelPrice{}, false
+		return modelPrice{}, "", false
 	}
 	// Exact match first
 	if p, ok := pricesStore[model]; ok {
-		return p, true
+		return p, model, true
 	}
 	// Try lowercase
 	lower := strings.ToLower(model)
 	if p, ok := pricesStore[lower]; ok {
-		return p, true
+		return p, lower, true
 	}
-	// Generate variants (dot↔dash, no dashes, no dots)
+	// Generate variants (dot/dash/colon interchange, no separators)
 	for _, v := range modelVariants(lower) {
 		if p, ok := pricesStore[v]; ok {
-			return p, true
+			return p, v, true
 		}
 	}
 	// Try stripping common prefixes (openai/, anthropic/, etc.)
 	if idx := strings.Index(model, "/"); idx >= 0 {
-		return matchPrice(model[idx+1:])
+		return matchPriceDetailed(model[idx+1:])
 	}
-	return modelPrice{}, false
+	// Fall back to the base model price when the exact variant is not
+	// listed, e.g. claude-opus-4-6-thinking → claude-opus-4-6,
+	// gemini-3-7-flash-high → gemini-3-7-flash,
+	// deepseek-v4-pro:preview → deepseek-v4-pro.
+	stripped := stripVariantSuffix(lower)
+	if stripped != "" && stripped != lower {
+		if p, _, ok := matchPriceDetailed(stripped); ok {
+			return p, stripped, true
+		}
+	}
+	return modelPrice{}, "", false
+}
+
+// suffixFallbacks lists model-name suffixes that are not priced separately;
+// when present they are stripped so the base model price applies.
+var suffixFallbacks = []string{
+	"-thinking-pro",
+	"-thinking",
+	":preview",
+	"-preview",
+	":latest",
+	"-latest",
+	":exp",
+	"-exp",
+	"-high",
+	"-ultra",
+}
+
+// stripVariantSuffix removes a trailing variant suffix (or a trailing
+// version/date number like ":0813") from a model name.
+func stripVariantSuffix(name string) string {
+	for _, suffix := range suffixFallbacks {
+		if strings.HasSuffix(name, suffix) {
+			return strings.TrimSuffix(name, suffix)
+		}
+	}
+	for _, separator := range []string{":", "-"} {
+		idx := strings.LastIndex(name, separator)
+		if idx > 0 && isVersionNumber(name[idx+1:]) {
+			return name[:idx]
+		}
+	}
+	return name
+}
+
+func isVersionNumber(s string) bool {
+	if len(s) < 2 || len(s) > 8 {
+		return false
+	}
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // modelVariants generates common spelling variations of a model name.
 func modelVariants(name string) []string {
+	seen := make(map[string]bool)
 	var out []string
-	add := func(s string) { out = append(out, s) }
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" || s == name || seen[s] {
+			return
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
 	// dot↔dash interchange
 	if strings.Contains(name, ".") {
 		add(strings.ReplaceAll(name, ".", "-"))
@@ -268,8 +337,15 @@ func modelVariants(name string) []string {
 	if strings.Contains(name, "-") {
 		add(strings.ReplaceAll(name, "-", "."))
 	}
+	// colon↔dash interchange (e.g. "deepseek-v4-pro:0813" → "deepseek-v4-pro-0813")
+	if strings.Contains(name, ":") {
+		add(strings.ReplaceAll(name, ":", "-"))
+	}
+	if strings.Contains(name, "-") {
+		add(strings.ReplaceAll(name, "-", ":"))
+	}
 	// remove all separators
-	add(strings.ReplaceAll(strings.ReplaceAll(name, "-", ""), ".", ""))
+	add(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(name, "-", ""), ".", ""), ":", ""))
 	// insert possible missing dashes between number-letter boundaries
 	// e.g. "glm5.2" → "glm-5.2", "deepseekv4" → "deepseek-v4"
 	return out
@@ -282,14 +358,14 @@ func modelVariants(name string) []string {
 const modelPriceAPI = "https://modelprice.boxtech.icu/api/v2/entities"
 
 type mpEntity struct {
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	Primary  struct {
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Primary struct {
 		Provider string `json:"provider"`
 		Pricing  struct {
-			Input      *float64 `json:"input"`
-			Output     *float64 `json:"output"`
-			CacheRead  *float64 `json:"cache_read"`
+			Input     *float64 `json:"input"`
+			Output    *float64 `json:"output"`
+			CacheRead *float64 `json:"cache_read"`
 		} `json:"pricing"`
 	} `json:"primary_offering"`
 }

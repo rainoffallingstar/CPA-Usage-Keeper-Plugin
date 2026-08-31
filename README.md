@@ -121,7 +121,7 @@ plugins:
 
 插件启动后自动从 [modelprice.boxtech.icu](https://modelprice.boxtech.icu) 拉取 650+ 模型的定价（每 6 小时刷新一次）。
 
-Pricing 标签页中点击 **Sync** 按钮可手动触发。同步后的定价支持模糊匹配（`glm-5-2` / `glm-5.2` / `deepseek.v4.pro` 等写法均可）。
+Pricing 标签页中点击 **Sync** 按钮可手动触发。同步后的定价支持模糊匹配（`glm-5-2` / `glm-5.2` / `deepseek.v4.pro` / `deepseek-v4-pro:0813` 等写法均可；`claude-opus-4-6-thinking`、`gemini-3-7-flash-high`、`deepseek-v4-pro:preview` 等变体/后缀模型会自动回退到基础型号的价格）。
 
 ### 手动管理
 
