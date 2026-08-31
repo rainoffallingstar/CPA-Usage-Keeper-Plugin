@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">Usage Keeper — AI 用量统计与成本精算插件</title>
+  <desc id="hero-desc">CLIProxyAPI 进程内高性能 AI 用量监控、成本核算与订阅配额可视化看板。</desc>
+
+  <defs>
+    <linearGradient id="hero-bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08090a"/>
+      <stop offset="50%" stop-color="#0d0e10"/>
+      <stop offset="100%" stop-color="#121316"/>
+    </linearGradient>
+    <linearGradient id="hero-glow-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2997ff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#5856d6" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="card-bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a1d"/>
+      <stop offset="100%" stop-color="#141416"/>
+    </linearGradient>
+    <linearGradient id="sparkline-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2997ff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#2997ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="accent-text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2997ff"/>
+      <stop offset="100%" stop-color="#7d7aff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Canvas Container -->
+  <rect width="1200" height="420" rx="20" fill="url(#hero-bg-grad)" stroke="#262629" stroke-width="1.5"/>
+  <ellipse cx="280" cy="180" rx="340" ry="220" fill="url(#hero-glow-blue)"/>
+  <ellipse cx="980" cy="240" rx="260" ry="180" fill="url(#hero-glow-blue)"/>
+
+  <!-- Left: Brand, Typography & Core Value -->
+  <g id="title-block" transform="translate(64, 52)">
+    <!-- Eyebrow Pill -->
+    <g transform="translate(0, 0)">
+      <rect width="258" height="28" rx="14" fill="#1e1e24" stroke="#333338" stroke-width="1"/>
+      <circle cx="14" cy="14" r="4" fill="#30d158"/>
+      <text x="26" y="18" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif" font-size="12" font-weight="600" letter-spacing="0.04em">CLIPROXYAPI (CPA) PLUGIN</text>
+      <rect x="198" y="5" width="52" height="18" rx="9" fill="#2997ff" fill-opacity="0.18"/>
+      <text x="224" y="18" fill="#2997ff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="700" text-anchor="middle">v0.10.23</text>
+    </g>
+
+    <!-- Main Title with Apple Logo Mark -->
+    <g transform="translate(0, 50)">
+      <rect x="0" y="0" width="44" height="44" rx="12" fill="url(#card-bg-grad)" stroke="#3a3a40" stroke-width="1.2"/>
+      <circle cx="22" cy="22" r="14" fill="none" stroke="#2997ff" stroke-width="2.5" stroke-dasharray="60 90"/>
+      <path d="M 14 26 L 19 21 L 24 23 L 30 15" fill="none" stroke="#30d158" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="30" cy="15" r="2" fill="#ffffff"/>
+      <text x="56" y="34" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="42" font-weight="700" letter-spacing="-0.02em">Usage Keeper</text>
+    </g>
+
+    <!-- Subtitle / One-line value -->
+    <text x="0" y="132" fill="url(#accent-text-grad)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600">AI API 实时用量统计 · 成本精算与订阅配额看板</text>
+
+    <!-- Description -->
+    <text x="0" y="172" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif" font-size="14" font-weight="400">运行在 CLIProxyAPI 进程内，零网络开销采集所有代理请求，</text>
+    <text x="0" y="196" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif" font-size="14" font-weight="400">提供 Apple 设计语言的交互式 Web Dashboard 与全功能 API。</text>
+
+    <!-- Feature Tag Chips -->
+    <g transform="translate(0, 240)">
+      <!-- Chip 1 -->
+      <rect x="0" y="0" width="138" height="32" rx="16" fill="#18181b" stroke="#2e2e33" stroke-width="1"/>
+      <text x="14" y="20" fill="#2997ff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="500">⚡ 进程内无锁落盘</text>
+
+      <!-- Chip 2 -->
+      <rect x="148" y="0" width="144" height="32" rx="16" fill="#18181b" stroke="#2e2e33" stroke-width="1"/>
+      <text x="162" y="20" fill="#30d158" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="500">📊 650+ 模型定价库</text>
+
+      <!-- Chip 3 -->
+      <rect x="302" y="0" width="148" height="32" rx="16" fill="#18181b" stroke="#2e2e33" stroke-width="1"/>
+      <text x="316" y="20" fill="#ffd60a" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="500">💳 四大平台配额监控</text>
+    </g>
+
+    <!-- Quick URL preview pill -->
+    <g transform="translate(0, 292)">
+      <text x="0" y="14" fill="#6e6e73" font-family="'SF Mono', ui-monospace, Menlo, monospace" font-size="12">Dashboard 默认地址: http://localhost:18317/v0/resource/plugins/usage-keeper/dashboard</text>
+    </g>
+  </g>
+
+  <!-- Right: Apple-style Realistic Dashboard Preview Card -->
+  <g id="project-proof" transform="translate(620, 36)">
+    <!-- Outer Floating Glass Window -->
+    <rect width="516" height="348" rx="16" fill="url(#card-bg-grad)" stroke="#303034" stroke-width="1.5"/>
+    
+    <!-- Window Header -->
+    <g transform="translate(18, 16)">
+      <!-- Traffic dots -->
+      <circle cx="6" cy="6" r="4.5" fill="#ff453a"/>
+      <circle cx="20" cy="6" r="4.5" fill="#ffd60a"/>
+      <circle cx="34" cy="6" r="4.5" fill="#30d158"/>
+      <!-- Window Title -->
+      <text x="240" y="10" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="500" text-anchor="middle">Usage Keeper · Overview</text>
+      <!-- Live badge -->
+      <rect x="420" y="-2" width="56" height="18" rx="9" fill="#30d158" fill-opacity="0.15"/>
+      <circle cx="430" cy="7" r="3" fill="#30d158"/>
+      <text x="454" y="11" fill="#30d158" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="10" font-weight="600" text-anchor="middle">LIVE</text>
+    </g>
+
+    <!-- Mini KPI Row Inside Window -->
+    <g transform="translate(18, 48)">
+      <!-- KPI Card 1: Cost -->
+      <g transform="translate(0, 0)">
+        <rect width="154" height="96" rx="10" fill="#202024" stroke="#333338" stroke-width="1"/>
+        <text x="12" y="22" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="500">总预估花费</text>
+        <rect x="108" y="10" width="34" height="16" rx="8" fill="#2997ff" fill-opacity="0.15"/>
+        <text x="125" y="22" fill="#2997ff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="9" font-weight="700" text-anchor="middle">USD</text>
+        <text x="12" y="52" fill="#f5f5f7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="700" letter-spacing="-0.01em">$3,098.67</text>
+        <!-- Sparkline -->
+        <path d="M 12 84 L 32 78 L 52 81 L 72 72 L 92 68 L 112 74 L 132 58 L 142 54 L 142 88 L 12 88 Z" fill="url(#sparkline-grad)"/>
+        <path d="M 12 84 L 32 78 L 52 81 L 72 72 L 92 68 L 112 74 L 132 58 L 142 54" fill="none" stroke="#2997ff" stroke-width="2" stroke-linecap="round"/>
+      </g>
+
+      <!-- KPI Card 2: Requests -->
+      <g transform="translate(162, 0)">
+        <rect width="154" height="96" rx="10" fill="#202024" stroke="#333338" stroke-width="1"/>
+        <text x="12" y="22" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="500">调用请求量</text>
+        <text x="12" y="52" fill="#f5f5f7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="700" letter-spacing="-0.01em">69,132</text>
+        <text x="12" y="74" fill="#30d158" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="500">成功率 99.6%</text>
+        <!-- Mini bars -->
+        <g transform="translate(108, 62)">
+          <rect x="0" y="10" width="4" height="14" rx="2" fill="#7d7aff" fill-opacity="0.4"/>
+          <rect x="7" y="6" width="4" height="18" rx="2" fill="#7d7aff" fill-opacity="0.6"/>
+          <rect x="14" y="2" width="4" height="22" rx="2" fill="#7d7aff" fill-opacity="0.8"/>
+          <rect x="21" y="0" width="4" height="24" rx="2" fill="#7d7aff"/>
+        </g>
+      </g>
+
+      <!-- KPI Card 3: Cache -->
+      <g transform="translate(324, 0)">
+        <rect width="154" height="96" rx="10" fill="#202024" stroke="#333338" stroke-width="1"/>
+        <text x="12" y="22" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="500">缓存命中率</text>
+        <text x="12" y="52" fill="#f5f5f7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="700" letter-spacing="-0.01em">73.8%</text>
+        <text x="12" y="74" fill="#86868b" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11">节约 2.8B Tokens</text>
+      </g>
+    </g>
+
+    <!-- Mini Timeseries Chart & Provider Donut Preview inside Window -->
+    <g transform="translate(18, 156)">
+      <!-- Timeseries Mini Window -->
+      <rect width="316" height="168" rx="10" fill="#202024" stroke="#333338" stroke-width="1"/>
+      <text x="14" y="22" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600">支出趋势 (Timeseries)</text>
+      
+      <!-- Chart Area -->
+      <path d="M 16 130 Q 80 120 130 95 T 220 70 T 300 42 L 300 148 L 16 148 Z" fill="url(#sparkline-grad)"/>
+      <path d="M 16 130 Q 80 120 130 95 T 220 70 T 300 42" fill="none" stroke="#2997ff" stroke-width="2.5" stroke-linecap="round"/>
+      
+      <!-- Grid lines -->
+      <line x1="16" y1="50" x2="300" y2="50" stroke="#2e2e34" stroke-dasharray="3 3"/>
+      <line x1="16" y1="95" x2="300" y2="95" stroke="#2e2e34" stroke-dasharray="3 3"/>
+      <line x1="16" y1="140" x2="300" y2="140" stroke="#2e2e34"/>
+      
+      <!-- Chart Dots -->
+      <circle cx="130" cy="95" r="3.5" fill="#141416" stroke="#2997ff" stroke-width="2"/>
+      <circle cx="220" cy="70" r="3.5" fill="#141416" stroke="#2997ff" stroke-width="2"/>
+      <circle cx="300" cy="42" r="4.5" fill="#ffffff" stroke="#2997ff" stroke-width="2.5"/>
+      <text x="16" y="158" fill="#6e6e73" font-family="'SF Mono', monospace" font-size="9">08:00</text>
+      <text x="158" y="158" fill="#6e6e73" font-family="'SF Mono', monospace" font-size="9" text-anchor="middle">16:00</text>
+      <text x="300" y="158" fill="#6e6e73" font-family="'SF Mono', monospace" font-size="9" text-anchor="end">22:00</text>
+
+      <!-- Provider Mini Donut Card -->
+      <g transform="translate(324, 0)">
+        <rect width="154" height="168" rx="10" fill="#202024" stroke="#333338" stroke-width="1"/>
+        <text x="12" y="22" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600">Provider 成本</text>
+
+        <!-- Donut SVG -->
+        <g transform="translate(77, 72)">
+          <circle cx="0" cy="0" r="32" fill="none" stroke="#2e2e33" stroke-width="12"/>
+          <!-- Codex (64%) -->
+          <circle cx="0" cy="0" r="32" fill="none" stroke="#2997ff" stroke-width="12" stroke-dasharray="128 201" stroke-dashoffset="0" transform="rotate(-90)"/>
+          <!-- Antigravity (18%) -->
+          <circle cx="0" cy="0" r="32" fill="none" stroke="#7d7aff" stroke-width="12" stroke-dasharray="36 201" stroke-dashoffset="-128" transform="rotate(-90)"/>
+          <!-- Claude (12%) -->
+          <circle cx="0" cy="0" r="32" fill="none" stroke="#30d158" stroke-width="12" stroke-dasharray="24 201" stroke-dashoffset="-164" transform="rotate(-90)"/>
+          <!-- Others (6%) -->
+          <circle cx="0" cy="0" r="32" fill="none" stroke="#ffd60a" stroke-width="12" stroke-dasharray="13 201" stroke-dashoffset="-188" transform="rotate(-90)"/>
+          <text x="0" y="4" fill="#f5f5f7" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="11" font-weight="700" text-anchor="middle">Top 5</text>
+        </g>
+
+        <!-- Legend rows -->
+        <g transform="translate(12, 120)">
+          <circle cx="4" cy="4" r="3" fill="#2997ff"/>
+          <text x="12" y="7" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9">Codex 64%</text>
+          
+          <circle cx="4" cy="18" r="3" fill="#7d7aff"/>
+          <text x="12" y="21" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9">Antigravity 18%</text>
+
+          <circle cx="4" cy="32" r="3" fill="#30d158"/>
+          <text x="12" y="35" fill="#d2d2d7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9">Claude 12%</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

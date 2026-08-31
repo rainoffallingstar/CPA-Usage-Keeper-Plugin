@@ -1,42 +1,103 @@
-# Usage Keeper — CPA Plugin
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Usage Keeper — AI API 用量统计与成本精算插件">
+</p>
 
-AI API 用量统计与费用核算插件，运行在 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 进程内。
+<p align="center">
+  <a href="https://github.com/rainoffallingstar/CPA-Usage-Keeper-Plugin/releases"><img src="https://img.shields.io/github/v/release/rainoffallingstar/CPA-Usage-Keeper-Plugin?style=flat-square&color=0071e3&label=Release" alt="Release"></a>
+  <a href="https://github.com/router-for-me/CLIProxyAPI"><img src="https://img.shields.io/badge/CPA-v7.2.131+-5856d6?style=flat-square" alt="CLIProxyAPI Compatible"></a>
+  <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.22+-007d9c?style=flat-square&logo=go&logoColor=white" alt="Go Version"></a>
+  <a href="https://sqlite.org"><img src="https://img.shields.io/badge/Storage-SQLite_Zero--Loss-30d158?style=flat-square" alt="SQLite Zero-Loss"></a>
+  <a href="#dashboard-功能矩阵"><img src="https://img.shields.io/badge/UI-Apple_Design_System-2997ff?style=flat-square" alt="Apple Design System"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-86868b?style=flat-square" alt="License"></a>
+</p>
 
-## 功能
+---
 
-- 实时采集用量数据（UsagePlugin 回调 -> SQLite）
-- 浏览器 Dashboard：摘要卡片、模型拆分、事件历史、暗色主题、时间范围筛选
-- 模型定价：手动添加 或 自动从 modelprice.boxtech.icu 同步 650+ 模型
-- OpenCode Go 套餐余额监控（支持工作区切换）
-- Ollama Cloud 用量监控（Session / Weekly 额度 + 按模型拆分）
-- 健康监控：缓存命中率、写入延迟、环缓冲使用率、告警
-- 导入/导出、后台导出任务管理（JSON/JSONL/CSV+gzip）
-- API Key 脱敏（SHA-224 哈希 + 显示掩码）
-- Quotio 兼容的 GET /v0/management/usage 端点
-- 5 平台交叉编译（GitHub Actions）
+## 💡 什么是 Usage Keeper？
 
-## 快速开始
+**Usage Keeper** 是一款运行在 [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI) 宿主进程内的高性能 AI API 用量监控、成本精算与订阅配额管理插件。
 
+通过 CGO 进程内共享内存直接拦截所有流经代理的请求，实现**零额外网络开销**、**无锁内存环形缓冲**与**异步事务持久化**。前端采用纯正 **Apple 视觉设计语言**（Apple Design System），提供涵盖时间序列趋势、渠道成本占比、模型排行榜及四大提供商订阅配额的现代化交互看板。
+
+---
+
+## ⚡ 核心特性
+
+<p align="center">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Usage Keeper 进程内架构图">
+</p>
+
+### 🍏 1. Apple 设计语言与真实数据可视化
+- **Overview（概览首屏）**：一眼尽览总预估花费、调用请求量、Token 吞吐构成与缓存命中率，全部 KPI 卡片均搭载真实事件流生成的**自绘 SVG 迷你面积趋势图**。
+- **时间序列趋势主图**：支持「支出成本 ($)」与「调用量」双模自由切换，自适应分桶（Hourly / Daily）并配备交互式数据浮窗。
+- **Provider 成本分布环形图**：智能清洗复杂渠道名称，按 Top 5 +「其他渠道」智能聚合，配备 Apple 阶梯彩色色板。
+- **高耗资模型 Top 5 排行榜**：按实际消耗金额由高至低排列，展示双色比例条与请求频次。
+
+### 💳 2. 多平台订阅配额监控 (Quota)
+- **OpenCode Go**：实时监控 5 小时滚动窗口、每周及每月用量，支持多工作区自动解析与免费/未订阅账号优雅识别。
+- **智谱 GLM Coding**：追踪每日调用额度上限、剩余百分比、重置倒计时与模型使用拆分。
+- **DeepSeek 官方账户**：实时查询预付费账户余额（USD）与使用率。
+- **Ollama Cloud**：精准解析 `ollama.com` 会话限额（Session / 5h 窗口）与每周限额（Weekly），模型调用次数精准归属于各自窗口下方。
+
+### 📊 3. 650+ 模型动态定价与智能匹配
+- **云端自动同步**：每 6 小时自动从 [modelprice.boxtech.icu](https://modelprice.boxtech.icu) 拉取 650+ 主流大模型的官方最新定价（Prompt / Completion / Cache）。
+- **变体后缀自动回退**：对带冒号版本（如 `deepseek-v4-pro:0813`）或变体后缀（如 `claude-opus-4-6-thinking`、`gemini-3-7-flash-high`、`deepseek-v4-pro:preview`）自动模糊回退匹配基础型号单价。
+- **在线维护与编辑**：支持按提供商分类折叠管理，可在 Web 端直接通过模态弹窗修改或新增定价规则。
+
+### ⚡ 4. 极致性能与零损耗持久化
+- **进程内无锁拦截**：使用容量 10,000 的内存环形缓冲区（Ring Buffer）实现瞬时入队，代理转发请求延迟增加 `< 0.05ms`。
+- **SQLite 异步批量事务**：双缓冲区自动定时批量落盘，配合 SQLite 3-conn 连接池，历经数十万次高并发请求零丢失。
+- **版本升级无损软链**：配合迁移脚本自动将 SQLite 库重定向至版本无关的 Canonical 目录（`upstream/data/usage-keeper.db`），CPA 版本自动升级绝不丢失历史数据。
+
+### 🔍 5. 交互式滑动抽屉 (Inspector Drawer)
+- 请求流水日志支持按调用状态、客户端来源（Cursor、Claude Code、CodeGate、API）及关键词实时检索。
+- 点击任意记录呼出右侧抽屉，查看 Token 拆分、执行耗时、脱敏凭据及完整 JSON 载荷。
+- 完整保留 **Apple 物理弹簧拖拽手势（1:1 惯性跟随与速度释放判定）**。
+
+---
+
+## 🚀 快速上手
+
+### 1. 编译构建
 ```bash
+# 编译当前平台的动态链接库 (.dylib / .so / .dll)
 make build
-cp dist/usage-keeper.dylib 你的CPA目录/plugins/darwin/arm64/
-# 在 CPA config.yaml 中添加配置块
-# 重启 CPA 或 touch config.yaml 触发热重载
 ```
 
-## Dashboard
+### 2. 部署到 CPA 插件目录
+```bash
+# 方式 A：使用内置的一键热重载迁移脚本（推荐）
+./scripts/migrate-plugin.sh --apply --force-build
 
-打开 `http://你的CPA地址:端口/v0/resource/plugins/usage-keeper/dashboard`
+# 方式 B：手动部署并重载
+cp dist/usage-keeper.dylib "你的CPA目录/plugins/darwin/arm64/usage-keeper-v0.10.23.dylib"
+# 修改或 touch 配置文件触发 CPA 动态热重载
+```
 
-| 标签页 | 说明 |
-|--------|------|
-| By Model | 按模型拆分的用量表（Token、请求数、Cost） + Provider 过滤 |
-| All Events | 分页事件列表（时间、模型、来源、Token、缓存命中率、延迟） |
-| Pricing | 添加/删除/自动同步模型定价 |
-| Health | 运行状态、环缓冲、缓存命中率、存储信息、告警 |
-| Quota | OpenCode Go 套餐余额（5小时滚动/本周/本月）+ 工作区切换、Ollama Cloud 用量（Session/Weekly） |
+### 3. 打开 Web Dashboard
+在浏览器中访问：
+```text
+http://<你的CPA地址:端口>/v0/resource/plugins/usage-keeper/dashboard
+```
 
-## 配置
+---
+
+## 🖥️ Dashboard 功能矩阵
+
+| 标签页 | 功能概述 | 核心能力 |
+|---|---|---|
+| **概览 (Overview)** | 全局核心指标与可视化大屏 | 总花费、调用量、Token 吞吐、缓存率、时间序列折线/面积图、Provider 成本环形图、Top 5 模型排行榜 |
+| **模型明细 (By Model)** | 各大模型的用量消耗分析 | 「已聚合 (折叠变体)」与「详细列表」双模切换、输入/输出比例条、缓存命中徽章、单模型一键跳转过滤 |
+| **请求日志 (All Events)** | 全量请求流水与排障抽屉 | 状态/来源客户端/关键词多维检索、失败错误展开、右侧滑动抽屉（含脱敏凭据与完整 JSON） |
+| **订阅配额 (Quota)** | 四大提供商余额与用量监控 | OpenCode Go、智谱 GLM、DeepSeek 官方余额、Ollama Cloud（Session / Weekly 模型归属） |
+| **定价管理 (Pricing)** | 模型计费规则维护与同步 | 云端 650+ 模型一键同步、提供商分类折叠、模糊变体回退匹配、弹出式编辑/新增/删除 Modal |
+| **系统健康 (Health)** | 进程运行与底层存储健康度 | 内存环形缓冲区圆环仪表、SQLite 文件大小与写入耗时、API 响应缓存命中率、系统告警状态灯 |
+
+---
+
+## ⚙️ 配置文件说明 (`config.yaml`)
+
+在 CLIProxyAPI 的 `config.yaml` 中添加 `usage-keeper` 配置块：
 
 ```yaml
 plugins:
@@ -46,150 +107,97 @@ plugins:
     usage-keeper:
       enabled: true
       priority: 1
-      db_path: ./data/usage-keeper.db
-      retention_days: 90
-      max_in_memory_events: 1000
-      refresh_seconds: 0
-      write_batch_size: 100
-      write_flush_seconds: 10
-      # 可选：在 config 中预定义 OpenCode 账号
+      db_path: ./data/usage-keeper.db     # SQLite 数据库路径（相对路径将自动软链至 Canonical DB）
+      retention_days: 90                  # 数据保留天数（默认 90 天）
+      max_in_memory_events: 1000          # 内存环形缓冲区大小（最大 10000）
+      refresh_seconds: 0                  # 仪表盘自动刷新间隔（秒，0 = 手动刷新）
+      write_batch_size: 100               # 每次批量事务写入 SQLite 的最大事件数
+      write_flush_seconds: 10             # 未满批次的最大内存停留秒数
+      api_key_hash_salt: "my-secret-salt" # API Key 脱敏哈希盐值（可选）
+
+      # 可选：预配置 OpenCode Go 账号（也可在 Dashboard 中直接添加）
       opencode_go_accounts:
-        - name: "我的 Go 套餐"
-          auth_cookie: ""
-        # 可选：在 config 中预定义 Ollama Cloud 账号
-        ollama_accounts:
-          - name: "我的 Ollama 账号"
-            session_cookie: "aid=...; __Secure-session=..."
-            show_session: true
-            show_weekly: true
-          workspace_id: ""
+        - name: "主工作区账号"
+          auth_cookie: "auth=eyJhbGciOi..."
+          workspace_id: "wrk_01..."
+
+      # 可选：预配置智谱 GLM Coding 账号
+      glm_coding_accounts:
+        - name: "GLM 开发者"
+          api_key: "sk-..."
+          base_url: "https://open.bigmodel.cn"
+
+      # 可选：预配置 DeepSeek 账号
+      deepseek_accounts:
+        - name: "DeepSeek 官方"
+          api_key: "sk-..."
+
+      # 可选：预配置 Ollama Cloud 账号
+      ollama_accounts:
+        - name: "Ollama Cloud 个人"
+          session_cookie: "aid=...; __Secure-session=..."
+          show_session: true
+          show_weekly: true
 ```
 
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| db_path | string | usage-keeper.db | SQLite 文件路径 |
-| retention_days | integer | 90 | 数据保留天数 |
-| max_in_memory_events | integer | 1000 | Dashboard 环缓冲大小（最大 10000） |
-| refresh_seconds | integer | 0 | 自动刷新间隔（0 = 关闭, ≤3600） |
-| write_batch_size | integer | 100 | 每个 SQLite 事务写入的用量事件数（≤1000） |
-| write_flush_seconds | integer | 10 | 未满批次的最长内存停留时间（≤300 秒） |
-| opencode_go_accounts | list | [] | OpenCode Go 账号预定义（也可在 Dashboard 中直接添加） |
-| ollama_accounts | list | [] | Ollama Cloud 账号预定义（也可在 Dashboard 中直接添加） |
+---
 
-## API 端点
+## 📡 REST API 端点
 
-所有路径前缀 `/v0/resource/plugins/usage-keeper`
-
-### 资源 API（无需认证）
-
-| 路径 | 参数 | 说明 |
-|------|------|------|
-| `/dashboard` | — | Dashboard HTML |
-| `/api/summary` | `range` | 聚合统计（Token/请求/缓存命中率） |
-| `/api/models` | `range`, `provider` | 按模型拆分 |
-| `/api/events` | `range`, `limit`, `offset` | 分页事件列表 |
-| `/api/health` | — | 健康监控 |
-| `/api/prices` | — | 模型定价 |
-| `/api/prices/sync` | — | 触发从 modelprice.boxtech.icu 同步定价 |
-| `/api/opencode-quota` | — | OpenCode Go 套餐配额 |
-| `/api/ollama-quota` | — | Ollama Cloud 用量配额 |
-
-### Management API（需要管理密钥）
-
-所有路径前缀 `/v0/management/usage-keeper`
+所有资源端点均挂载在 `/v0/resource/plugins/usage-keeper` 下（无需单独认证，供 Dashboard 消费）：
 
 | 路径 | 方法 | 说明 |
-|------|------|------|
-| `/summary` | GET | 聚合统计 |
-| `/models` | GET | 按模型拆分 |
-| `/events` | GET | 分页事件 |
-| `/cleanup` | POST | 手动清理过期数据 |
-| `/health` | GET | 健康监控 |
-| `/prices` | GET/PUT/DELETE/POST | 模型定价 CRUD |
-| `/export` | GET | 导出数据 |
-| `/import` | POST | 导入数据 |
-| `/export-jobs` | GET/POST/DELETE | 导出任务管理 |
-| `/export-download` | GET | 下载导出文件 |
-| `/opencode-quota` | GET/POST | OpenCode Go 配额 |
-| `/ollama-quota` | GET/POST | Ollama Cloud 配额 |
+|---|---|---|
+| `/dashboard` | `GET` | 现代化 Apple 风格 Web Dashboard HTML |
+| `/api/summary` | `GET` | 聚合统计（请求数、Token 拆分、缓存命中率、均延，支持 `range=1h/6h/24h/7d/30d`） |
+| `/api/models` | `GET` | 按模型聚合列表（请求数、Tokens、预估成本，支持 `provider` 过滤） |
+| `/api/events` | `GET` | 分页请求事件日志（支持 `limit`、`offset`、`model`、`source`、`auth` 过滤） |
+| `/api/health` | `GET` | 运行状态、环缓冲负载、SQLite 文件体积与写入延迟指标 |
+| `/api/prices` | `GET` | 模型定价规则列表 |
+| `/api/prices/sync` | `GET` | 触发从 modelprice.boxtech.icu 在线同步最新定价 |
+| `/api/opencode-quota` | `GET/POST` | OpenCode Go 账号配额获取、添加与刷新 |
+| `/api/glmcoding-quota`| `GET/POST` | 智谱 GLM Coding 账号配额获取与管理 |
+| `/api/deepseek-quota` | `GET/POST` | DeepSeek 官方余额获取与管理 |
+| `/api/ollama-quota`   | `GET/POST` | Ollama Cloud 会话与周度限额获取 |
+| `/api/usage`          | `GET` | Quotio 格式兼容的聚合用量端点 |
 
-兼容端点：`/v0/management/usage` (Quotio 聚合)
+---
 
-## 模型定价
+## 🛠️ 跨平台构建矩阵
 
-### 自动同步
-
-插件启动后自动从 [modelprice.boxtech.icu](https://modelprice.boxtech.icu) 拉取 650+ 模型的定价（每 6 小时刷新一次）。
-
-Pricing 标签页中点击 **Sync** 按钮可手动触发。同步后的定价支持模糊匹配（`glm-5-2` / `glm-5.2` / `deepseek.v4.pro` / `deepseek-v4-pro:0813` 等写法均可；`claude-opus-4-6-thinking`、`gemini-3-7-flash-high`、`deepseek-v4-pro:preview` 等变体/后缀模型会自动回退到基础型号的价格）。
-
-### 手动管理
-
-在 Pricing 标签页中直接添加/删除模型定价，价格单位为 **美元/百万 Token**。
-
-## OpenCode Go 余额监控
-
-1. 打开 Dashboard，切换到 **Quota** 标签页
-2. 点击 **Add Account**，输入账号名
-3. 点击 **Set Cookie**，粘贴浏览器中的 `auth=xxx` cookie
-4. 保存后自动拉取 5 小时滚动 / 本周 / 本月用量百分比
-5. 支持多工作区切换（自动解析或手动指定 `wrk_xxx`）
-
-已保存的账号存储在 SQLite 中，重启 CPA 后自动恢复。
-
-## Ollama Cloud 用量监控
-
-1. 打开 Dashboard，切换到 **Quota** 标签页
-2. 在 Add Account 面板选择 **Ollama Cloud**
-3. 输入账号名，粘贴浏览器中的 `aid=...; __Secure-session=...` cookie
-4. 保存后自动抓取 `https://ollama.com/settings` 页面，解析 Session / Weekly 用量百分比
-5. 展示套餐名（Plan）、每个窗口的用量进度条、以及按模型拆分的请求数
-
-实现参考 [ollama-cloud-quota-monitor](https://github.com/jacklee-code/ollama-cloud-quota-monitor)。
-
-已保存的账号存储在 SQLite 中，重启 CPA 后自动恢复。
-
-## 构建
+插件原生支持 5 大操作系统与架构组合：
 
 ```bash
-make build                    # 当前平台
-GOOS=linux GOARCH=amd64 make build  # 交叉编译
+# 交叉编译指定目标平台
+GOOS=darwin  GOARCH=arm64 make build   # macOS Apple Silicon (.dylib)
+GOOS=darwin  GOARCH=amd64 make build   # macOS Intel (.dylib)
+GOOS=linux   GOARCH=amd64 make build   # Linux x86_64 (.so)
+GOOS=linux   GOARCH=arm64 make build   # Linux aarch64 (.so)
+GOOS=windows GOARCH=amd64 make build   # Windows x64 (.dll)
 ```
 
-| 平台 | 产物 |
-|------|------|
-| macOS arm64 / amd64 | dist/usage-keeper.dylib |
-| Linux amd64 / arm64 | dist/usage-keeper.so |
-| Windows amd64 | dist/usage-keeper.dll |
+---
 
-## GitHub Actions
+## 🔄 热更新部署与升级
 
-推送到 `main` 分支自动构建测试。推送 `v*` tag 触发 Release（包含 5 平台二进制 + checksums）。
+每次发布新版本时，CPA 会根据动态库文件名中的版本号进行字典序比较并自动加载最高版本。
 
+推荐通过自带脚本一键完成构建与热更新：
 ```bash
-git tag v$(date +%Y%m%d)
-git push origin v$(date +%Y%m%d)
+./scripts/migrate-plugin.sh --apply --force-build
 ```
 
-## 升级
+该脚本将自动执行：
+1. 读取 `types.go` 中的最新版本号并完成交叉编译。
+2. 将构建出的动态库自动部署至活跃 CPA 版本的 `plugins/` 目录。
+3. 校验并确保 SQLite 数据库无损软链接至版本无关的 Canonical 目录。
+4. 切换 `config.yaml` 的刷新间隔，平滑触发宿主进程动态热重载。
+5. 自动验证 `dashboard` 200 返回状态与占位符完整性。
 
-```bash
-make build VERSION=0.5.0
-cp dist/usage-keeper.dylib plugins/darwin/arm64/usage-keeper-v0.5.0.dylib
-rm plugins/darwin/arm64/usage-keeper-v0.4.9.dylib
-```
+---
 
-版本化文件名让 CPA 在热重载时自动加载最新版本。
+## 📄 License
 
-## 故障排除
+本项目基于 [MIT License](./LICENSE) 开源。
 
-| 问题 | 排查 |
-|------|------|
-| Dashboard 404 | 确认 `plugins.enabled: true`，检查文件在正确的 `plugins/GOOS/GOARCH/` 目录下，重启 CPA |
-| 无用量数据 | 只有插件加载后的请求才会被统计，`/usage` 端点默认聚合最近 24 小时 |
-| 插件加载失败 | 检查 CPA 日志中 `pluginhost:` 行，`file` 确认架构匹配 |
-| Quotio 无数据 | 访问 Dashboard 确认插件已加载，检查管理密钥配置 |
-
-## 致谢
-
-受 [cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper) by [@Willxup](https://github.com/Willxup) 启发。
+受 [cpa-usage-keeper](https://github.com/Willxup/cpa-usage-keeper) 启发并全面重构。
