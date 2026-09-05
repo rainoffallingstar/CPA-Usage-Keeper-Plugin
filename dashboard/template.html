@@ -298,6 +298,50 @@ tr:hover .filter-link{opacity:1}
 @media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-row-2,.grid-row-equal,.grid-row-3{grid-template-columns:1fr}}
 @media(max-width:640px){.kpi-grid{grid-template-columns:1fr}.header-inner{height:auto;padding-block:8px;flex-wrap:wrap}.header-actions{width:100%%;justify-content:flex-end}.search-input,.search-input:focus{width:100%%}#drawer-panel{width:100vw}.quota-grid{grid-template-columns:1fr}.key-value-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}#drawer-panel.dragging{transition:none}}
+
+/* ─── Receipt Export Modal ────────────────────────────────────────────────── */
+.receipt-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2600;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity var(--motion-base) var(--ease-standard);padding:16px}
+.receipt-overlay.active{opacity:1;pointer-events:auto}
+.receipt-modal{width:520px;max-width:calc(100vw - 24px);max-height:92vh;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-floating);overflow:hidden;transform:scale(0.95);transition:transform var(--motion-base) var(--ease-standard)}
+.receipt-overlay.active .receipt-modal{transform:scale(1)}
+.receipt-modal-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border-soft);flex-wrap:wrap;gap:8px}
+.receipt-modal-header h3{font-size:15px;font-weight:600;margin:0}
+.receipt-modal-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.receipt-scroll{overflow-y:auto;padding:18px;background:var(--surface-warm)}
+.receipt-paper{background:#fdfdf7;color:#1a1a1a;font-family:var(--font-mono);font-size:12px;line-height:1.5;padding:22px 20px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12);max-width:340px;margin:0 auto;position:relative}
+.receipt-paper::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:16px;background:repeating-linear-gradient(90deg,transparent 0 6px,#fdfdf7 6px 12px);filter:drop-shadow(0 2px 2px rgba(0,0,0,0.15))}
+.receipt-paper .r-center{text-align:center}
+.receipt-paper .r-brand{font-size:16px;font-weight:700;letter-spacing:2px}
+.receipt-paper .r-sub{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase}
+.receipt-paper .r-dash{border-top:1px dashed #999;margin:10px 0}
+.receipt-paper .r-row{display:flex;justify-content:space-between;gap:8px}
+.receipt-paper .r-row .r-label{color:#444}
+.receipt-paper .r-row .r-val{font-weight:600;white-space:nowrap}
+.receipt-paper .r-section{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#333;margin:12px 0 6px;text-align:center}
+.receipt-paper .r-item{display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:11px;padding:2px 0}
+.receipt-paper .r-item .r-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333}
+.receipt-paper .r-item .r-tok{color:#555;text-align:right;min-width:56px}
+.receipt-paper .r-item .r-cost{font-weight:600;text-align:right;min-width:52px}
+.receipt-paper .r-item-head{font-weight:700;color:#333;border-bottom:1px dashed #999;padding-bottom:3px;margin-bottom:2px}
+.receipt-paper .r-item-head .r-tok,.receipt-paper .r-item-head .r-cost{color:#333}
+.receipt-paper .r-item-tip{border-top:1px dashed #999;margin-top:4px;padding-top:4px;color:#666}
+.receipt-paper .r-item-tip .r-name{font-style:italic;color:#666}
+.receipt-paper .r-item-tip .r-cost{color:#666}
+.receipt-paper .r-total{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:700;margin-top:4px}
+.receipt-paper .r-total .r-total-label{letter-spacing:1px}
+.receipt-paper .r-total .r-total-val{font-size:18px}
+.receipt-paper .r-foot{text-align:center;font-size:10px;color:#666;margin-top:12px}
+.receipt-paper .r-meta{font-size:10px;color:#888;text-align:center;margin-top:6px}
+.receipt-paper .r-barcode{text-align:center;font-size:9px;letter-spacing:3px;color:#333;margin-top:8px;font-family:var(--font-mono)}
+
+/* Print: only the invoice clone is printed (for PDF export) */
+@media print{
+  body *{visibility:hidden!important}
+  #receipt-print-clone,#receipt-print-clone *{visibility:visible!important}
+  #receipt-print-clone{display:block!important;position:absolute!important;left:0;top:0;width:100%%;margin:0;padding:0;box-shadow:none!important;border-radius:0!important;max-width:100%%!important;background:#fff!important}
+  #receipt-print-clone::after{display:none!important}
+  @page{margin:0}
+}
 </style>
 </head>
 <body>
@@ -332,6 +376,11 @@ tr:hover .filter-link{opacity:1}
         <!-- Manual Refresh Button -->
         <button id="btn-refresh" class="btn btn-secondary btn-icon-only" title="立即刷新" aria-label="立即刷新" onclick="refreshAll()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+        </button>
+        <!-- Export Receipt Button -->
+        <button id="btn-export-receipt" class="btn btn-secondary" title="导出用量小票 (PDF / 图片)" aria-label="导出用量小票" onclick="openReceiptModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          导出小票
         </button>
         <!-- Dark/Light Theme Toggle -->
         <button id="btn-theme" class="btn btn-secondary btn-icon-only" title="切换深浅主题" aria-label="切换深浅主题" onclick="toggleTheme()">
@@ -561,6 +610,7 @@ tr:hover .filter-link{opacity:1}
             <button class="btn btn-secondary quota-prov-btn" data-prov="glm" onclick="setQuotaProvider('glm')">GLM Coding</button>
             <button class="btn btn-secondary quota-prov-btn" data-prov="deepseek" onclick="setQuotaProvider('deepseek')">DeepSeek</button>
             <button class="btn btn-secondary quota-prov-btn" data-prov="ollama" onclick="setQuotaProvider('ollama')">Ollama Cloud</button>
+            <button class="btn btn-secondary quota-prov-btn" data-prov="colab" onclick="setQuotaProvider('colab')">Google Colab</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn btn-primary btn-sm" id="btn-toggle-add-quota" onclick="toggleAddQuotaForm()">
@@ -669,7 +719,61 @@ tr:hover .filter-link{opacity:1}
     </div>
   </div>
 
+  <!-- ─── Receipt Export Modal ─────────────────────────────────────────────── -->
+  <div class="receipt-overlay" id="receipt-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" onclick="if(event.target===this)closeReceiptModal()">
+    <div class="receipt-modal">
+      <div class="receipt-modal-header">
+        <h3 id="receipt-modal-title">Invoice 导出</h3>
+        <div class="receipt-modal-actions">
+          <select id="receipt-range-select" class="select-control" aria-label="导出时间段" onchange="onReceiptRangeChange()" style="height:26px;font-size:12px">
+            <option value="1h">过去 1 小时</option>
+            <option value="6h">过去 6 小时</option>
+            <option value="24h">过去 24 小时</option>
+            <option value="7d">过去 7 天</option>
+            <option value="30d">过去 30 天</option>
+          </select>
+          <select id="receipt-topn-select" class="select-control" aria-label="TOP N 模型" onchange="onReceiptTopNChange()" style="height:26px;font-size:12px">
+            <option value="3">TOP 3</option>
+            <option value="5" selected>TOP 5</option>
+            <option value="10">TOP 10</option>
+            <option value="20">TOP 20</option>
+            <option value="0">全部</option>
+          </select>
+          <select id="receipt-privacy-select" class="select-control" aria-label="隐私保护" onchange="onReceiptPrivacyChange()" style="height:26px;font-size:12px">
+            <option value="show" selected>隐私: 明文</option>
+            <option value="mask">隐私: 脱敏</option>
+            <option value="hide">隐私: 隐藏</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="exportReceiptPNG()" title="导出为 PNG 图片">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg>
+            图片
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="exportReceiptPDF()" title="通过打印对话框导出为 PDF">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            PDF
+          </button>
+          <button class="btn btn-ghost btn-icon-only" onclick="closeReceiptModal()" aria-label="关闭小票对话框">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="receipt-scroll">
+        <div class="receipt-paper" id="receipt-print-area">
+          <div class="r-center r-brand">INVOICE</div>
+          <div class="r-center r-sub">Usage · 用量账单</div>
+          <div class="r-dash"></div>
+          <div class="r-center" id="receipt-period" style="font-size:11px;color:#333">—</div>
+          <div class="r-dash"></div>
+          <div id="receipt-body"><!-- filled by JS --></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<!-- ─── Print-only Invoice Clone (direct child of body, avoids fixed-overlay print issues) ─── -->
+<div id="receipt-print-clone" class="receipt-paper" style="display:none"></div>
 
 <script>
 /* ─── Helper Functions ────────────────────────────────────────────────────── */
@@ -692,7 +796,9 @@ function icon(name){
 		alertCircle:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
 		server:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
 		tag:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
-		clock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+		clock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+		google:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/></svg>',
+		key:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 6.35a5 5 0 0 1 6.1 1.6 5 5 0 0 1-6.68 6.9L4.5 21.5 1 18l1.3-1.3H5V14h2.7l1.5-1.5a5 5 0 0 1 6.4-6.15z"/></svg>'
 	};
 	return m[name]||'';
 }
@@ -736,8 +842,9 @@ var currentEventsList=[];
 function rangeValue(){return document.getElementById("time-range-select").value}
 function handleRangeChange(){refreshAll()}
 
-async function fetchJSON(path,extra){
-	var url=API_BASE+path+"?range="+rangeValue();
+async function fetchJSON(path,extra,rangeOverride){
+	var rng=rangeOverride||rangeValue();
+	var url=API_BASE+path+"?range="+rng;
 	if(extra)Object.keys(extra).forEach(function(k){if(extra[k]!==undefined&&extra[k]!==null)url+="&"+k+"="+encodeURIComponent(extra[k])});
 	var opts={};
 	if(etagCache[url])opts.headers={"If-None-Match":etagCache[url]};
@@ -1551,7 +1658,7 @@ function setQuotaProvider(pid){
 
 function buildQuotaFields(provider){
 	var f="";
-	var provLabels={opencode:"OpenCode Go",glm:"GLM Coding",deepseek:"DeepSeek",ollama:"Ollama Cloud"};
+	var provLabels={opencode:"OpenCode Go",glm:"GLM Coding",deepseek:"DeepSeek",ollama:"Ollama Cloud",colab:"Google Colab"};
 	var pName=provLabels[provider]||provider;
 
 	var titleEl=document.getElementById("quota-add-title");
@@ -1563,6 +1670,10 @@ function buildQuotaFields(provider){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. glm-dev"></div><div class="form-group" style="flex:2;min-width:240px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">Base URL</label><input class="text-input" id="qa-base" value="https://open.bigmodel.cn"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="ollama"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. ollama-pro"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Session Cookie</label><input class="text-input" id="qa-cookie" placeholder="aid=...; __Secure-session=..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+	}else if(provider==="colab"){
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. colab-main"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doColabLogin()">'+icon("google")+' 登录 Google Colab</button></div>';
+		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">点击登录后，浏览器将弹出 Google 授权页，完成授权后回跳本机回调端点；若回跳失败，可复制地址栏回调 URL 中的 <code>code=...</code> 参数粘贴回下方输入框。</div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:8px"><div class="form-group" style="flex:3;min-width:260px;margin-bottom:0"><label class="form-label">手动授权码 (可选回退)</label><input class="text-input" id="qa-code" placeholder="粘贴回调 URL 中的 code=..."></div><button class="btn btn-secondary" style="height:34px;padding:0 16px" onclick="doColabManualCode()">'+icon("key")+' 提交授权码</button></div>';
 	}else{
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. deepseek-main"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
 	}
@@ -1585,6 +1696,7 @@ async function renderQuota(){
 		var glmData=await fetchJSON("/glmcoding-quota");quotaDataCache["glm"]=(glmData.accounts)||[];
 		var dsData=await fetchJSON("/deepseek-quota");quotaDataCache["deepseek"]=(dsData.accounts)||[];
 		var olData=await fetchJSON("/ollama-quota");quotaDataCache["ollama"]=(olData.accounts)||[];
+		var cbData=await fetchJSON("/colab-quota");quotaDataCache["colab"]=(cbData.accounts)||[];
 
 		renderQuotaCards();
 	}catch(e){
@@ -1621,7 +1733,18 @@ function renderQuotaCards(){
 			if(pct>=90)warnHtml='<div class="quota-alert danger">'+icon("alertCircle")+' 配额即将耗尽 (>90%%)</div>';
 			else if(pct>=70)warnHtml='<div class="quota-alert warning">'+icon("alertCircle")+' 使用率较高 (>70%%)</div>';
 
-			var valDisplay=win.total>0?(Number(win.used||0).toFixed(1)+' / '+Number(win.total||0).toFixed(1)+' '+esc(win.unit||"")):(win.status_text?esc(win.status_text):"");
+			var valDisplay="";
+			if(acc.type==="colab"){
+				if(win.total>0){
+					valDisplay=Number(win.used||0).toFixed(1)+' / '+Number(win.total||0).toFixed(0)+' '+esc(win.unit||"")+' (余 '+Number(win.remaining||0).toFixed(1)+')';
+				}else if(win.remaining!==undefined){
+					valDisplay=formatNum(win.remaining)+(win.unit||"")+" 剩余";
+				}else{
+					valDisplay=win.status_text?esc(win.status_text):"";
+				}
+			}else{
+				valDisplay=win.total>0?(Number(win.used||0).toFixed(1)+' / '+Number(win.total||0).toFixed(1)+' '+esc(win.unit||"")):(win.status_text?esc(win.status_text):"");
+			}
 
 			// Models inside this specific window
 			var modelsHtml="";
@@ -1641,8 +1764,129 @@ function renderQuotaCards(){
 
 		var errorHtml=acc.error?'<div class="error-detail-box" style="margin-top:6px">'+esc(acc.error)+'</div>':'';
 
-		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto"><button class="btn btn-secondary btn-sm" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("refresh")+' 刷新配额</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
+		var historyHtml="";
+		if(acc.type==="colab"){
+			historyHtml='<div class="colab-history" id="colab-history-'+esc(acc.name)+'" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--fg)">用量历史</span><span style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" data-history-days="7" onclick="loadColabHistory(\''+esc(acc.name)+'\',7)">7天</button><button class="btn btn-primary btn-xs" data-history-days="30" onclick="loadColabHistory(\''+esc(acc.name)+'\',30)">30天</button><button class="btn btn-ghost btn-xs" data-history-days="90" onclick="loadColabHistory(\''+esc(acc.name)+'\',90)">90天</button></span></div><div style="font-size:11px;color:var(--meta)">正在加载…</div></div>';
+		}
+
+		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto"><button class="btn btn-secondary btn-sm" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("refresh")+' 刷新配额</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
 	}).join("");
+
+	// Auto-load history charts for Colab accounts.
+	setTimeout(function(){
+		accounts.forEach(function(acc){
+			if(acc.type==="colab"){
+				loadColabHistory(acc.name,30);
+			}
+		});
+	},50);
+}
+
+function loadColabHistory(account,days){
+	var container=document.getElementById("colab-history-"+account);
+	if(!container)return;
+	// Highlight active period button.
+	container.querySelectorAll("[data-history-days]").forEach(function(b){
+		b.className="btn "+(parseInt(b.getAttribute("data-history-days"),10)===days?"btn-primary":"btn-ghost")+" btn-xs";
+	});
+	container.querySelector("div:last-child").innerHTML='<div style="font-size:11px;color:var(--meta)">正在加载…</div>';
+	fetch(API_BASE+"/colab-quota?action=history&account="+encodeURIComponent(account)+"&days="+days)
+		.then(function(r){return r.json()})
+		.then(function(d){
+			var points=(d&&d.result?d.result.points:(d&&d.points)||[]);
+			renderColabHistoryChart(container,points,days);
+		})
+		.catch(function(){
+			container.querySelector("div:last-child").innerHTML='<div style="font-size:11px;color:var(--danger)">历史数据加载失败</div>';
+		});
+}
+
+function renderColabHistoryChart(container,points,days){
+	var chartBox=container.querySelector("div:last-child");
+	if(!chartBox)return;
+	if(!points||points.length<2){
+		chartBox.innerHTML='<div style="font-size:11px;color:var(--meta);padding:10px 0">暂无可用的历史快照 — 每次刷新配额时会自动记录，数据将随时间累积</div>';
+		return;
+	}
+	// SVG line chart: paid CCU balance (green) + free mCCUs remaining (blue).
+	var w=chartBox.clientWidth||330;
+	var h=120;
+	var pad={top:12,right:14,bottom:20,left:40};
+	var innerW=w-pad.left-pad.right;
+	var innerH=h-pad.top-pad.bottom;
+
+	var hasPaid=points.some(function(p){return p.has_paid});
+	var hasFree=points.some(function(p){return p.has_free});
+
+	// Time range from first to last point.
+	var times=points.map(function(p){return new Date(p.ts).getTime()});
+	var t0=Math.min.apply(null,times),t1=Math.max.apply(null,times);
+	if(t1<=t0)t1=t0+1;
+
+	// Y scale across both series.
+	var vals=[];
+	points.forEach(function(p){
+		if(p.has_paid&&p.paid_balance!=null)vals.push(Number(p.paid_balance));
+		if(p.has_free&&p.free_remaining!=null)vals.push(Number(p.free_remaining));
+	});
+	var vMax=Math.max.apply(null,vals.concat([1]));
+	var vMin=Math.min.apply(null,vals.concat([0]));
+	if(vMax===vMin)vMax=vMin+1;
+	var span=vMax-vMin;
+
+	function x(t){return pad.left+((t-t0)/(t1-t0))*innerW}
+	function y(v){return pad.top+innerH-((v-vMin)/span)*innerH}
+
+	function buildLine(flagField,valField){
+		var dstr="";
+		var first=true;
+		points.forEach(function(p){
+			if(!p[flagField])return;
+			var px=x(new Date(p.ts).getTime()).toFixed(1);
+			var py=y(Number(p[valField])).toFixed(1);
+			dstr+=(first?"M":"L")+px+" "+py+" ";
+			first=false;
+		});
+		return dstr;
+	}
+
+	function fmt(v){
+		v=Number(v);
+		if(Math.abs(v)>=1e6)return (v/1e6).toFixed(1)+"M";
+		if(Math.abs(v)>=1e3)return (v/1e3).toFixed(0)+"K";
+		return String(Math.round(v));
+	}
+
+	var grid="";
+	for(var i=0;i<=3;i++){
+		var gv=vMin+span*(i/3);
+		var gy=y(gv).toFixed(1);
+		grid+='<line x1="'+pad.left+'" y1="'+gy+'" x2="'+(w-pad.right)+'" y2="'+gy+'" stroke="#ddd" stroke-width="0.5" stroke-dasharray="2 2"/>';
+		grid+='<text x="'+(pad.left-6)+'" y="'+(Number(gy)+3)+'" font-size="9" fill="#888" text-anchor="end">'+fmt(gv)+'</text>';
+	}
+
+	var paidLine=hasPaid?buildLine("has_paid","paid_balance"):"";
+	var freeLine=hasFree?buildLine("has_free","free_remaining"):"";
+
+	// X-axis labels (start / mid / end of window).
+	var xLabels="";
+	[0,0.5,1].forEach(function(f){
+		var t=t0+(t1-t0)*f;
+		var d=new Date(t);
+		var lbl=(d.getMonth()+1)+"/"+d.getDate();
+		var px=x(t).toFixed(1);
+		xLabels+='<text x="'+px+'" y="'+(h-6)+'" font-size="9" fill="#888" text-anchor="middle">'+lbl+'</text>';
+	});
+
+	var legend='<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:4px">';
+	if(hasPaid)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:#34c759;border-radius:2px;vertical-align:middle;margin-right:4px"></span>付费 CCU 余额</span>';
+	if(hasFree)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:#0071e3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>免费额度 (mCCUs)</span>';
+	legend+='<span style="margin-left:auto">最近 '+days+' 天</span></div>';
+
+	chartBox.innerHTML='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'+grid;
+	if(paidLine)chartBox.innerHTML+='<path d="'+paidLine+'" fill="none" stroke="#34c759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	if(freeLine)chartBox.innerHTML+='<path d="'+freeLine+'" fill="none" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	chartBox.innerHTML+=xLabels+'</svg>'+legend;
 }
 
 function doAddQuotaAccount(){
@@ -1672,6 +1916,8 @@ function doAddQuotaAccount(){
 			renderQuota();
 			showToast("已添加 Ollama 账号: "+n,"success");
 		}).catch(function(){showToast("添加失败","danger")});
+	}else if(p==="colab"){
+		doColabLogin();
 	}else{
 		var dk=(document.getElementById("qa-key")||{}).value||"";
 		fetchQ("/deepseek-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(dk.trim())).then(function(){
@@ -1687,10 +1933,86 @@ function refreshCurrentQuota(){
 	showToast("已刷新 "+currentQuotaProvider.toUpperCase()+" 配额","success");
 }
 
+/* ─── Google Colab OAuth Login Flow ──────────────────────────────────────── */
+var colabLoginTimer=null;
+
+function doColabLogin(){
+	var n=(document.getElementById("qa-name")||{}).value||"";
+	n=n.trim();
+	if(!n){showToast("请输入账号标识","danger");return;}
+	var btn=event&&event.target?event.target:null;
+	if(btn)setBtnLoading(btn,true);
+	fetch(API_BASE+"/colab-quota?action=login&account="+encodeURIComponent(n))
+		.then(function(r){return r.json()})
+		.then(function(d){
+			if(btn)setBtnLoading(btn,false);
+			// Resource API returns the raw payload; management API wraps it in
+			// {ok, result}. Support both shapes.
+			var payload=(d&&d.result)?d.result:d;
+			if(!payload||!payload.auth_url){
+				var msg=(d&&d.error)?(d.error.message||d.error):(payload&&payload.error?payload.error:"");
+				showToast(msg||"登录启动失败","danger");
+				return;
+			}
+			var url=payload.auth_url;
+			var loginId=payload.login_id;
+			// Open the authorization page in a new tab.
+			window.open(url,"_blank");
+			showToast("已在浏览器打开 Google 授权页，请完成登录…","success");
+			// Poll the login state until the code is received & exchanged.
+			startColabLoginPoll(loginId);
+		})
+		.catch(function(){
+			if(btn)setBtnLoading(btn,false);
+			showToast("登录请求失败","danger");
+		});
+}
+
+function startColabLoginPoll(loginId){
+	if(colabLoginTimer)clearInterval(colabLoginTimer);
+	colabLoginTimer=setInterval(function(){
+		fetch(API_BASE+"/colab-quota?action=loginstate&login_id="+encodeURIComponent(loginId))
+			.then(function(r){return r.json()})
+			.then(function(d){
+				// Resource API returns raw payload; support both shapes.
+				var st=(d&&d.result)?d.result:d;
+				if(st.done===true){
+					clearInterval(colabLoginTimer);
+					colabLoginTimer=null;
+					showToast("Google Colab 登录成功"+(st.email?" · "+st.email:""),"success");
+					toggleAddQuotaForm();
+					renderQuota();
+				}else if(st.error){
+					clearInterval(colabLoginTimer);
+					colabLoginTimer=null;
+					showToast("登录失败: "+st.error,"danger");
+				}
+			})
+			.catch(function(){});
+	},2500);
+}
+
+function doColabManualCode(){
+	var n=(document.getElementById("qa-name")||{}).value||"";
+	var code=(document.getElementById("qa-code")||{}).value||"";
+	n=n.trim();code=code.trim();
+	if(!n){showToast("请输入账号标识","danger");return;}
+	if(!code){showToast("请输入授权码 (code=...)","danger");return;}
+	// Strip a full callback URL down to just the code parameter.
+	var m=code.match(/[?&]code=([^&]+)/);
+	if(m)code=m[1];
+	// Manual code entry cannot complete PKCE exchange without the matching
+	// verifier, which the loopback flow owns. For reliability we instruct the
+	// user to instead paste a refresh_token obtained from the extension, or
+	// retry the browser login (the recommended path).
+	showToast("请优先使用浏览器登录；手动 code 需配套 PKCE verifier，当前版本仅支持浏览器回跳","danger");
+}
+
 function quotaPath(provider){
 	if(provider==="opencode")return"/opencode-quota";
 	if(provider==="glm")return"/glmcoding-quota";
 	if(provider==="ollama")return"/ollama-quota";
+	if(provider==="colab")return"/colab-quota";
 	return"/deepseek-quota";
 }
 function refreshQuota(provider,name){
@@ -1917,6 +2239,302 @@ function showTooltip(event,html){
 }
 function hideTooltip(){
 	if(tooltipEl)tooltipEl.classList.remove("visible");
+}
+
+/* ─── Receipt Export ──────────────────────────────────────────────────────── */
+var receiptData=null;
+var receiptRange="30d";
+var receiptTopN=5;
+var receiptPrivacyMode="show"; // 'show' | 'mask' | 'hide'
+
+function maskSensitive(val){
+	if(!val)return"";
+	val=String(val).trim();
+	if(val.includes("@")){
+		var parts=val.split("@");
+		var name=parts[0],domain=parts.slice(1).join("@");
+		if(name.length<=2)return name[0]+"***@"+domain;
+		return name[0]+"***"+name[name.length-1]+"@"+domain;
+	}
+	if(/^\d{11}$/.test(val))return val.slice(0,3)+"****"+val.slice(7);
+	if(val.length<=3)return val[0]+"***";
+	return val.slice(0,2)+"***"+val.slice(-1);
+}
+
+function onReceiptPrivacyChange(){
+	var sel=document.getElementById("receipt-privacy-select");
+	if(!sel)return;
+	receiptPrivacyMode=sel.value||"show";
+	if(receiptData)renderReceipt(receiptData.sum,receiptData.models,receiptData.colabAccounts,receiptData.colabHistory);
+}
+
+function rangeLabel(rng){
+	var map={"1h":"过去 1 小时","6h":"过去 6 小时","24h":"过去 24 小时","7d":"过去 7 天","30d":"过去 30 天"};
+	return map[rng]||rng;
+}
+
+function receiptPeriodText(){
+	var now=new Date();
+	var hours={"1h":1,"6h":6,"24h":24,"7d":168,"30d":720}[receiptRange]||24;
+	var start=new Date(now.getTime()-hours*3600*1000);
+	function f(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+	return f(start)+" ~ "+f(now)+"  ("+rangeLabel(receiptRange)+")";
+}
+
+async function fetchColabInfoForReceipt(range){
+	var colabAccounts=[];
+	try{
+		var cbData=await fetchJSON("/colab-quota");
+		colabAccounts=(cbData&&cbData.accounts)?cbData.accounts:(cbData&&cbData.result&&cbData.result.accounts?cbData.result.accounts:[]);
+	}catch(e){}
+	if(!colabAccounts.length && quotaDataCache["colab"]){
+		colabAccounts=quotaDataCache["colab"];
+	}
+	var colabHistory=null;
+	if(colabAccounts.length && colabAccounts[0].name){
+		var days={"1h":1,"6h":1,"24h":1,"7d":7,"30d":30}[range]||30;
+		try{
+			var hResp=await fetch(API_BASE+"/colab-quota?action=history&account="+encodeURIComponent(colabAccounts[0].name)+"&days="+days);
+			var hData=await hResp.json();
+			colabHistory=(hData&&hData.result?hData.result:hData);
+		}catch(e){}
+	}
+	return {accounts:colabAccounts, history:colabHistory};
+}
+
+async function openReceiptModal(){
+	var overlay=document.getElementById("receipt-overlay");
+	if(!overlay)return;
+	overlay.classList.add("active");
+	overlay.setAttribute("aria-hidden","false");
+	// Default the export period to the header's current selection.
+	receiptRange=rangeValue();
+	var sel=document.getElementById("receipt-range-select");
+	if(sel)sel.value=receiptRange;
+	// Default TOP N to 5.
+	receiptTopN=5;
+	var topnSel=document.getElementById("receipt-topn-select");
+	if(topnSel)topnSel.value="5";
+	var privSel=document.getElementById("receipt-privacy-select");
+	receiptPrivacyMode=privSel?privSel.value:"show";
+	document.getElementById("receipt-period").textContent=receiptPeriodText();
+	document.getElementById("receipt-body").innerHTML='<div class="r-center" style="color:#888">正在生成小票…</div>';
+	try{
+		var sum=await fetchJSON("/summary",null,receiptRange);
+		var models=await fetchJSON("/models",null,receiptRange);
+		var cb=await fetchColabInfoForReceipt(receiptRange);
+		receiptData={sum:sum,models:models,colabAccounts:cb.accounts,colabHistory:cb.history};
+		renderReceipt(sum,models,cb.accounts,cb.history);
+	}catch(e){
+		document.getElementById("receipt-body").innerHTML='<div class="r-center" style="color:#b00">数据获取失败</div>';
+	}
+}
+
+function onReceiptTopNChange(){
+	var sel=document.getElementById("receipt-topn-select");
+	if(!sel)return;
+	receiptTopN=parseInt(sel.value,10)||0;
+	if(receiptData)renderReceipt(receiptData.sum,receiptData.models,receiptData.colabAccounts,receiptData.colabHistory);
+}
+
+async function onReceiptRangeChange(){
+	var sel=document.getElementById("receipt-range-select");
+	if(!sel)return;
+	receiptRange=sel.value;
+	document.getElementById("receipt-period").textContent=receiptPeriodText();
+	document.getElementById("receipt-body").innerHTML='<div class="r-center" style="color:#888">正在生成小票…</div>';
+	try{
+		var sum=await fetchJSON("/summary",null,receiptRange);
+		var models=await fetchJSON("/models",null,receiptRange);
+		var cb=await fetchColabInfoForReceipt(receiptRange);
+		receiptData={sum:sum,models:models,colabAccounts:cb.accounts,colabHistory:cb.history};
+		renderReceipt(sum,models,cb.accounts,cb.history);
+	}catch(e){
+		document.getElementById("receipt-body").innerHTML='<div class="r-center" style="color:#b00">数据获取失败</div>';
+	}
+}
+
+function renderReceipt(sum,models,colabAccounts,colabHistory){
+	sum=sum||{};models=models||[];
+	var totalCost=models.reduce(function(s,m){return s+(Number(m.cost)||0)},0);
+	var totalReqs=sum.total_requests||0;
+	var failed=sum.failed_requests||0;
+	var totalToks=sum.total_tokens||0;
+	var inToks=sum.input_tokens||0;
+	var outToks=sum.output_tokens||0;
+	var successRate=totalReqs>0?(((totalReqs-failed)/totalReqs)*100).toFixed(1):"100.0";
+
+	var sorted=models.slice().sort(function(a,b){return (b.cost||0)-(a.cost||0)});
+	// Split models with real usage from zero-usage models (0 tokens AND 0 cost).
+	// Zero-usage models are never shown in the TOP N list — they fold into the tip line.
+	var used=sorted.filter(function(m){return (Number(m.total_tokens)||0)>0 || (Number(m.cost)||0)>0});
+	var zero=sorted.filter(function(m){return !((Number(m.total_tokens)||0)>0 || (Number(m.cost)||0)>0)});
+	// TOP N is user-selectable; 0 means "全部" (all used models).
+	var topN=receiptTopN>0?receiptTopN:used.length;
+	var top=used.slice(0,topN);
+	// Aggregate all models ranked beyond TOP N (plus zero-usage models) into a "小费" (tip) line.
+	var others=used.slice(topN).concat(zero);
+	var otherToks=others.reduce(function(s,m){return s+(Number(m.total_tokens)||0)},0);
+	var otherCost=others.reduce(function(s,m){return s+(Number(m.cost)||0)},0);
+
+	var html="";
+	// Summary rows (like a bill's subtotal lines)
+	html+='<div class="r-row"><span class="r-label">总请求数</span><span class="r-val">'+formatNum(totalReqs)+'</span></div>';
+	html+='<div class="r-row"><span class="r-label">成功请求</span><span class="r-val">'+formatNum(totalReqs-failed)+' ('+successRate+'%%)</span></div>';
+	html+='<div class="r-row"><span class="r-label">失败请求</span><span class="r-val">'+formatNum(failed)+'</span></div>';
+	html+='<div class="r-row"><span class="r-label">总 Tokens</span><span class="r-val">'+formatNum(totalToks)+'</span></div>';
+	html+='<div class="r-row"><span class="r-label">输入 Tokens</span><span class="r-val">'+formatNum(inToks)+'</span></div>';
+	html+='<div class="r-row"><span class="r-label">输出 Tokens</span><span class="r-val">'+formatNum(outToks)+'</span></div>';
+
+	html+='<div class="r-dash"></div>';
+	html+='<div class="r-section">'+(receiptTopN>0?'TOP '+receiptTopN+' 模型':'全部模型')+'</div>';
+	if(top.length){
+		html+='<div class="r-item r-item-head"><span class="r-name">模型</span><span class="r-tok">Tokens</span><span class="r-cost">费用</span></div>';
+		top.forEach(function(m){
+			html+='<div class="r-item"><span class="r-name" title="'+esc(m.model)+'">'+esc(m.model)+'</span><span class="r-tok">'+formatNum(m.total_tokens)+'</span><span class="r-cost">'+formatCost(m.cost)+'</span></div>';
+		});
+		// "小费" line: aggregated usage/cost of all models ranked beyond TOP N.
+		if(others.length){
+			html+='<div class="r-item r-item-tip"><span class="r-name" title="其他 '+others.length+' 个模型">小费 · 其他</span><span class="r-tok">'+formatNum(otherToks)+'</span><span class="r-cost">'+formatCost(otherCost)+'</span></div>';
+		}
+	}else{
+		html+='<div class="r-center" style="color:#888">暂无模型用量</div>';
+	}
+
+	html+='<div class="r-dash"></div>';
+	html+='<div class="r-total"><span class="r-total-label">TOTAL 总花费</span><span class="r-total-val">'+formatCost(totalCost)+'</span></div>';
+
+	// ─── Google Colab Section ───
+	if(colabAccounts && colabAccounts.length){
+		html+='<div class="r-dash"></div>';
+		html+='<div class="r-section">GOOGLE COLAB 算力</div>';
+		colabAccounts.forEach(function(acc){
+			var planName=acc.plan||"Colab 免费版";
+			html+='<div class="r-row"><span class="r-label">订阅等级</span><span class="r-val">'+esc(planName)+'</span></div>';
+			if(acc.name && receiptPrivacyMode!=="hide"){
+				var acctDisplay=receiptPrivacyMode==="mask"?maskSensitive(acc.name):acc.name;
+				html+='<div class="r-row"><span class="r-label">账号</span><span class="r-val" style="font-size:10px">'+esc(acctDisplay)+'</span></div>';
+			}
+			(acc.windows||[]).forEach(function(win){
+				var val="";
+				if(win.unit==="CCU"){
+					val=(win.remaining!=null?Number(win.remaining).toFixed(2):Number(win.total).toFixed(2))+" CCU";
+				}else if(win.unit==="mCCUs"){
+					val=formatNum(win.remaining)+" mCCUs";
+				}else if(win.total>0){
+					val=win.total+" "+(win.unit||"");
+				}else{
+					val=win.status_text||"—";
+				}
+				html+='<div class="r-row"><span class="r-label">'+esc(win.label)+'</span><span class="r-val">'+esc(val)+'</span></div>';
+			});
+			if(colabHistory && colabHistory.points && colabHistory.points.length>=2){
+				var pts=colabHistory.points;
+				var first=pts[0],last=pts[pts.length-1];
+				if(first.has_paid && last.has_paid && first.paid_balance>last.paid_balance){
+					var diff=(first.paid_balance-last.paid_balance).toFixed(2);
+					html+='<div class="r-row"><span class="r-label">区间 CCU 消耗</span><span class="r-val" style="color:#ff9500">'+diff+' CCU</span></div>';
+				}
+			}
+		});
+	}
+
+	var timeDisplay=(receiptPrivacyMode==="hide"||receiptPrivacyMode==="mask")
+		?(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0")+"-"+String(new Date().getDate()).padStart(2,"0"))
+		:new Date().toLocaleString();
+	html+='<div class="r-foot">谢谢惠顾 · THANK YOU</div>';
+	html+='<div class="r-meta">生成于 '+timeDisplay+'</div>';
+	html+='<div class="r-barcode">||||||||||||||||||||||||||||||||</div>';
+
+	document.getElementById("receipt-body").innerHTML=html;
+}
+
+function closeReceiptModal(){
+	var overlay=document.getElementById("receipt-overlay");
+	if(!overlay)return;
+	overlay.classList.remove("active");
+	overlay.setAttribute("aria-hidden","true");
+}
+
+function exportReceiptPDF(){
+	var paper=document.getElementById("receipt-print-area");
+	var clone=document.getElementById("receipt-print-clone");
+	if(paper&&clone){
+		clone.innerHTML=paper.innerHTML;
+		clone.style.display="block";
+	}
+	window.print();
+	if(clone)clone.style.display="none";
+}
+
+function exportReceiptPNG(){
+	var paper=document.getElementById("receipt-print-area");
+	if(!paper)return;
+	// Self-contained receipt CSS (inlined so the SVG foreignObject rasterizes
+	// with the same layout as the on-page preview). Uses a literal monospace
+	// stack because CSS variables from the page :root are not available inside
+	// the foreignObject document.
+	var css=".receipt-paper{background:#fdfdf7;color:#1a1a1a;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;padding:22px 20px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.12);max-width:340px;margin:0 auto;position:relative}"+
+		".receipt-paper .r-center{text-align:center}"+
+		".receipt-paper .r-brand{font-size:16px;font-weight:700;letter-spacing:2px}"+
+		".receipt-paper .r-sub{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase}"+
+		".receipt-paper .r-dash{border-top:1px dashed #999;margin:10px 0}"+
+		".receipt-paper .r-row{display:flex;justify-content:space-between;gap:8px}"+
+		".receipt-paper .r-row .r-label{color:#444}"+
+		".receipt-paper .r-row .r-val{font-weight:600;white-space:nowrap}"+
+		".receipt-paper .r-section{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#333;margin:12px 0 6px;text-align:center}"+
+		".receipt-paper .r-item{display:grid;grid-template-columns:1fr auto auto;gap:8px;font-size:11px;padding:2px 0}"+
+		".receipt-paper .r-item .r-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333}"+
+		".receipt-paper .r-item .r-tok{color:#555;text-align:right;min-width:56px}"+
+		".receipt-paper .r-item .r-cost{font-weight:600;text-align:right;min-width:52px}"+
+		".receipt-paper .r-item-head{font-weight:700;color:#333;border-bottom:1px dashed #999;padding-bottom:3px;margin-bottom:2px}"+
+		".receipt-paper .r-item-head .r-tok,.receipt-paper .r-item-head .r-cost{color:#333}"+
+		".receipt-paper .r-item-tip{border-top:1px dashed #999;margin-top:4px;padding-top:4px;color:#666}"+
+		".receipt-paper .r-item-tip .r-name{font-style:italic;color:#666}"+
+		".receipt-paper .r-item-tip .r-cost{color:#666}"+
+		".receipt-paper .r-total{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:700;margin-top:4px}"+
+		".receipt-paper .r-total .r-total-label{letter-spacing:1px}"+
+		".receipt-paper .r-total .r-total-val{font-size:18px}"+
+		".receipt-paper .r-foot{text-align:center;font-size:10px;color:#666;margin-top:12px}"+
+		".receipt-paper .r-meta{font-size:10px;color:#888;text-align:center;margin-top:6px}"+
+		".receipt-paper .r-barcode{text-align:center;font-size:9px;letter-spacing:3px;color:#333;margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}";
+
+	// Rebuild the receipt as a self-contained document: CSS + the rendered body.
+	var inner=paper.innerHTML;
+	var html='<div class="receipt-paper">'+inner+'</div>';
+	var width=paper.offsetWidth||340;
+	var height=paper.offsetHeight||500;
+	var scale=2; // 2x for crisp output
+	var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'">'+
+		'<foreignObject width="100%%" height="100%%">'+
+		'<div xmlns="http://www.w3.org/1999/xhtml" style="width:'+width+'px;height:'+height+'px;background:#fdfdf7">'+
+		'<style>'+css+'</style>'+html+
+		'</div></foreignObject></svg>';
+	var blob=new Blob([svg],{type:"image/svg+xml;charset=utf-8"});
+	var url=URL.createObjectURL(blob);
+	var img=new Image();
+	img.onload=function(){
+		var canvas=document.createElement("canvas");
+		canvas.width=width*scale;
+		canvas.height=height*scale;
+		var ctx=canvas.getContext("2d");
+		ctx.scale(scale,scale);
+		ctx.drawImage(img,0,0,width,height);
+		URL.revokeObjectURL(url);
+		var a=document.createElement("a");
+		var privSuffix=receiptPrivacyMode!=="show"?"-private":"";
+		a.download="usage-keeper-invoice-"+receiptRange+privSuffix+".png";
+		a.href=canvas.toDataURL("image/png");
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		showToast("小票图片已导出","success");
+	};
+	img.onerror=function(){
+		URL.revokeObjectURL(url);
+		showToast("图片导出失败，请改用 PDF","error");
+	};
+	img.src=url;
 }
 
 /* ─── Refresh All & Auto Refresh ──────────────────────────────────────────── */

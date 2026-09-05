@@ -294,3 +294,104 @@ All four providers are registered as resource API routes:
 | Ollama | `ollama_accounts` | `name`, `session_cookie`, `show_session`, `show_weekly` |
 
 All accounts survive plugin restarts via SQLite `ON CONFLICT ... DO UPDATE`.
+
+---
+
+## 8. Google Colab — Subscription Tier & CCU Quota Monitoring
+
+Auth flow mirrors [googlecolab/colab-vscode](https://github.com/googlecolab/colab-vscode):
+
+### Login (OAuth2 Authorization Code + PKCE, loopback callback)
+
+1. Dashboard calls `GET /api/colab-quota?action=login&account=<name>`
+2. Plugin starts an ephemeral HTTP server on `127.0.0.1:<random-port>`, generates
+   a PKCE `code_verifier` + S256 `code_challenge` and a `nonce`, then returns
+   the Google authorization URL with `redirect_uri=http://127.0.0.1:<port>`.
+3. User authorizes in the browser → Google redirects to the loopback server
+   with `?code=...&state=nonce=<id>` → the plugin captures the code.
+4. Dashboard polls `GET /api/colab-quota?action=loginstate&login_id=<id>` until
+   the plugin has exchanged the code for tokens via
+   `POST https://oauth2.googleapis.com/token`
+   (`client_id` + `client_secret` + `code` + `code_verifier` + `redirect_uri`).
+5. `refresh_token` is stored obfuscated (XOR-salted, base64) in SQLite.
+
+### Credential storage
+
+| Table | Columns |
+|-------|---------|
+| `colab_quota_accounts` | `name`, `refresh_token` (obfuscated), `email` |
+
+Access tokens are JIT-refreshed from the refresh token 2 minutes before expiry.
+
+### Quota query
+
+```
+GET https://colab.pa.googleapis.com/v1/user-info?get_ccu_consumption_info=true
+Authorization: Bearer <access_token>
+```
+
+| API Field | Display |
+|-----------|---------|
+| `subscriptionTier` (`NONE`/`PRO`/`PRO_PLUS`) | `Plan` (Colab 免费版 / Colab Pro / Colab Pro+) |
+| `paidComputeUnitsBalance` | 付费 CCU 算力窗口（基于阶梯天花板契约推导 total 与 used） |
+| `consumptionRateHourly` / `assignmentsCount` | 消耗率 CCU/h + 运行实例数 |
+| `freeCcuQuotaInfo.remainingTokens` (mCCUs, Int64 string) | 免费 CCU 剩余窗口 |
+| `freeCcuQuotaInfo.nextRefillTimestampSec` | 免费额度重置倒计时 |
+
+---
+
+### Quota Ceiling Contract (智能阶梯动态天花板契约)
+
+#### 1. 业务事实与 API 现实约束
+- **Colab Pro**: 每月发放 100 CCU，有效期 90 天（3 个月内可跨月累积，纯月费最高持有 300 CCU）。
+- **Colab Pro+**: 每月发放 600 CCU，有效期 90 天（纯月费最高持有 1800 CCU）。
+- **Pay-As-You-Go (按需单次购买)**: 仅允许购买 **100 CCU** 或 **500 CCU** 两种固定规格包。
+- **企业用户 (Colab Enterprise)**: 无固定额度，按 GCP 组织项目统一按量结算。
+- **核心约束**: Google 官方 API `v1/user-info` **仅返回当前可用余额单一数值** `paidComputeUnitsBalance`（如 `63.16`），**不返回**历史充值批次、月结重置日及过期时间。
+
+#### 2. 契约算法（Adaptive Step-up Ceiling）
+由于 100 CCU（Pro 月费/小包）、500 CCU（大包）、600 CCU（Pro+ 月费）的公约基数均为 100 CCU，采用**基线覆盖 + 100 步长阶梯阶跃算法**：
+
+```go
+func computeColabCeiling(tier string, balance float64) (total float64, used float64, hint string)
+```
+
+1. **Colab Pro (`tier == "PRO"`)**:
+   - `balance <= 100.0`: 标准月度基线。`total = 100.0`, `used = max(0, 100.0 - balance)`。
+   - `balance > 100.0`: 跨月累积或叠加增购。`total = ceil(balance / 100.0) * 100.0`, `used = total - balance`。
+   - `balance == 0.0`: 配额耗尽。`total = 100.0`, `used = 100.0`（触发 100% 红色告警）。
+2. **Colab Pro+ (`tier == "PRO_PLUS"`)**:
+   - `balance <= 600.0`: 标准月度基线。`total = 600.0`, `used = max(0, 600.0 - balance)`。
+   - `balance > 600.0`: 跨月累积或叠加增购。`total = ceil(balance / 100.0) * 100.0`, `used = total - balance`。
+   - `balance == 0.0`: 配额耗尽。`total = 600.0`, `used = 600.0`（触发 100% 红色告警）。
+3. **企业用户 (`tier == "ENTERPRISE"`)**:
+   - `total = balance`, `used = 0`, 状态文案注明「企业版无固定上限 · 按量结算」，不渲染进度条比例。
+4. **免费版 / 纯增购买家 (`tier == "NONE"`)**:
+   - 若 `balance > 0`: `total = ceil(balance / 100.0) * 100.0`, `used = total - balance`。
+   - 若 `balance == 0`: 仅展示免费 mCCUs 窗口，不展示付费条。
+
+#### 3. 前端展示契约
+- **进度条百分比**: `pct = min(100, round((used / total) * 100))`
+- **数值行**: `used.toFixed(1) + " / " + total.toFixed(0) + " CCU (余 " + balance.toFixed(1) + ")"`
+  - *例*: `36.8 / 100 CCU (余 63.2)`
+- **颜色阈值**: `< 70%` 正常绿，`70% ~ 90%` 告警橙，`>= 90%` 告急红。
+- **副标题状态行**: 附带 `status_text` 实时展示每小时消耗率与批次上限。
+
+---
+
+### Route & registration
+
+| Provider | Resource Path |
+|----------|--------------|
+| Colab | `/v0/resource/plugins/usage-keeper/api/colab-quota` |
+
+### Pitfalls
+
+1. Colab requires the `https://www.googleapis.com/auth/colaboratory` scope in
+   addition to `profile`/`email`.
+2. `paidComputeUnitsBalance` is absent when the user has no paid balance; free
+   quota fields are only present in that case.
+3. `remainingTokens` is serialized as a string (ProtoJSON Int64) — parse as
+   integer and treat value as milli-CCUs.
+4. The OAuth client is the public Colab VS Code extension client;
+   it is not private — treat refresh tokens as sensitive.

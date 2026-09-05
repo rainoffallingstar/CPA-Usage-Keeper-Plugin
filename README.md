@@ -15,9 +15,9 @@
 
 ## 💡 什么是 Usage Keeper？
 
-**Usage Keeper** 是一款运行在 [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI) 宿主进程内的高性能 AI API 用量监控、成本精算与订阅配额管理插件。
+**Usage Keeper** 是一款运行在 [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI) 宿主进程内的高性能 AI API 用量监控、成本精算、小票导出与订阅配额管理插件。
 
-通过 CGO 进程内共享内存直接拦截所有流经代理的请求，实现**零额外网络开销**、**无锁内存环形缓冲**与**异步事务持久化**。前端采用纯正 **Apple 视觉设计语言**（Apple Design System），提供涵盖时间序列趋势、渠道成本占比、模型排行榜及四大提供商订阅配额的现代化交互看板。
+通过 CGO 进程内共享内存直接拦截流经代理的所有请求，实现**零额外网络开销**、**无锁内存环形缓冲**与**异步批量持久化**。前端采用纯正 **Apple 视觉设计语言**（Apple Design System），提供涵盖时间序列趋势、渠道成本占比、模型排行榜、餐馆风格 Invoice 消费小票导出，以及五大主流提供商（含 Google Colab）订阅配额的现代化交互看板。
 
 ---
 
@@ -28,28 +28,61 @@
 </p>
 
 ### 🍏 1. Apple 设计语言与真实数据可视化
-- **Overview（概览首屏）**：一眼尽览总预估花费、调用请求量、Token 吞吐构成与缓存命中率，全部 KPI 卡片均搭载真实事件流生成的**自绘 SVG 迷你面积趋势图**。
-- **时间序列趋势主图**：支持「支出成本 ($)」与「调用量」双模自由切换，自适应分桶（Hourly / Daily）并配备交互式数据浮窗。
-- **Provider 成本分布环形图**：智能清洗复杂渠道名称，按 Top 5 +「其他渠道」智能聚合，配备 Apple 阶梯彩色色板。
+- **Overview（概览首屏）**：一眼尽览总预估花费、调用请求量、Token 吞吐构成与缓存命中率，全部 KPI 卡片均搭载基于真实事件流生成的**自绘 SVG 迷你面积趋势图**。
+- **时间序列趋势主图**：支持「支出成本 ($)」与「调用量」双模自由切换，自适应时间桶聚合（Hourly / Daily）并配备交互式数据浮窗。
+- **Provider 成本分布环形图**：智能清洗复杂渠道名称，按 Top 5 +「其他渠道」聚合，配备 Apple 阶梯彩色色板。
 - **高耗资模型 Top 5 排行榜**：按实际消耗金额由高至低排列，展示双色比例条与请求频次。
 
-### 💳 2. 多平台订阅配额监控 (Quota)
-- **OpenCode Go**：实时监控 5 小时滚动窗口、每周及每月用量，支持多工作区自动解析与免费/未订阅账号优雅识别。
+---
+
+### 🧾 2. 餐馆风格 Invoice 消费小票导出（PDF / PNG）
+
+<p align="center">
+  <img src="./assets/readme/invoice.svg" width="100%" alt="Usage Keeper 消费小票导出与 Google Colab 算力监控展示">
+</p>
+
+- **复古热敏纸视觉**：米白纸底、等宽字体、虚线分隔、底部锯齿撕边与仿真条形码，极具报销单据质感。
+- **自由定制时间段与 TOP N**：
+  - 时间段自由切换（1h / 6h / 24h / 7d / 30d），自动换算起止日期；
+  - 支持自定义 TOP 3 / TOP 5 / TOP 10 / TOP 20 / 全部模型；
+  - **小费机制（Gratuity）**：TOP N 之外的所有低频/零用量模型自动聚合为「**小费 · 其他**」行，保持总额精确一致。
+- **三态隐私保护模式**：
+  - `明文`：完整展示绑定的账号邮箱（如 `zyh3084989256@gmail.com`）与精确时间；
+  - `脱敏`：智能掩码个人邮箱（如 `z***6@gmail.com`），时间模糊至日期；
+  - `隐藏`：彻底移除账号名条目，适合社交媒体公开分享与费用展示。
+- **双导出链路**：
+  - **矢量 PDF**：独立 DOM 克隆节点 + 打印样式表，避免弹窗遮罩导致的空白页，一键打印为高质量 PDF；
+  - **高清 PNG**：SVG `foreignObject` 完整内联排版样式，2x 画布超清栅格化直出，自动附带隐私标识文件名。
+
+---
+
+### 💳 3. 五大平台订阅配额监控 (Quota)
+- **Google Colab**：
+  - **OAuth2 PKCE 授权与 Loopback 回跳**：一键登录 Google 官方授权页，本地端口自动捕获回调完成换 Token；
+  - **智能阶梯动态天花板契约（Adaptive Step-up Ceiling）**：针对 Pro（100 CCU/月，90天有效）、Pro+（600 CCU/月）、Pay-As-You-Go（100/500 包）及 Enterprise，基于 100 CCU 最小公约基数自动推导当月已用比例与上限；
+  - **本地快照时间序列折线图**：每次配额刷新自动记录快照，卡片内嵌 SVG 双轨折线图（绿色付费余额 + 蓝色免费额度），支持 7d / 30d / 90d 切换。
+- **OpenCode Go**：实时监控 5 小时滚动窗口、每周及每月用量，支持多工作区自动解析与未订阅状态优雅兼容。
 - **智谱 GLM Coding**：追踪每日调用额度上限、剩余百分比、重置倒计时与模型使用拆分。
 - **DeepSeek 官方账户**：实时查询预付费账户余额（USD）与使用率。
 - **Ollama Cloud**：精准解析 `ollama.com` 会话限额（Session / 5h 窗口）与每周限额（Weekly），模型调用次数精准归属于各自窗口下方。
 
-### 📊 3. 650+ 模型动态定价与智能匹配
+---
+
+### 📊 4. 650+ 模型动态定价与智能匹配
 - **云端自动同步**：每 6 小时自动从 [modelprice.boxtech.icu](https://modelprice.boxtech.icu) 拉取 650+ 主流大模型的官方最新定价（Prompt / Completion / Cache）。
 - **变体后缀自动回退**：对带冒号版本（如 `deepseek-v4-pro:0813`）或变体后缀（如 `claude-opus-4-6-thinking`、`gemini-3-7-flash-high`、`deepseek-v4-pro:preview`）自动模糊回退匹配基础型号单价。
 - **在线维护与编辑**：支持按提供商分类折叠管理，可在 Web 端直接通过模态弹窗修改或新增定价规则。
 
-### ⚡ 4. 极致性能与零损耗持久化
+---
+
+### ⚡ 5. 极致性能与零损耗持久化
 - **进程内无锁拦截**：使用容量 10,000 的内存环形缓冲区（Ring Buffer）实现瞬时入队，代理转发请求延迟增加 `< 0.05ms`。
 - **SQLite 异步批量事务**：双缓冲区自动定时批量落盘，配合 SQLite 3-conn 连接池，历经数十万次高并发请求零丢失。
 - **版本升级无损软链**：配合迁移脚本自动将 SQLite 库重定向至版本无关的 Canonical 目录（`upstream/data/usage-keeper.db`），CPA 版本自动升级绝不丢失历史数据。
 
-### 🔍 5. 交互式滑动抽屉 (Inspector Drawer)
+---
+
+### 🔍 6. 交互式滑动抽屉 (Inspector Drawer)
 - 请求流水日志支持按调用状态、客户端来源（Cursor、Claude Code、CodeGate、API）及关键词实时检索。
 - 点击任意记录呼出右侧抽屉，查看 Token 拆分、执行耗时、脱敏凭据及完整 JSON 载荷。
 - 完整保留 **Apple 物理弹簧拖拽手势（1:1 惯性跟随与速度释放判定）**。
@@ -70,7 +103,7 @@ make build
 ./scripts/migrate-plugin.sh --apply --force-build
 
 # 方式 B：手动部署并重载
-cp dist/usage-keeper.dylib "你的CPA目录/plugins/darwin/arm64/usage-keeper-v0.10.23.dylib"
+cp dist/usage-keeper.dylib "你的CPA目录/plugins/darwin/arm64/usage-keeper-v0.11.5.dylib"
 # 修改或 touch 配置文件触发 CPA 动态热重载
 ```
 
@@ -79,17 +112,19 @@ cp dist/usage-keeper.dylib "你的CPA目录/plugins/darwin/arm64/usage-keeper-v0
 ```text
 http://<你的CPA地址:端口>/v0/resource/plugins/usage-keeper/dashboard
 ```
+> 注：CPA 默认监听端口为 `8317`。
 
 ---
 
 ## 🖥️ Dashboard 功能矩阵
 
-| 标签页 | 功能概述 | 核心能力 |
+| 标签页 / 模块 | 功能概述 | 核心能力 |
 |---|---|---|
 | **概览 (Overview)** | 全局核心指标与可视化大屏 | 总花费、调用量、Token 吞吐、缓存率、时间序列折线/面积图、Provider 成本环形图、Top 5 模型排行榜 |
+| **消费小票 (Invoice)** | 餐馆小票风格用量发票导出 | 顶部独立导出弹窗、1h~30d 周期切换、TOP N 自定义与小费折算、脱敏/隐藏三态模式、PDF/PNG 双格式 |
 | **模型明细 (By Model)** | 各大模型的用量消耗分析 | 「已聚合 (折叠变体)」与「详细列表」双模切换、输入/输出比例条、缓存命中徽章、单模型一键跳转过滤 |
 | **请求日志 (All Events)** | 全量请求流水与排障抽屉 | 状态/来源客户端/关键词多维检索、失败错误展开、右侧滑动抽屉（含脱敏凭据与完整 JSON） |
-| **订阅配额 (Quota)** | 四大提供商余额与用量监控 | OpenCode Go、智谱 GLM、DeepSeek 官方余额、Ollama Cloud（Session / Weekly 模型归属） |
+| **订阅配额 (Quota)** | 五大提供商余额与用量监控 | Google Colab (PKCE+快照折线图)、OpenCode Go、智谱 GLM、DeepSeek 余额、Ollama Cloud |
 | **定价管理 (Pricing)** | 模型计费规则维护与同步 | 云端 650+ 模型一键同步、提供商分类折叠、模糊变体回退匹配、弹出式编辑/新增/删除 Modal |
 | **系统健康 (Health)** | 进程运行与底层存储健康度 | 内存环形缓冲区圆环仪表、SQLite 文件大小与写入耗时、API 响应缓存命中率、系统告警状态灯 |
 
@@ -107,14 +142,15 @@ plugins:
     usage-keeper:
       enabled: true
       priority: 1
-      db_path: ./data/usage-keeper.db     # SQLite 数据库路径（相对路径将自动软链至 Canonical DB）
+      db_path: ./data/usage-keeper.db     # SQLite 数据库路径（自动软链至 Canonical 目录）
       retention_days: 90                  # 数据保留天数（默认 90 天）
       max_in_memory_events: 1000          # 内存环形缓冲区大小（最大 10000）
-      refresh_seconds: 0                  # 仪表盘自动刷新间隔（秒，0 = 手动刷新）
+      refresh_seconds: 42                 # 仪表盘自动刷新间隔（秒，0 = 手动刷新）
       write_batch_size: 100               # 每次批量事务写入 SQLite 的最大事件数
       write_flush_seconds: 10             # 未满批次的最大内存停留秒数
       api_key_hash_salt: "my-secret-salt" # API Key 脱敏哈希盐值（可选）
 
+      # 可选：预配置 Google Colab 账号（推荐直接在 Dashboard 点「登录 Google Colab」授权）
       # 可选：预配置 OpenCode Go 账号（也可在 Dashboard 中直接添加）
       opencode_go_accounts:
         - name: "主工作区账号"
@@ -148,13 +184,14 @@ plugins:
 
 | 路径 | 方法 | 说明 |
 |---|---|---|
-| `/dashboard` | `GET` | 现代化 Apple 风格 Web Dashboard HTML |
+| `/dashboard` | `GET` | 现代化 Apple 风格 Web Dashboard HTML（内嵌 Invoice 小票与趋势图） |
 | `/api/summary` | `GET` | 聚合统计（请求数、Token 拆分、缓存命中率、均延，支持 `range=1h/6h/24h/7d/30d`） |
 | `/api/models` | `GET` | 按模型聚合列表（请求数、Tokens、预估成本，支持 `provider` 过滤） |
 | `/api/events` | `GET` | 分页请求事件日志（支持 `limit`、`offset`、`model`、`source`、`auth` 过滤） |
 | `/api/health` | `GET` | 运行状态、环缓冲负载、SQLite 文件体积与写入延迟指标 |
 | `/api/prices` | `GET` | 模型定价规则列表 |
 | `/api/prices/sync` | `GET` | 触发从 modelprice.boxtech.icu 在线同步最新定价 |
+| `/api/colab-quota` | `GET/POST`| Google Colab PKCE 登录、配额查询与 7/30/90 天快照历史 |
 | `/api/opencode-quota` | `GET/POST` | OpenCode Go 账号配额获取、添加与刷新 |
 | `/api/glmcoding-quota`| `GET/POST` | 智谱 GLM Coding 账号配额获取与管理 |
 | `/api/deepseek-quota` | `GET/POST` | DeepSeek 官方余额获取与管理 |

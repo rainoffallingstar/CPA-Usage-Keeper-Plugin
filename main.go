@@ -220,6 +220,7 @@ func initAllAccounts() {
 		initGlmCodingAccounts(cfg.GlmCodingAccounts)
 		initDeepseekAccounts(cfg.DeepSeekAccounts)
 		initOllamaAccounts(cfg.OllamaAccounts)
+		initColabAccounts()
 		initModelPriceSync()
 	})
 }
@@ -236,6 +237,7 @@ func lazyInit() {
 		loadGlmAccountsFromDB()
 		loadDeepseekAccountsFromDB()
 		loadOllamaAccountsFromDB()
+		loadColabAccountsFromDB()
 		loadPricesFromDB()
 	})
 }
@@ -522,6 +524,24 @@ func createTables() error {
 		show_session INTEGER NOT NULL DEFAULT 1,
 		show_weekly INTEGER NOT NULL DEFAULT 1
 	)`)
+	// Create Google Colab accounts table for persistence
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS colab_quota_accounts (
+		name TEXT PRIMARY KEY,
+		refresh_token TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT ''
+	)`)
+	// Create Google Colab snapshot history table (points are recorded on each
+	// quota refresh; older points are pruned by retention policy).
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS colab_usage_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		account TEXT NOT NULL,
+		ts TEXT NOT NULL DEFAULT '',
+		paid_balance REAL NOT NULL DEFAULT 0,
+		free_remaining REAL NOT NULL DEFAULT 0,
+		has_paid INTEGER NOT NULL DEFAULT 0,
+		has_free INTEGER NOT NULL DEFAULT 0
+	)`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_colab_history_acct ON colab_usage_history(account, ts)`)
 	// Create model prices table for persistence
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS model_prices (
 		model TEXT PRIMARY KEY,
@@ -919,6 +939,8 @@ func managementRegResponse() managementRegistrationResponse {
 			{Method: http.MethodPost, Path: "/usage-keeper/glmcoding-quota"},
 			{Method: http.MethodGet, Path: "/usage-keeper/ollama-quota"},
 			{Method: http.MethodPost, Path: "/usage-keeper/ollama-quota"},
+			{Method: http.MethodGet, Path: "/usage-keeper/colab-quota"},
+			{Method: http.MethodPost, Path: "/usage-keeper/colab-quota"},
 		},
 		Resources: []pluginapi.ResourceRoute{
 			{
@@ -980,6 +1002,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Path:        "/api/ollama-quota",
 				Menu:        "",
 				Description: "Ollama Cloud quota JSON API.",
+			},
+			{
+				Path:        "/api/colab-quota",
+				Menu:        "",
+				Description: "Google Colab subscription & quota JSON API.",
 			},
 		},
 	}
@@ -1050,6 +1077,10 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleOllamaQuotaGet(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/ollama-quota"):
 		return okEnvelope(handleOllamaQuotaPost(req.Body))
+	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/colab-quota"):
+		return okEnvelope(handleColabQuotaGet(req.Query))
+	case strings.EqualFold(req.Method, http.MethodPost) && strings.HasSuffix(path, "/colab-quota"):
+		return okEnvelope(handleColabQuotaPost(req.Body))
 	default:
 		return okEnvelope(jsonResponse(http.StatusNotFound, map[string]any{"error": "route not found"}))
 	}
