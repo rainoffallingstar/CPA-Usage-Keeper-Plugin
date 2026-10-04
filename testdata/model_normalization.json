@@ -1,0 +1,20 @@
+{
+  "_comment": "Shared golden vectors for model-name normalisation. Both the dashboard's normalizeModelName (JS) and the backend's normalizePriceModel (Go) must collapse every `model` to `base`, so the UI's model grouping and price lookup can never drift apart. Date/version suffixes are intentionally NOT covered here: the dashboard groups versions for display while pricing stays version-specific.",
+  "cases": [
+    {"model": "deepseek-ai/deepseek-v4-flash", "base": "deepseek-v4-flash"},
+    {"model": "google/gemini-3.5-flash", "base": "gemini-3.5-flash"},
+    {"model": "DeepSeek-V4-Flash", "base": "deepseek-v4-flash"},
+    {"model": "gemini-3.5-flash-low", "base": "gemini-3.5-flash"},
+    {"model": "gemini-3.1-pro-low", "base": "gemini-3.1-pro"},
+    {"model": "deepseek-v4-flash-free", "base": "deepseek-v4-flash"},
+    {"model": "deepseek-v4-flash:free", "base": "deepseek-v4-flash"},
+    {"model": "grok4.5（free）", "base": "grok-4.5"},
+    {"model": "grok4.5(free)", "base": "grok-4.5"},
+    {"model": "grok4.5", "base": "grok-4.5"},
+    {"model": "claude-opus-4-6-thinking", "base": "claude-opus-4-6"},
+    {"model": "gemini-3.1-pro-preview", "base": "gemini-3.1-pro"},
+    {"model": "gemini-3.8-flash-latest", "base": "gemini-3.8-flash"},
+    {"model": "gemini-3.1-pro", "base": "gemini-3.1-pro"},
+    {"model": "gpt-5.6-terra", "base": "gpt-5.6-terra"}
+  ]
+}

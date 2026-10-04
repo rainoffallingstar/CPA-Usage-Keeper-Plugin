@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.11.18 (2026-10-04)
+
+### 一致性（消除同类 bug 的根源）
+- **统一前后端模型名归一化口径 + 共享 golden 测试向量**: 归一化此前有 3 份实现（前端 `normalizeModelName`、后端 `modelVariants`/`stripVariantSuffix`、后端 `normalizePriceModel`），缓存率 >100% 与模型成本 $0 两个 bug 都源于口径漂移。
+  - 新增 `testdata/model_normalization.json` 作为**前后端共用**的向量文件（15 组），Go 侧 `TestModelNormalizationFixture` 断言 `normalizePriceModel`，JS 侧 `dashboard/model_normalization.test.js` 断言 `normalizeModelName`，两侧必须对同一份文件得出相同结果；
+  - 后端后缀集补齐 `-thinking` / `-latest` / `-preview`，与前端对齐（**日期/版本后缀故意不剥离**：前端为分组展示会合并版本，而定价必须区分版本，已在向量文件与代码注释中说明）。
+
+### 测试
+- **新增「整页初始化」冒烟测试** `dashboard/init_smoke.test.js`: 用 DOM stub + 按端点分发的 fetch stub 在 VM 中**运行真实的 dashboard `<script>`**，然后逐个渲染 6 个 tab，断言渲染期间有非空写入、包含预期数据（如模型名 / `<svg>` / 状态标题），且不含 `undefined` / `NaN` / `[object Object]`。已实测它同时能抓到两类缺陷：
+  - 渲染前抛异常（即 v0.11.12「Top 5 卡片空白」的 TypeError 类型）；
+  - 数据静默丢失（`esc()` 会把 undefined 渲染成空串，仅靠「无 undefined」断言抓不到，故加入正向断言）。
+
 ## v0.11.17 (2026-10-04)
 
 ### Performance

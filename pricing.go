@@ -361,9 +361,13 @@ func stripVariantSuffix(name string) string {
 }
 
 // priceVariantSuffixes are suffixes the price table does not carry separately.
-// The dashboard's normalizeModelName strips the same set, so pricing and the
-// UI's model grouping stay consistent instead of some variants costing $0.
-var priceVariantSuffixes = []string{"（free）", "(free)", ":free", "-free", "-low"}
+// This mirrors the dashboard's normalizeModelName so the same variants the UI
+// groups together also resolve to the same price key; keep the two in sync via
+// testdata/model_normalization.json, which both sides assert against.
+//
+// Date suffixes (-0731, -2026-09-05) are deliberately NOT stripped here:
+// pricing is version-specific, whereas the UI groups versions for display.
+var priceVariantSuffixes = []string{"（free）", "(free)", ":free", "-free", "-low", "-thinking", "-latest", "-preview"}
 
 // insertLetterDigitDash turns "grok4.5" into "grok-4.5", mirroring the
 // dashboard normaliser so both resolve against the same price key.
