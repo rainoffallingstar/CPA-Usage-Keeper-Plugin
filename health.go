@@ -134,7 +134,14 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "write_queue_pressure", Message: fmt.Sprintf("Persistence queue at %d%% (%d/%d) - disk writes may be falling behind", queueUsed*100/queueCap, queueUsed, queueCap)})
 	}
 	if strings.HasPrefix(priceSync, "error:") {
-		alerts = append(alerts, healthAlert{Severity: "warn", Code: "price_sync_failed", Message: "Model price sync failed (" + priceSync + "); costs fall back to the last known prices"})
+		pricesMu.RLock()
+		cached := len(pricesStore)
+		pricesMu.RUnlock()
+		detail := fmt.Sprintf("; using %d cached prices", cached)
+		if cached == 0 {
+			detail = "; no prices cached yet, costs will show as $0"
+		}
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "price_sync_failed", Message: "Model price sync failed (" + strings.TrimPrefix(priceSync, "error: ") + ")" + detail})
 	}
 	if unpriced > 0 {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "models_without_price", Message: fmt.Sprintf("%d model(s) in usage have no price - their cost shows as $0", unpriced)})

@@ -38,7 +38,7 @@ const (
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.11.14"
+var pluginVersion = "0.11.15"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`

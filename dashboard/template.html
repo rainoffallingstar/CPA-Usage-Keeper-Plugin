@@ -657,7 +657,7 @@ tr:hover .filter-link{opacity:1}
               </button>
               <div class="search-box">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="pricing-search-input" class="search-input" placeholder="搜索模型规则..." aria-label="搜索定价规则" oninput="renderPricing()">
+                <input type="text" id="pricing-search-input" class="search-input" placeholder="搜索模型规则..." aria-label="搜索定价规则" oninput="debouncedPricingSearch()">
               </div>
             </div>
           </div>
@@ -1678,6 +1678,7 @@ function eventsFilterChanged(){
 }
 
 var debouncedEventsFilterChanged=debounce(eventsFilterChanged,300);
+var debouncedPricingSearch=debounce(function(){renderPricing()},300);
 
 /* Charts are drawn into a fixed viewBox derived from the container width, so a
    window resize must re-render the active tab's charts or they distort. */
@@ -2387,17 +2388,35 @@ async function deletePrice(model){
 
 async function syncPrices(){
 	var btn=document.getElementById("btn-sync-prices");
-	if(btn)setBtnLoading(btn,true);
+	if(btn&&btn.disabled)return;
+	if(btn){btn.disabled=true;setBtnLoading(btn,true)}
+
+	// The upstream feed can be slow (it occasionally misses the server's 45s
+	// timeout), so cap the wait and report a timeout instead of hanging.
+	var controller=typeof AbortController!=="undefined"?new AbortController():null;
+	var timer=controller?setTimeout(function(){controller.abort()},120000):null;
+
 	try{
-		var resp=await fetch(API_BASE+"/prices/sync");
-		var data=await resp.json();
+		var resp=await fetch(API_BASE+"/prices/sync",controller?{signal:controller.signal}:undefined);
+		var data={};
+		try{data=await resp.json()}catch(_jsonErr){}
+		// A failed sync returns 500 + {"error": ...}; without this check the
+		// old code reported "已同步 undefined 条" as a success.
+		if(!resp.ok){
+			throw new Error((data&&data.error)?data.error:("HTTP "+resp.status));
+		}
 		lastPricesData=null;
 		await renderPricing();
-		if(btn)setBtnLoading(btn,false,"已同步 "+data.synced+" 条");
-		showToast("已从云端同步 "+data.synced+" 条最新定价规则","success");
+		if(btn)setBtnLoading(btn,false,"已同步 "+(data.synced||0)+" 条");
+		showToast("已从云端同步 "+(data.synced||0)+" 条最新定价规则","success");
 	}catch(e){
 		if(btn)setBtnLoading(btn,false);
-		showToast("同步定价失败","danger");
+		var msg=(e&&e.name==="AbortError")?"云端响应超时，请稍后重试":((e&&e.message)?e.message:"未知错误");
+		showToast("同步定价失败："+msg,"error");
+		showFetchError("panel-pricing","模型定价同步失败："+msg,"syncPrices()");
+	}finally{
+		if(timer)clearTimeout(timer);
+		if(btn)btn.disabled=false;
 	}
 }
 

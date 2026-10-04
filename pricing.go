@@ -471,7 +471,7 @@ type mpEntity struct {
 	} `json:"primary_offering"`
 }
 
-var mpClient = &http.Client{Timeout: 30 * time.Second}
+var mpClient = &http.Client{Timeout: 45 * time.Second}
 
 func syncModelPrices() (int, error) {
 	resp, err := mpClient.Get(modelPriceAPI)
@@ -526,7 +526,7 @@ func syncModelPrices() (int, error) {
 }
 
 func handlePriceSyncImpl() pluginapi.ManagementResponse {
-	count, err := syncModelPrices()
+	count, err := doPriceSync()
 	if err != nil {
 		return jsonResponse(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -549,21 +549,31 @@ func initModelPriceSync() {
 		priceSyncStop = make(chan struct{})
 		go func() {
 			// Immediate first sync
-			go doPriceSync()
+			go func() { _, _ = doPriceSync() }()
 			for {
 				select {
 				case <-priceSyncStop:
 					return
 				case <-time.After(6 * time.Hour):
 				}
-				go doPriceSync()
+				go func() { _, _ = doPriceSync() }()
 			}
 		}()
 	})
 }
 
-func doPriceSync() {
-	count, err := syncModelPrices()
+// priceSyncRunMu ensures only one sync runs at a time. Starting the plugin
+// fires an immediate sync while a manual "sync now" click or the 6h ticker can
+// race it; two concurrent 700KB downloads made the upstream time out.
+var priceSyncRunMu sync.Mutex
+
+func doPriceSync() (int, error) {
+	if !priceSyncRunMu.TryLock() {
+		return 0, fmt.Errorf("a price sync is already running")
+	}
+	defer priceSyncRunMu.Unlock()
+
+	count, err := syncModelPricesWithRetry()
 	priceSyncMu.Lock()
 	if err != nil {
 		priceLastSync = "error: " + err.Error()
@@ -571,7 +581,24 @@ func doPriceSync() {
 		priceLastSync = time.Now().UTC().Format(time.RFC3339)
 	}
 	priceSyncMu.Unlock()
-	_ = count
+	return count, err
+}
+
+// syncModelPricesWithRetry gives the upstream one retry: it occasionally fails
+// to send response headers within the client timeout.
+func syncModelPricesWithRetry() (int, error) {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		count, err := syncModelPrices()
+		if err == nil {
+			return count, nil
+		}
+		lastErr = err
+		if attempt == 0 {
+			time.Sleep(3 * time.Second)
+		}
+	}
+	return 0, lastErr
 }
 
 func getPriceSyncStatus() string {
