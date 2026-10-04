@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.16 (2026-10-04)
+
+### Fixes
+- **热更新后浏览器仍显示旧界面**: Dashboard HTML 响应此前只带 `Content-Type`，没有任何缓存指令，浏览器会按启发式规则缓存整页 —— 换掉 dylib 后刷新仍看到旧 UI。现在返回 `Cache-Control: no-store, must-revalidate` 与 `Pragma: no-cache`，刷新必定拿到最新界面（JSON API 的 ETag 缓存不受影响）。
+- **定价同步按钮文案过长**: 原先按钮写着完整域名「从 modelprice.boxtech.icu 同步」，占满标题栏。改为「**同步定价**」，数据来源移入 `title` 悬浮提示；同步完成后的短提示「已同步 N 条」保持不变。
+
 ## v0.11.15 (2026-10-04)
 
 ### Fixes

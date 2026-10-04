@@ -1623,8 +1623,15 @@ func jsonResponseWithETag(statusCode int, body any, etag string) pluginapi.Manag
 func htmlResponse(statusCode int, body string) pluginapi.ManagementResponse {
 	return pluginapi.ManagementResponse{
 		StatusCode: statusCode,
-		Headers:    http.Header{"Content-Type": {contentTypeHTML}},
-		Body:       []byte(body),
+		Headers: http.Header{
+			"Content-Type": {contentTypeHTML},
+			// The dashboard is hot-reloaded (the dylib is swapped in place), so
+			// the browser must revalidate instead of serving a stale cached page
+			// after an update.
+			"Cache-Control": {"no-store, must-revalidate"},
+			"Pragma":        {"no-cache"},
+		},
+		Body: []byte(body),
 	}
 }
 
