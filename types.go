@@ -15,7 +15,6 @@ const (
 	defaultDBPath             = "usage-keeper.db"
 	defaultRetentionDays      = 90
 	defaultRefreshSeconds     = 0
-	defaultMaxInMemoryEvents  = 1000
 	defaultWriteBatchSize     = 100
 	defaultWriteFlushSeconds  = 10
 	contentTypeJSON           = "application/json; charset=utf-8"
@@ -39,12 +38,11 @@ const (
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.11.8"
+var pluginVersion = "0.11.9"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
 	RetentionDays      int                 `yaml:"retention_days"`
-	MaxInMemoryEvents  int                 `yaml:"max_in_memory_events"`
 	RefreshSeconds     int                 `yaml:"refresh_seconds"`
 	WriteBatchSize     int                 `yaml:"write_batch_size"`
 	WriteFlushSeconds  int                 `yaml:"write_flush_seconds"`
@@ -59,7 +57,6 @@ func defaultConfig() pluginConfig {
 	return pluginConfig{
 		DBPath:            defaultDBPath,
 		RetentionDays:     defaultRetentionDays,
-		MaxInMemoryEvents: defaultMaxInMemoryEvents,
 		RefreshSeconds:    defaultRefreshSeconds,
 		WriteBatchSize:    defaultWriteBatchSize,
 		WriteFlushSeconds: defaultWriteFlushSeconds,

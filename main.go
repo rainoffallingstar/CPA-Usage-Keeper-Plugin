@@ -62,12 +62,6 @@ var (
 	initOnce           sync.Once
 	shutdownOnce       sync.Once
 	usageEventsWriteMu sync.Mutex
-
-	// In-memory ring buffer for recent events (serves dashboard instantly).
-	ringBuf   []usageEvent
-	ringHead  int
-	ringCount int
-	ringMu    sync.RWMutex
 )
 
 func init() {
@@ -189,9 +183,6 @@ func configure(raw []byte) error {
 		if v, ok := intConfig(values, "retention_days"); ok {
 			decoded.RetentionDays = v
 		}
-		if v, ok := intConfig(values, "max_in_memory_events"); ok {
-			decoded.MaxInMemoryEvents = v
-		}
 		if v, ok := intConfig(values, "refresh_seconds"); ok {
 			decoded.RefreshSeconds = v
 		}
@@ -232,7 +223,6 @@ var lazyInitOnce sync.Once
 func lazyInit() {
 	lazyInitOnce.Do(func() {
 		defer func() { recover() }()
-		loadRecentIntoRing()
 		loadOpenCodeAccountsFromDB()
 		loadGlmAccountsFromDB()
 		loadDeepseekAccountsFromDB()
@@ -317,9 +307,8 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 	if override.RetentionDays > 0 {
 		base.RetentionDays = override.RetentionDays
 	}
-	if override.MaxInMemoryEvents > 0 {
+	if override.RefreshSeconds > 0 {
 		base.RefreshSeconds = override.RefreshSeconds
-		base.MaxInMemoryEvents = override.MaxInMemoryEvents
 	}
 	if override.WriteBatchSize > 0 {
 		base.WriteBatchSize = override.WriteBatchSize
@@ -346,12 +335,6 @@ func normalizeConfig(cfg pluginConfig) pluginConfig {
 	}
 	if cfg.RetentionDays <= 0 {
 		cfg.RetentionDays = defaultRetentionDays
-	}
-	if cfg.MaxInMemoryEvents <= 0 {
-		cfg.MaxInMemoryEvents = defaultMaxInMemoryEvents
-	}
-	if cfg.MaxInMemoryEvents > 10000 {
-		cfg.MaxInMemoryEvents = 10000
 	}
 	if cfg.RefreshSeconds < 0 {
 		cfg.RefreshSeconds = defaultRefreshSeconds
@@ -402,11 +385,6 @@ func pluginRegistration() registration {
 					Name:        "retention_days",
 					Type:        pluginapi.ConfigFieldTypeInteger,
 					Description: "Number of days to retain usage records before automatic cleanup.",
-				},
-				{
-					Name:        "max_in_memory_events",
-					Type:        pluginapi.ConfigFieldTypeInteger,
-					Description: "Maximum number of recent events kept in memory for fast dashboard rendering.",
 				},
 				{
 					Name:        "refresh_seconds",
@@ -554,66 +532,16 @@ func createTables() error {
 	return err
 }
 
-func loadRecentIntoRing() {
-	cfg := currentConfig()
-	ringBuf = make([]usageEvent, cfg.MaxInMemoryEvents)
-	ringHead = 0
-	ringCount = 0
-
-	// Recover from panic during DB query in CGO context — ring buffer starts
-	// empty and will be populated as usage events arrive.
-	defer func() {
-		if r := recover(); r != nil {
-			ringBuf = make([]usageEvent, cfg.MaxInMemoryEvents)
-			ringHead = 0
-			ringCount = 0
-		}
-	}()
-
-	rows, err := db.Query(
-		"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events ORDER BY timestamp DESC, id DESC LIMIT ?",
-		cfg.MaxInMemoryEvents,
-	)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	var events []usageEvent
-	for rows.Next() {
-		var e usageEvent
-		var cached int64
-		if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &cached); errScan != nil {
-			continue
-		}
-		e.CacheHitRate = cacheHitRate(cached, e.InputTokens)
-		events = append(events, e)
-	}
-
-	ringMu.Lock()
-	for i := len(events) - 1; i >= 0; i-- {
-		ringBuf[ringHead] = events[i]
-		ringHead = (ringHead + 1) % len(ringBuf)
-		ringCount++
-		if ringCount > len(ringBuf) {
-			ringCount = len(ringBuf)
-		}
-	}
-	ringMu.Unlock()
-}
-
 // ---------------------------------------------------------------------------
 // Usage event handling
 // ---------------------------------------------------------------------------
 
-type queuedUsageEvent struct {
-	record pluginapi.UsageRecord
-	event  usageEvent
-}
-
+// usageWriterState holds the bounded async persistence queue. This channel is
+// the real in-memory buffer: when it fills up, events are dropped (and counted
+// in storageQueueDrops), unlike the removed ring buffer which never dropped.
 var usageWriterState struct {
 	sync.Mutex
-	queue   chan queuedUsageEvent
+	queue   chan pluginapi.UsageRecord
 	stop    chan struct{}
 	done    chan struct{}
 	started bool
@@ -630,7 +558,7 @@ func startUsageWriter() {
 	if queueCapacity < 1000 {
 		queueCapacity = 1000
 	}
-	usageWriterState.queue = make(chan queuedUsageEvent, queueCapacity)
+	usageWriterState.queue = make(chan pluginapi.UsageRecord, queueCapacity)
 	usageWriterState.stop = make(chan struct{})
 	usageWriterState.done = make(chan struct{})
 	usageWriterState.started = true
@@ -658,14 +586,14 @@ func stopUsageWriter() {
 	usageWriterState.Unlock()
 }
 
-func enqueueUsageEvent(event queuedUsageEvent) {
+func enqueueUsageEvent(record pluginapi.UsageRecord) {
 	usageWriterState.Lock()
 	defer usageWriterState.Unlock()
 	if !usageWriterState.started || usageWriterState.queue == nil {
 		return
 	}
 	select {
-	case usageWriterState.queue <- event:
+	case usageWriterState.queue <- record:
 	default:
 		cacheMu.Lock()
 		storageQueueDrops++
@@ -673,7 +601,18 @@ func enqueueUsageEvent(event queuedUsageEvent) {
 	}
 }
 
-func runUsageWriter(queue <-chan queuedUsageEvent, stop <-chan struct{}, done chan<- struct{}) {
+// usageWriteQueueStats returns the current depth and capacity of the async
+// persistence queue. This is the real buffer pressure signal for the dashboard.
+func usageWriteQueueStats() (used, capacity int) {
+	usageWriterState.Lock()
+	defer usageWriterState.Unlock()
+	if usageWriterState.queue == nil {
+		return 0, 0
+	}
+	return len(usageWriterState.queue), cap(usageWriterState.queue)
+}
+
+func runUsageWriter(queue <-chan pluginapi.UsageRecord, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 
 	config := currentConfig()
@@ -682,7 +621,7 @@ func runUsageWriter(queue <-chan queuedUsageEvent, stop <-chan struct{}, done ch
 	timer := time.NewTimer(flushInterval)
 	defer timer.Stop()
 
-	batch := make([]queuedUsageEvent, 0, batchSize)
+	batch := make([]pluginapi.UsageRecord, 0, batchSize)
 	persistedEventsSinceCleanup := 0
 	flush := func() {
 		if len(batch) == 0 {
@@ -738,7 +677,7 @@ func resetUsageWriterTimer(timer *time.Timer, interval time.Duration) {
 	timer.Reset(interval)
 }
 
-func persistUsageBatchWithRetry(batch []queuedUsageEvent) error {
+func persistUsageBatchWithRetry(batch []pluginapi.UsageRecord) error {
 	const maximumAttempts = 3
 	const initialRetryDelay = 100 * time.Millisecond
 
@@ -762,7 +701,7 @@ func isSQLiteBusyError(err error) bool {
 	return strings.Contains(errorMessage, "database is locked") || strings.Contains(errorMessage, "database is busy")
 }
 
-func persistUsageBatch(batch []queuedUsageEvent) error {
+func persistUsageBatch(batch []pluginapi.UsageRecord) error {
 	usageEventsWriteMu.Lock()
 	defer usageEventsWriteMu.Unlock()
 
@@ -791,8 +730,8 @@ func persistUsageBatch(batch []queuedUsageEvent) error {
 	defer statement.Close()
 
 	for index := range batch {
-		record := batch[index].record
-		result, errExecute := statement.Exec(
+		record := batch[index]
+		_, errExecute := statement.Exec(
 			record.RequestedAt.Format(time.RFC3339),
 			record.Provider,
 			record.Model,
@@ -821,16 +760,12 @@ func persistUsageBatch(batch []queuedUsageEvent) error {
 		if errExecute != nil {
 			return errExecute
 		}
-		batch[index].event.ID, _ = result.LastInsertId()
 	}
 
 	if errCommit := transaction.Commit(); errCommit != nil {
 		return errCommit
 	}
 
-	for _, queuedEvent := range batch {
-		appendUsageEventToRing(queuedEvent.event)
-	}
 	cacheMu.Lock()
 	lastWriteMs = time.Since(startedAt).Milliseconds()
 	dashboardVersion++
@@ -852,20 +787,6 @@ func hashedAPIKey(apiKey string) string {
 	return hashAPIKey(apiKey)
 }
 
-func appendUsageEventToRing(event usageEvent) {
-	ringMu.Lock()
-	defer ringMu.Unlock()
-	if len(ringBuf) == 0 {
-		return
-	}
-	ringBuf[ringHead] = event
-	ringHead = (ringHead + 1) % len(ringBuf)
-	ringCount++
-	if ringCount > len(ringBuf) {
-		ringCount = len(ringBuf)
-	}
-}
-
 func handleUsage(raw []byte) ([]byte, error) {
 	ensureDB()
 	lazyInit()
@@ -875,24 +796,7 @@ func handleUsage(raw []byte) ([]byte, error) {
 		return okEnvelopeJSON("{}")
 	}
 
-	event := usageEvent{
-		Timestamp:    record.RequestedAt.Format(time.RFC3339),
-		Provider:     record.Provider,
-		Model:        record.Model,
-		InputTokens:  record.Detail.InputTokens,
-		OutputTokens: record.Detail.OutputTokens,
-		TotalTokens:  record.Detail.TotalTokens,
-		LatencyMs:    record.Latency.Milliseconds(),
-		Failed:       record.Failed,
-		CacheHitRate: cacheHitRate(record.Detail.CachedTokens, record.Detail.InputTokens),
-		AuthID:       record.AuthID,
-		ExecutorType: record.ExecutorType,
-	}
-	if record.Failed {
-		event.FailureBody = record.Failure.Body
-	}
-
-	enqueueUsageEvent(queuedUsageEvent{record: record, event: event})
+	enqueueUsageEvent(record)
 	return okEnvelopeJSON("{}")
 }
 

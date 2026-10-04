@@ -28,8 +28,8 @@ type healthResponse struct {
 type runtimeHealthStatus struct {
 	UptimeSeconds       int64   `json:"uptime_seconds"`
 	TotalRequests       int64   `json:"total_requests"`
-	RingBufferSize      int     `json:"ring_buffer_size"`
-	RingBufferUsed      int     `json:"ring_buffer_used"`
+	WriteQueueSize      int     `json:"write_queue_size"`
+	WriteQueueUsed      int     `json:"write_queue_used"`
 	SummaryCacheHitRate float64 `json:"summary_cache_hit_rate"`
 	EventsCacheHitRate  float64 `json:"events_cache_hit_rate"`
 	LastWriteDurationMs int64   `json:"last_write_duration_ms"`
@@ -88,10 +88,7 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	}
 	dbMu.RUnlock()
 
-	ringMu.RLock()
-	ringUsed := ringCount
-	ringCap := len(ringBuf)
-	ringMu.RUnlock()
+	queueUsed, queueCap := usageWriteQueueStats()
 
 	cacheMu.Lock()
 	sumHits := summaryCacheHits
@@ -113,6 +110,9 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	if lastWrite > 1000 {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "storage_writer_slow", Message: fmt.Sprintf("Last write took %dms", lastWrite)})
 	}
+	if queueCap > 0 && queueUsed*100/queueCap >= 80 {
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "write_queue_pressure", Message: fmt.Sprintf("Persistence queue at %d%% (%d/%d) - disk writes may be falling behind", queueUsed*100/queueCap, queueUsed, queueCap)})
+	}
 
 	status := "ok"
 	for _, a := range alerts {
@@ -130,8 +130,8 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 		Runtime: runtimeHealthStatus{
 			UptimeSeconds:       int64(time.Since(startTime).Seconds()),
 			TotalRequests:       totalEvents,
-			RingBufferSize:      ringCap,
-			RingBufferUsed:      ringUsed,
+			WriteQueueSize:      queueCap,
+			WriteQueueUsed:      queueUsed,
 			SummaryCacheHitRate: hitRate(sumHits, sumMisses),
 			EventsCacheHitRate:  hitRate(evtHits, evtMisses),
 			LastWriteDurationMs: lastWrite,

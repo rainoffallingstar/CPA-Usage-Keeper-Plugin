@@ -42,14 +42,6 @@ plugins:
       retention_days: 90
 
       # -----------------------------------------------------------------------
-      # max_in_memory_events — Maximum number of recent events kept in an
-      # in-memory ring buffer for fast dashboard rendering (no DB query needed
-      # for the default view). Capped at 10000.
-      # Default: 1000
-      # -----------------------------------------------------------------------
-      max_in_memory_events: 1000
-
-      # -----------------------------------------------------------------------
       # refresh_seconds — Dashboard auto-refresh interval in seconds.
       # Valid range: 0–3600 (0 = off). The dashboard also has a dropdown to change this at runtime.
       # Default: 0 (auto-refresh disabled)

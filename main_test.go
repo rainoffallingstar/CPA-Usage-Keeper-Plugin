@@ -25,9 +25,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.RetentionDays != defaultRetentionDays {
 		t.Fatalf("default RetentionDays = %d, want %d", cfg.RetentionDays, defaultRetentionDays)
 	}
-	if cfg.MaxInMemoryEvents != defaultMaxInMemoryEvents {
-		t.Fatalf("default MaxInMemoryEvents = %d, want %d", cfg.MaxInMemoryEvents, defaultMaxInMemoryEvents)
-	}
 	if cfg.RefreshSeconds != defaultRefreshSeconds {
 		t.Fatalf("default RefreshSeconds = %d, want %d", cfg.RefreshSeconds, defaultRefreshSeconds)
 	}
@@ -43,65 +40,49 @@ func TestNormalizeConfig(t *testing.T) {
 			name: "empty config gets defaults",
 			in:   pluginConfig{},
 			want: pluginConfig{
-				DBPath:            defaultDBPath,
-				RetentionDays:     defaultRetentionDays,
-				MaxInMemoryEvents: defaultMaxInMemoryEvents,
-				RefreshSeconds:    defaultRefreshSeconds,
+				DBPath:         defaultDBPath,
+				RetentionDays:  defaultRetentionDays,
+				RefreshSeconds: defaultRefreshSeconds,
 			},
 		},
 		{
 			name: "explicit db_path",
 			in:   pluginConfig{DBPath: "/custom/path.db"},
 			want: pluginConfig{
-				DBPath:            "/custom/path.db",
-				RetentionDays:     defaultRetentionDays,
-				MaxInMemoryEvents: defaultMaxInMemoryEvents,
-				RefreshSeconds:    defaultRefreshSeconds,
-			},
-		},
-		{
-			name: "max_in_memory_events capped",
-			in:   pluginConfig{MaxInMemoryEvents: 20000},
-			want: pluginConfig{
-				DBPath:            defaultDBPath,
-				RetentionDays:     defaultRetentionDays,
-				MaxInMemoryEvents: 10000,
-				RefreshSeconds:    defaultRefreshSeconds,
+				DBPath:         "/custom/path.db",
+				RetentionDays:  defaultRetentionDays,
+				RefreshSeconds: defaultRefreshSeconds,
 			},
 		},
 		{
 			name: "refresh_seconds out of range",
 			in:   pluginConfig{RefreshSeconds: 5000},
 			want: pluginConfig{
-				DBPath:            defaultDBPath,
-				RetentionDays:     defaultRetentionDays,
-				MaxInMemoryEvents: defaultMaxInMemoryEvents,
-				RefreshSeconds:    defaultRefreshSeconds,
+				DBPath:         defaultDBPath,
+				RetentionDays:  defaultRetentionDays,
+				RefreshSeconds: defaultRefreshSeconds,
 			},
 		},
 		{
 			name: "negative refresh_seconds reset",
 			in:   pluginConfig{RefreshSeconds: -1},
 			want: pluginConfig{
-				DBPath:            defaultDBPath,
-				RetentionDays:     defaultRetentionDays,
-				MaxInMemoryEvents: defaultMaxInMemoryEvents,
-				RefreshSeconds:    defaultRefreshSeconds,
+				DBPath:         defaultDBPath,
+				RetentionDays:  defaultRetentionDays,
+				RefreshSeconds: defaultRefreshSeconds,
 			},
 		},
 		{
 			name: "valid custom config",
 			in: pluginConfig{
-				DBPath:            "/data/db.sqlite",
-				RetentionDays:     7,
-				MaxInMemoryEvents: 500,
-				RefreshSeconds:    30,
+				DBPath:         "/data/db.sqlite",
+				RetentionDays:  7,
+				RefreshSeconds: 30,
 			},
 			want: pluginConfig{
-				DBPath:            "/data/db.sqlite",
-				RetentionDays:     7,
-				MaxInMemoryEvents: 500,
-				RefreshSeconds:    30,
+				DBPath:         "/data/db.sqlite",
+				RetentionDays:  7,
+				RefreshSeconds: 30,
 			},
 		},
 	}
@@ -115,9 +96,6 @@ func TestNormalizeConfig(t *testing.T) {
 			if got.RetentionDays != tt.want.RetentionDays {
 				t.Errorf("RetentionDays = %d, want %d", got.RetentionDays, tt.want.RetentionDays)
 			}
-			if got.MaxInMemoryEvents != tt.want.MaxInMemoryEvents {
-				t.Errorf("MaxInMemoryEvents = %d, want %d", got.MaxInMemoryEvents, tt.want.MaxInMemoryEvents)
-			}
 			if got.RefreshSeconds != tt.want.RefreshSeconds {
 				t.Errorf("RefreshSeconds = %d, want %d", got.RefreshSeconds, tt.want.RefreshSeconds)
 			}
@@ -128,10 +106,9 @@ func TestNormalizeConfig(t *testing.T) {
 func TestMergeConfig(t *testing.T) {
 	base := defaultConfig()
 	override := pluginConfig{
-		DBPath:            "/override.db",
-		RetentionDays:     14,
-		MaxInMemoryEvents: 2000,
-		RefreshSeconds:    60,
+		DBPath:         "/override.db",
+		RetentionDays:  14,
+		RefreshSeconds: 60,
 	}
 	result := mergeConfig(base, override)
 	if result.DBPath != "/override.db" {
@@ -140,9 +117,7 @@ func TestMergeConfig(t *testing.T) {
 	if result.RetentionDays != 14 {
 		t.Errorf("RetentionDays = %d, want 14", result.RetentionDays)
 	}
-	if result.MaxInMemoryEvents != 2000 {
-		t.Errorf("MaxInMemoryEvents = %d, want 2000", result.MaxInMemoryEvents)
-	}
+	// refresh_seconds must apply on its own, without any other field being set.
 	if result.RefreshSeconds != 60 {
 		t.Errorf("RefreshSeconds = %d, want 60", result.RefreshSeconds)
 	}
@@ -169,7 +144,7 @@ func TestCurrentConfig(t *testing.T) {
 	}
 
 	// Set a new config
-	activeConfig.Store(pluginConfig{DBPath: "/test.db", RetentionDays: 30, MaxInMemoryEvents: 500, RefreshSeconds: 0})
+	activeConfig.Store(pluginConfig{DBPath: "/test.db", RetentionDays: 30, RefreshSeconds: 0})
 
 	cfg = currentConfig()
 	if cfg.DBPath != "/test.db" {
@@ -434,8 +409,25 @@ func TestPluginRegistration(t *testing.T) {
 	if !reg.Capabilities.ManagementAPI {
 		t.Fatal("management_api capability should be true")
 	}
-	if len(reg.Metadata.ConfigFields) != 6 {
-		t.Errorf("expected 6 config fields, got %d", len(reg.Metadata.ConfigFields))
+	// max_in_memory_events was removed with the dead ring buffer.
+	wantFields := map[string]bool{
+		"db_path":             true,
+		"retention_days":      true,
+		"refresh_seconds":     true,
+		"write_batch_size":    true,
+		"write_flush_seconds": true,
+	}
+	if len(reg.Metadata.ConfigFields) != len(wantFields) {
+		t.Errorf("expected %d config fields, got %d", len(wantFields), len(reg.Metadata.ConfigFields))
+	}
+	for _, f := range reg.Metadata.ConfigFields {
+		if !wantFields[f.Name] {
+			t.Errorf("unexpected config field %q", f.Name)
+		}
+		delete(wantFields, f.Name)
+	}
+	for name := range wantFields {
+		t.Errorf("missing config field %q", name)
 	}
 }
 
@@ -524,13 +516,6 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	db = d
 	dbMu.Unlock()
 
-	// Init ring buffer
-	ringMu.Lock()
-	ringBuf = make([]usageEvent, 1000)
-	ringHead = 0
-	ringCount = 0
-	ringMu.Unlock()
-
 	cleanup := func() {
 		dbMu.Lock()
 		if db != nil {
@@ -539,13 +524,6 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		db = origDB
 		dbMu.Unlock()
 		os.Remove(tmpFile.Name())
-
-		// Restore ring buffer
-		ringMu.Lock()
-		ringBuf = nil
-		ringHead = 0
-		ringCount = 0
-		ringMu.Unlock()
 	}
 
 	return d, cleanup
@@ -578,22 +556,16 @@ func TestPersistUsageBatchWritesAllEventsInOneTransaction(t *testing.T) {
 	defer cleanup()
 
 	requestedAt := time.Now().UTC()
-	batch := []queuedUsageEvent{
+	batch := []pluginapi.UsageRecord{
 		{
-			record: pluginapi.UsageRecord{
-				RequestedAt: requestedAt,
-				Provider:    "openai",
-				Model:       "gpt-5",
-			},
-			event: usageEvent{Provider: "openai", Model: "gpt-5"},
+			RequestedAt: requestedAt,
+			Provider:    "openai",
+			Model:       "gpt-5",
 		},
 		{
-			record: pluginapi.UsageRecord{
-				RequestedAt: requestedAt,
-				Provider:    "openai",
-				Model:       "gpt-5-mini",
-			},
-			event: usageEvent{Provider: "openai", Model: "gpt-5-mini"},
+			RequestedAt: requestedAt,
+			Provider:    "openai",
+			Model:       "gpt-5-mini",
 		},
 	}
 
@@ -607,18 +579,6 @@ func TestPersistUsageBatchWritesAllEventsInOneTransaction(t *testing.T) {
 	}
 	if persistedCount != len(batch) {
 		t.Fatalf("persisted event count = %d, want %d", persistedCount, len(batch))
-	}
-	for index, event := range batch {
-		if event.event.ID == 0 {
-			t.Errorf("batch event %d did not receive a SQLite row ID", index)
-		}
-	}
-
-	ringMu.RLock()
-	persistedRingCount := ringCount
-	ringMu.RUnlock()
-	if persistedRingCount != len(batch) {
-		t.Errorf("ring buffer count = %d, want %d", persistedRingCount, len(batch))
 	}
 }
 
@@ -740,6 +700,86 @@ func TestHandleTimeseriesClampsBucketCount(t *testing.T) {
 	}
 	if ts.Series[0].Label == "" {
 		t.Errorf("expected non-empty bucket labels")
+	}
+}
+
+func TestUsageWriteQueueStatsAndDropCounting(t *testing.T) {
+	// Drive the writer state directly so no persistence goroutine drains it.
+	usageWriterState.Lock()
+	usageWriterState.queue = make(chan pluginapi.UsageRecord, 3)
+	usageWriterState.started = true
+	usageWriterState.stop = make(chan struct{})
+	usageWriterState.done = make(chan struct{})
+	usageWriterState.Unlock()
+	defer func() {
+		usageWriterState.Lock()
+		usageWriterState.queue = nil
+		usageWriterState.started = false
+		usageWriterState.stop = nil
+		usageWriterState.done = nil
+		usageWriterState.Unlock()
+	}()
+
+	used, capacity := usageWriteQueueStats()
+	if used != 0 || capacity != 3 {
+		t.Fatalf("usageWriteQueueStats() = %d/%d, want 0/3", used, capacity)
+	}
+
+	cacheMu.Lock()
+	before := storageQueueDrops
+	cacheMu.Unlock()
+
+	// Two fit, three overflow -> the overflow must be counted as drops.
+	for i := 0; i < 5; i++ {
+		enqueueUsageEvent(pluginapi.UsageRecord{Model: "m"})
+	}
+
+	used, capacity = usageWriteQueueStats()
+	if used != 3 || capacity != 3 {
+		t.Errorf("queue = %d/%d, want 3/3 (full)", used, capacity)
+	}
+	cacheMu.Lock()
+	dropped := storageQueueDrops - before
+	cacheMu.Unlock()
+	if dropped != 2 {
+		t.Errorf("dropped events = %d, want 2", dropped)
+	}
+}
+
+func TestUsageWriteQueueStatsWhenStopped(t *testing.T) {
+	usageWriterState.Lock()
+	prevQueue, prevStarted := usageWriterState.queue, usageWriterState.started
+	usageWriterState.queue = nil
+	usageWriterState.started = false
+	usageWriterState.Unlock()
+	defer func() {
+		usageWriterState.Lock()
+		usageWriterState.queue, usageWriterState.started = prevQueue, prevStarted
+		usageWriterState.Unlock()
+	}()
+
+	if used, capacity := usageWriteQueueStats(); used != 0 || capacity != 0 {
+		t.Fatalf("usageWriteQueueStats() = %d/%d, want 0/0 when the writer is stopped", used, capacity)
+	}
+	// Enqueuing while stopped must be a safe no-op (not a drop).
+	enqueueUsageEvent(pluginapi.UsageRecord{Model: "m"})
+}
+
+func TestHealthReportsWriteQueueNotRingBuffer(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	_ = d
+
+	resp := handleHealthCheck()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, `"write_queue_size"`) || !strings.Contains(body, `"write_queue_used"`) {
+		t.Errorf("health JSON missing write queue fields: %s", body)
+	}
+	if strings.Contains(body, "ring_buffer") {
+		t.Errorf("health JSON should no longer expose ring_buffer fields: %s", body)
 	}
 }
 
@@ -1030,7 +1070,6 @@ func TestConfigureWithYAML(t *testing.T) {
 
 	yaml := `db_path: /custom/path.db
 retention_days: 14
-max_in_memory_events: 500
 refresh_seconds: 30
 `
 	req, _ := json.Marshal(map[string]any{
@@ -1048,9 +1087,6 @@ refresh_seconds: 30
 	}
 	if cfg.RetentionDays != 14 {
 		t.Errorf("RetentionDays = %d, want 14", cfg.RetentionDays)
-	}
-	if cfg.MaxInMemoryEvents != 500 {
-		t.Errorf("MaxInMemoryEvents = %d, want 500", cfg.MaxInMemoryEvents)
 	}
 	if cfg.RefreshSeconds != 30 {
 		t.Errorf("RefreshSeconds = %d, want 30", cfg.RefreshSeconds)

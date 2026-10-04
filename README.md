@@ -17,7 +17,7 @@
 
 **Usage Keeper** 是一款运行在 [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI) 宿主进程内的高性能 AI API 用量监控、成本精算、小票导出与订阅配额管理插件。
 
-通过 CGO 进程内共享内存直接拦截流经代理的所有请求，实现**零额外网络开销**、**无锁内存环形缓冲**与**异步批量持久化**。前端采用纯正 **Apple 视觉设计语言**（Apple Design System），提供涵盖时间序列趋势、渠道成本占比、模型排行榜、餐馆风格 Invoice 消费小票导出，以及五大主流提供商（含 Google Colab）订阅配额的现代化交互看板。
+通过 CGO 进程内共享内存直接拦截流经代理的所有请求，实现**零额外网络开销**、**有界无锁异步写队列**与**异步批量持久化**。前端采用纯正 **Apple 视觉设计语言**（Apple Design System），提供涵盖时间序列趋势、渠道成本占比、模型排行榜、餐馆风格 Invoice 消费小票导出，以及五大主流提供商（含 Google Colab）订阅配额的现代化交互看板。
 
 ---
 
@@ -76,7 +76,7 @@
 ---
 
 ### ⚡ 5. 极致性能与零损耗持久化
-- **进程内无锁拦截**：使用容量 10,000 的内存环形缓冲区（Ring Buffer）实现瞬时入队，代理转发请求延迟增加 `< 0.05ms`。
+- **进程内无锁拦截**：事件入队走有界 channel 写队列（容量 `max(1000, write_batch_size × 10)`），代理转发请求延迟增加 `< 0.05ms`；队列满时按背压丢弃并计入 `dropped_usage_events`，不会阻塞转发。
 - **SQLite 异步批量事务**：双缓冲区自动定时批量落盘，配合 SQLite 3-conn 连接池，历经数十万次高并发请求零丢失。
 - **版本升级无损软链**：配合迁移脚本自动将 SQLite 库重定向至版本无关的 Canonical 目录（`upstream/data/usage-keeper.db`），CPA 版本自动升级绝不丢失历史数据。
 
@@ -126,7 +126,7 @@ http://<你的CPA地址:端口>/v0/resource/plugins/usage-keeper/dashboard
 | **请求日志 (All Events)** | 全量请求流水与排障抽屉 | 状态/来源客户端/关键词多维检索、失败错误展开、右侧滑动抽屉（含脱敏凭据与完整 JSON） |
 | **订阅配额 (Quota)** | 五大提供商余额与用量监控 | Google Colab (PKCE+快照折线图)、OpenCode Go、智谱 GLM、DeepSeek 余额、Ollama Cloud |
 | **定价管理 (Pricing)** | 模型计费规则维护与同步 | 云端 650+ 模型一键同步、提供商分类折叠、模糊变体回退匹配、弹出式编辑/新增/删除 Modal |
-| **系统健康 (Health)** | 进程运行与底层存储健康度 | 内存环形缓冲区圆环仪表、SQLite 文件大小与写入耗时、API 响应缓存命中率、系统告警状态灯 |
+| **系统健康 (Health)** | 进程运行与底层存储健康度 | 异步落盘队列背压仪表、SQLite 文件大小与写入耗时、API 响应缓存命中率、系统告警状态灯 |
 
 ---
 
@@ -144,7 +144,6 @@ plugins:
       priority: 1
       db_path: ./data/usage-keeper.db     # SQLite 数据库路径（自动软链至 Canonical 目录）
       retention_days: 90                  # 数据保留天数（默认 90 天）
-      max_in_memory_events: 1000          # 内存环形缓冲区大小（最大 10000）
       refresh_seconds: 42                 # 仪表盘自动刷新间隔（秒，0 = 手动刷新）
       write_batch_size: 100               # 每次批量事务写入 SQLite 的最大事件数
       write_flush_seconds: 10             # 未满批次的最大内存停留秒数
@@ -188,7 +187,8 @@ plugins:
 | `/api/summary` | `GET` | 聚合统计（请求数、Token 拆分、缓存命中率、均延，支持 `range=1h/6h/24h/7d/30d`） |
 | `/api/models` | `GET` | 按模型聚合列表（请求数、Tokens、预估成本，支持 `provider` 过滤） |
 | `/api/events` | `GET` | 分页请求事件日志（支持 `limit`、`offset`、`model`、`source`、`auth` 过滤） |
-| `/api/health` | `GET` | 运行状态、环缓冲负载、SQLite 文件体积与写入延迟指标 |
+| `/api/timeseries` | `GET` | 按 `range` 全量分桶的时间序列（请求数/Token/真实成本，支持 `buckets` 参数） |
+| `/api/health` | `GET` | 运行状态、异步落盘队列背压、SQLite 文件体积与写入延迟指标 |
 | `/api/prices` | `GET` | 模型定价规则列表 |
 | `/api/prices/sync` | `GET` | 触发从 modelprice.boxtech.icu 在线同步最新定价 |
 | `/api/colab-quota` | `GET/POST`| Google Colab PKCE 登录、配额查询与 7/30/90 天快照历史 |
