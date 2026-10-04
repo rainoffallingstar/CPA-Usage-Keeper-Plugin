@@ -255,7 +255,8 @@ func TestCacheHitRate(t *testing.T) {
 		{50, 100, 50},
 		{0, 100, 0},
 		{0, 0, 0},
-		{100, 50, 200}, // over 100% capped at 200 -> capped later in dashboard
+		{100, 50, 100}, // cached > input (Claude-style) is clamped to 100
+		{200, 100, 100},
 	}
 
 	for _, tt := range tests {

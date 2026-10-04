@@ -1147,9 +1147,7 @@ func handleSummary(query map[string][]string, headers map[string][]string) plugi
 			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE timestamp >= ?",
 			since,
 		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs, &cacheReadTotal)
-		if resp.InputTokens > 0 {
-			resp.CacheHitRate = float64(cacheReadTotal) / float64(resp.InputTokens) * 100
-		}
+		resp.CacheHitRate = cacheHitRate(cacheReadTotal, resp.InputTokens)
 	}
 
 	return jsonResponse(http.StatusOK, resp)
@@ -1474,11 +1472,22 @@ func renderDashboard() string {
 // Helper functions
 // ---------------------------------------------------------------------------
 // cacheHitRate returns the cache hit rate as a percentage, or 0 if input tokens is zero.
+//
+// The rate is clamped to [0, 100]. Providers that report cached tokens separately
+// from input tokens (e.g. Claude's cache_read_input_tokens) can yield
+// cached > input, which would otherwise produce a nonsensical value above 100%.
 func cacheHitRate(cacheRead, inputTokens int64) float64 {
 	if inputTokens <= 0 {
 		return 0
 	}
-	return float64(cacheRead) / float64(inputTokens) * 100
+	rate := float64(cacheRead) / float64(inputTokens) * 100
+	if rate < 0 {
+		return 0
+	}
+	if rate > 100 {
+		return 100
+	}
+	return rate
 }
 
 func okEnvelope(result any) ([]byte, error) {

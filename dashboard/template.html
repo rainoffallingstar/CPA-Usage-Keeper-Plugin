@@ -782,6 +782,8 @@ function formatNum(n){var v=Number(n);if(isNaN(v))return"0";if(v>=1e9)return(v/1
 function formatTokens(v){return formatNum(v)}
 function formatMs(ms){var v=Number(ms);if(isNaN(v)||v<=0)return"0ms";if(v>=60000)return(v/60000).toFixed(1)+"m";if(v>=1000)return(v/1000).toFixed(1)+"s";return Math.round(v)+"ms"}
 function formatCost(c){var v=Number(c);if(isNaN(v)||v===0)return"$0.00";if(v<0.01)return"$"+v.toFixed(4);return"$"+v.toFixed(2)}
+function clampPct(v){var n=Number(v);if(!isFinite(n)||n<0)return 0;return n>100?100:n}
+function bucketCost(input,output,cached){var fresh=Math.max(0,input-Math.max(0,cached));return fresh/1e6*0.5+output/1e6*2.0+Math.max(0,cached)/1e6*0.1}
 
 function icon(name){
 	var m={
@@ -1040,8 +1042,8 @@ function buildTimeBuckets(events, rangeHours){
 				buckets[b].tokens+=Number(e.total_tokens)||0;
 				var input=Number(e.input_tokens)||0;
 				var output=Number(e.output_tokens)||0;
-				var cached=Math.round(input*(e.cache_hit_rate||0)/100);
-				buckets[b].cost += (input-cached)/1e6*0.5 + output/1e6*2.0 + cached/1e6*0.1;
+				var cached=Math.round(input*clampPct(e.cache_hit_rate||0)/100);
+				buckets[b].cost += bucketCost(input,output,cached);
 				break;
 			}
 		}
@@ -1067,7 +1069,7 @@ async function renderOverview(){
 	var totalTokensCount=sum.total_tokens||0;
 	var inTokens=sum.input_tokens||0;
 	var outTokens=sum.output_tokens||0;
-	var cacheRate=sum.cache_hit_rate||0;
+	var cacheRate=clampPct(sum.cache_hit_rate||0);
 	var avgLatency=sum.avg_latency_ms||0;
 
 	// Populate KPI values
@@ -1168,9 +1170,10 @@ function renderMainTimeline(){
 	var innerH=h-padding.top-padding.bottom;
 
 	var isCost=chartMode==="cost";
-	var values=buckets.map(function(b){return isCost?b.cost:b.requests});
+	var values=buckets.map(function(b){var v=Number(isCost?b.cost:b.requests)||0;return v<0?0:v});
 	var labels=buckets.map(function(b){return b.label});
-	var maxVal=(Math.max.apply(null,values)||1)*1.15;
+	var peak=Math.max.apply(null,values);
+	var maxVal=(isFinite(peak)&&peak>0?peak:1)*1.15;
 	var strokeColor=isCost?"var(--chart-1)":"var(--chart-2)";
 
 	var points=values.map(function(v,i){
@@ -1469,7 +1472,7 @@ async function renderEvents(){
 		var click=e.failed&&e.failure_body?'onclick="toggleErrorRow(\''+eid+'\')"':'onclick="showEventDetailByIndex('+i+')"';
 		var rowCls=e.failed?"clickable-row error-row":"clickable-row";
 
-		rowsHtml+='<tr class="'+rowCls+'" '+click+' tabindex="0" onkeydown="if(event.key===\'Enter\'){showEventDetailByIndex('+i+')}"><td class="num-col" style="color:var(--muted);font-size:12px">'+ts+'</td><td><div style="font-weight:600">'+esc(e.model)+'</div><div style="font-size:11px;color:var(--muted)">'+esc(e.provider||"")+'</div></td><td>'+executorTag(e.executor_type)+'</td><td style="text-align:right" class="num-col">'+formatTokens(e.input_tokens)+' / '+formatTokens(e.output_tokens)+'</td><td style="text-align:right"><span class="badge '+(e.cache_hit_rate>0?"badge-success":"badge-neutral")+'">'+(e.cache_hit_rate||0).toFixed(0)+'%%</span></td><td style="text-align:right" class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
+		rowsHtml+='<tr class="'+rowCls+'" '+click+' tabindex="0" onkeydown="if(event.key===\'Enter\'){showEventDetailByIndex('+i+')}"><td class="num-col" style="color:var(--muted);font-size:12px">'+ts+'</td><td><div style="font-weight:600">'+esc(e.model)+'</div><div style="font-size:11px;color:var(--muted)">'+esc(e.provider||"")+'</div></td><td>'+executorTag(e.executor_type)+'</td><td style="text-align:right" class="num-col">'+formatTokens(e.input_tokens)+' / '+formatTokens(e.output_tokens)+'</td><td style="text-align:right"><span class="badge '+(e.cache_hit_rate>0?"badge-success":"badge-neutral")+'">'+clampPct(e.cache_hit_rate).toFixed(0)+'%%</span></td><td style="text-align:right" class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
 
 		if(e.failed&&e.failure_body){
 			rowsHtml+='<tr class="error-detail-row" id="'+eid+'" style="display:none"><td colspan="7"><div class="error-detail-box">'+esc(e.failure_body.substring(0,600))+(e.failure_body.length>600?"…":"")+'</div><button class="btn btn-xs btn-secondary" style="margin-top:6px" onclick="event.stopPropagation();showEventDetailByIndex('+i+')">查看完整事件详情 →</button></td></tr>';
@@ -1518,7 +1521,7 @@ function showEventDetail(e){
 		errorSection='<div><h4 class="drawer-section-title" style="color:var(--danger)">上游错误明细 (Failure Body)</h4><div class="code-block" style="border-color:var(--danger-border);color:var(--danger)">'+esc(e.failure_body)+'</div></div>';
 	}
 
-	var html='<div class="drawer-header"><div class="drawer-grab" data-drawer-grab="1" style="position:absolute;top:0;left:0;right:0"></div><div style="margin-top:8px"><h3 class="card-title" id="drawer-title" style="font-size:18px">事件调用详情</h3><p class="card-subtitle">ID: evt_'+(e.id||'—')+'</p></div><button class="btn btn-ghost btn-icon-only" onclick="closeDrawer()" aria-label="关闭抽屉"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div class="drawer-body"><div><h4 class="drawer-section-title">核心调用状态</h4><div class="key-value-list"><span class="key-label">请求时间</span><span class="key-val">'+esc(e.timestamp?new Date(e.timestamp).toLocaleString():"—")+'</span><span class="key-label">调用模型</span><span class="key-val" style="font-weight:600">'+esc(e.model||"—")+'</span><span class="key-label">服务提供方</span><span class="key-val">'+esc(e.provider||"—")+'</span><span class="key-label">客户端来源</span><span class="key-val">'+executorTag(e.executor_type)+'</span><span class="key-label">执行耗时</span><span class="key-val">'+formatMs(e.latency_ms)+'</span><span class="key-label">响应状态</span><span class="key-val">'+badge+'</span></div></div><div><h4 class="drawer-section-title">Token 消耗细则</h4><div class="key-value-list"><span class="key-label">提示词输入</span><span class="key-val">'+formatTokens(e.input_tokens)+'</span><span class="key-label">补全输出</span><span class="key-val">'+formatTokens(e.output_tokens)+'</span><span class="key-label">总计 Tokens</span><span class="key-val" style="font-weight:600">'+formatTokens(e.total_tokens)+'</span><span class="key-label">缓存命中率</span><span class="key-val">'+(e.cache_hit_rate||0).toFixed(1)+'%%</span></div></div><div><h4 class="drawer-section-title">凭据与环境</h4><div class="key-value-list"><span class="key-label">Auth ID</span><span class="key-val">'+esc(e.auth_id||"—")+'</span><span class="key-label">Executor Type</span><span class="key-val">'+esc(e.executor_type||"—")+'</span></div></div>'+errorSection+'<div><h4 class="drawer-section-title">原始请求 JSON 载荷</h4><pre class="code-block">'+esc(JSON.stringify(rawObj,null,2))+'</pre></div></div>';
+	var html='<div class="drawer-header"><div class="drawer-grab" data-drawer-grab="1" style="position:absolute;top:0;left:0;right:0"></div><div style="margin-top:8px"><h3 class="card-title" id="drawer-title" style="font-size:18px">事件调用详情</h3><p class="card-subtitle">ID: evt_'+(e.id||'—')+'</p></div><button class="btn btn-ghost btn-icon-only" onclick="closeDrawer()" aria-label="关闭抽屉"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div class="drawer-body"><div><h4 class="drawer-section-title">核心调用状态</h4><div class="key-value-list"><span class="key-label">请求时间</span><span class="key-val">'+esc(e.timestamp?new Date(e.timestamp).toLocaleString():"—")+'</span><span class="key-label">调用模型</span><span class="key-val" style="font-weight:600">'+esc(e.model||"—")+'</span><span class="key-label">服务提供方</span><span class="key-val">'+esc(e.provider||"—")+'</span><span class="key-label">客户端来源</span><span class="key-val">'+executorTag(e.executor_type)+'</span><span class="key-label">执行耗时</span><span class="key-val">'+formatMs(e.latency_ms)+'</span><span class="key-label">响应状态</span><span class="key-val">'+badge+'</span></div></div><div><h4 class="drawer-section-title">Token 消耗细则</h4><div class="key-value-list"><span class="key-label">提示词输入</span><span class="key-val">'+formatTokens(e.input_tokens)+'</span><span class="key-label">补全输出</span><span class="key-val">'+formatTokens(e.output_tokens)+'</span><span class="key-label">总计 Tokens</span><span class="key-val" style="font-weight:600">'+formatTokens(e.total_tokens)+'</span><span class="key-label">缓存命中率</span><span class="key-val">'+clampPct(e.cache_hit_rate).toFixed(1)+'%%</span></div></div><div><h4 class="drawer-section-title">凭据与环境</h4><div class="key-value-list"><span class="key-label">Auth ID</span><span class="key-val">'+esc(e.auth_id||"—")+'</span><span class="key-label">Executor Type</span><span class="key-val">'+esc(e.executor_type||"—")+'</span></div></div>'+errorSection+'<div><h4 class="drawer-section-title">原始请求 JSON 载荷</h4><pre class="code-block">'+esc(JSON.stringify(rawObj,null,2))+'</pre></div></div>';
 
 	openDrawer(html);
 }
