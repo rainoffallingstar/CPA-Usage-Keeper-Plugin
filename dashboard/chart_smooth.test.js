@@ -38,10 +38,21 @@ const sandbox = { Math, Number, isFinite };
 vm.createContext(sandbox);
 vm.runInContext(extractFunction('smoothPath'), sandbox);
 
-test('smoothPath is wired into all three line/area charts', () => {
+test('smoothPath is wired into all line/area charts', () => {
   assert.ok(templateSource.includes('var linePath=smoothPath(points)'), 'sparkline should smooth');
   assert.ok(templateSource.includes('var pathStr=smoothPath(points)'), 'main timeline should smooth');
   assert.ok(templateSource.includes('return smoothPath(pts)'), 'colab history chart should smooth');
+});
+
+test('top models card renders a curve chart, not progress bars', () => {
+  const start = templateSource.indexOf('function renderTopModels(');
+  const end = templateSource.indexOf('\nasync function renderOverviewInsights', start);
+  assert.ok(start >= 0 && end > start, 'renderTopModels should be present');
+  const body = templateSource.slice(start, end);
+  assert.ok(body.includes('smoothPath('), 'should draw a smooth curve');
+  assert.ok(body.includes('<path d="'), 'should emit an SVG path');
+  assert.ok(!body.includes('progress-bar-fill'), 'should no longer use progress bars');
+  assert.ok(body.includes('top5-area-grad'), 'should fill the area under the curve');
 });
 
 test('smoothPath handles empty and single points', () => {
