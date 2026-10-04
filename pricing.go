@@ -481,3 +481,31 @@ func getPriceSyncStatus() string {
 	}
 	return priceLastSync
 }
+
+// countUnpricedModels reports how many distinct models seen in usage have no
+// price entry, so an all-zero cost dashboard becomes visible instead of silent.
+func countUnpricedModels() int64 {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return 0
+	}
+	rows, err := d.Query("SELECT DISTINCT model FROM usage_events WHERE model != ''")
+	if err != nil {
+		return 0
+	}
+	defer rows.Close()
+
+	var missing int64
+	for rows.Next() {
+		var model string
+		if rows.Scan(&model) != nil {
+			continue
+		}
+		if _, ok := matchPrice(model); !ok {
+			missing++
+		}
+	}
+	return missing
+}

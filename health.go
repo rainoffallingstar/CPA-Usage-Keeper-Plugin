@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,10 @@ type runtimeHealthStatus struct {
 	LastWriteDurationMs int64   `json:"last_write_duration_ms"`
 	StorageWriteErrors  int64   `json:"storage_write_errors"`
 	DroppedUsageEvents  int64   `json:"dropped_usage_events"`
+	PluginPanics        int64   `json:"plugin_panics"`
+	PriceSync           string  `json:"price_sync"`
+	UnpricedModels      int64   `json:"unpriced_models"`
+	DBInitError         string  `json:"db_init_error,omitempty"`
 }
 
 type storageHealthStatus struct {
@@ -53,6 +58,7 @@ var (
 	eventsCacheMisses  int64
 	storageErrCount    int64
 	storageQueueDrops  int64
+	pluginPanics       int64
 	lastWriteMs        int64
 	cacheMu            sync.Mutex
 	dashboardVersion   uint64
@@ -98,9 +104,23 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	lastWrite := lastWriteMs
 	storeErrs := storageErrCount
 	queueDrops := storageQueueDrops
+	panics := pluginPanics
 	cacheMu.Unlock()
 
+	dbErr := getDBInitError()
+	priceSync := getPriceSyncStatus()
+	unpriced := int64(0)
+	if dbErr == "" {
+		unpriced = countUnpricedModels()
+	}
+
 	alerts := make([]healthAlert, 0)
+	if dbErr != "" {
+		alerts = append(alerts, healthAlert{Severity: "error", Code: "database_unavailable", Message: "Usage database unavailable: " + dbErr})
+	}
+	if panics > 0 {
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "plugin_panics", Message: fmt.Sprintf("%d recovered panic(s) while serving requests", panics)})
+	}
 	if storeErrs > 0 {
 		alerts = append(alerts, healthAlert{Severity: "error", Code: "storage_write_errors", Message: fmt.Sprintf("%d storage write errors detected", storeErrs)})
 	}
@@ -113,6 +133,12 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	if queueCap > 0 && queueUsed*100/queueCap >= 80 {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "write_queue_pressure", Message: fmt.Sprintf("Persistence queue at %d%% (%d/%d) - disk writes may be falling behind", queueUsed*100/queueCap, queueUsed, queueCap)})
 	}
+	if strings.HasPrefix(priceSync, "error:") {
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "price_sync_failed", Message: "Model price sync failed (" + priceSync + "); costs fall back to the last known prices"})
+	}
+	if unpriced > 0 {
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "models_without_price", Message: fmt.Sprintf("%d model(s) in usage have no price - their cost shows as $0", unpriced)})
+	}
 
 	status := "ok"
 	for _, a := range alerts {
@@ -122,6 +148,11 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 		} else if a.Severity == "warn" {
 			status = "warn"
 		}
+	}
+
+	storageStatus := "connected"
+	if dbErr != "" {
+		storageStatus = "unavailable"
 	}
 
 	return jsonResponse(http.StatusOK, healthResponse{
@@ -137,12 +168,17 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 			LastWriteDurationMs: lastWrite,
 			StorageWriteErrors:  storeErrs,
 			DroppedUsageEvents:  queueDrops,
+			PluginPanics:        panics,
+			PriceSync:           priceSync,
+			UnpricedModels:      unpriced,
+			DBInitError:         dbErr,
 		},
 		Storage: storageHealthStatus{
 			DBPath:      dbPath,
 			DBFileSize:  fileSize(dbPath),
 			WALFileSize: fileSize(dbPath + "-wal"),
-			Status:      "connected",
+			Status:      storageStatus,
+			LastError:   dbErr,
 		},
 	})
 }

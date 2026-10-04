@@ -42,9 +42,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Check JS syntax
-        run: node --check dashboard/helpers.js
-
       - name: Run JS tests
         run: node --test dashboard/*.test.js
 

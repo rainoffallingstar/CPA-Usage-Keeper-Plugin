@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.11.13 (2026-10-04)
+
+### Fixes（按一轮完整前后端审查逐项修复）
+- **宿主进程健壮性**: `cliproxyPluginCall` 增加 `defer recover()` —— 任何 handler panic 不再跨 cgo 边界终结 CPA 宿主进程，而是返回错误信封并计入 `plugin_panics`。
+- **数据库初始化失败不再静默**: `ensureDB` 由 `panic` 改为记录错误，健康接口返回 `db_init_error`、`storage.status=unavailable` 并产生 error 级告警，不再"静默服务空数据"。
+- **事件页时间范围失效**: 前端 `/events?limit=500` 被 `fetchJSON` 追加 `?range=` 拼成 `?limit=500?range=…`，`range` 丢失 → 事件页永远按 30 天取数。改为 `fetchJSON("/events",{limit:500})`。
+- **事件页无分页 + 客户端筛选**: 新增 `limit/offset` 分页控件，并把状态/来源/搜索全部下推服务端（新增 `executor`、`failed`、`q` 查询参数），不再只在最早加载的一页里过滤。
+- **真实状态码**: `/api/events` 补齐 `failure_status_code`、`reasoning_tokens`、`cached_tokens`、`cache_read/creation_tokens`、`ttft_ms`、`source`、`service_tier`；前端状态徽章不再硬编码 `OK 200`/`FAIL 429`。
+- **NULL 列导致事件消失**: events 查询全部改用 `COALESCE(...)`，NULL 列不再让整行被静默跳过。
+- **时区/DST 正确性**: 所有时间范围过滤与排序改用 `datetime(timestamp)`（归一化到 UTC），并新增表达式索引；跨时区偏移的历史行不再错排/漏查。清理任务的过期判断同样修正。
+- **价格不可见的静默 $0**: 健康接口新增 `price_sync`（含失败原因）与 `unpriced_models`，同步失败或存在无定价模型时会给出告警；`getPriceSyncStatus()` 此前从未被调用。
+- **`/summary` 响应形态分裂**: `/api/summary` 恒定返回 summary 结构，Quotio 结构改由 `/api/usage` 专用处理，调用方漏传 `range` 不再静默换 schema。
+- **观测/健壮细节**: `/api/timeseries` 增加 ETag（含数据版本，避免每次刷新重跑 12 条聚合）；`offset` 增加上限。
+- **前端错误可见性**: 新增面板级错误横幅 + 重试按钮，各 tab 的抓取失败不再等同于"无数据"；配额面板失败时不再永久空白；新增加载占位、搜索 debounce、窗口 resize 重绘图表、详情抽屉真实状态码。
+- **无障碍**: tab 补齐 `aria-controls`/`aria-labelledby` 与方向键/Home/End 导航（roving tabindex）。
+- **清理死代码**: 删除从未被页面加载的 `dashboard/helpers.js` 及其测试（原测试只覆盖未上线代码），同步移除 CI 中对应的 `node --check`；把未被 CI 收集的 `normalize_test.js`/`aggregate_test.js` 重写为 `*.test.js`，并改为从 `template.html` 提取真实函数进行覆盖。
+
 ## v0.11.12 (2026-10-04)
 
 ### Fixes

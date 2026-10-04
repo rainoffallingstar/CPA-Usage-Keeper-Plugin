@@ -576,12 +576,12 @@ tr:hover .filter-link{opacity:1}
               <p class="card-subtitle">点击任意行可在右侧抽屉查看完整调用参数与脱敏凭据</p>
             </div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <select id="events-filter-status" class="select-control" onchange="renderEvents()">
+              <select id="events-filter-status" class="select-control" onchange="eventsFilterChanged()">
                 <option value="all">全部状态</option>
                 <option value="success">仅成功</option>
                 <option value="failed">仅失败</option>
               </select>
-              <select id="events-filter-executor" class="select-control" onchange="renderEvents()">
+              <select id="events-filter-executor" class="select-control" onchange="eventsFilterChanged()">
                 <option value="all">全部来源</option>
                 <option value="cursor">Cursor</option>
                 <option value="claude-code">Claude Code</option>
@@ -590,7 +590,7 @@ tr:hover .filter-link{opacity:1}
               </select>
               <div class="search-box">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="events-search-input" class="search-input" placeholder="搜索模型或 Auth ID..." aria-label="搜索模型或 Auth ID" oninput="renderEvents()">
+                <input type="text" id="events-search-input" class="search-input" placeholder="搜索模型或 Auth ID..." aria-label="搜索模型或 Auth ID" oninput="debouncedEventsFilterChanged()">
               </div>
             </div>
           </div>
@@ -865,6 +865,9 @@ var currentQuotaProvider="opencode";
 var lastSummaryData=null;
 var lastModelsData=null;
 var lastEventsData=null;
+var eventsPageData=null;
+var eventsOffset=0;
+var eventsLimit=50;
 var lastTimeseriesData=null;
 var lastPricesData=null;
 var lastHealthData=null;
@@ -949,6 +952,44 @@ function switchTab(name){
 
 function emptyState(iconName,title,desc){
 	return '<div class="empty-state-box"><div class="empty-state-icon">'+icon(iconName)+'</div><div class="empty-state-title">'+esc(title)+'</div>'+(desc?'<div class="empty-state-desc">'+esc(desc)+'</div>':'')+'</div>';
+}
+
+/* Loading placeholder, shown before the first successful fetch. */
+function loadingState(msg){
+	return '<div class="empty-state-box"><div class="empty-state-title">'+esc(msg||"加载中…")+'</div><div class="empty-state-desc" style="opacity:0.6">正在从插件读取数据</div></div>';
+}
+
+/* Error state with a retry button, so a failed fetch is not shown as "no data". */
+function errorState(title,msg,retryExpr){
+	return '<div class="empty-state-box"><div class="empty-state-icon">'+icon("alertCircle")+'</div><div class="empty-state-title">'+esc(title||"加载失败")+'</div><div class="empty-state-desc">'+esc(msg||"")+'</div><button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="'+esc(retryExpr||"refreshAll()")+'">重试</button></div>';
+}
+
+/* Panel-level fetch error banner, so a failed load is never silently shown as
+   "no data". Cleared at the start of each render and re-added on failure. */
+function clearFetchError(panelId){
+	var el=document.getElementById(panelId+"-fetch-error");
+	if(el)el.remove();
+}
+
+function showFetchError(panelId,msg,retryExpr){
+	clearFetchError(panelId);
+	var panel=document.getElementById(panelId);
+	if(!panel)return;
+	var box=document.createElement("div");
+	box.id=panelId+"-fetch-error";
+	box.innerHTML='<div class="insight-item" style="border-color:var(--danger-border);background:var(--danger-bg);margin-bottom:16px"><span class="status-dot" style="color:var(--danger)"></span><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--danger)">数据加载失败</div><div style="font-size:11px;color:var(--muted)">'+esc(msg||"")+'</div></div><button class="btn btn-xs btn-secondary" onclick="'+esc(retryExpr||"refreshAll()")+'">重试</button></div>';
+	panel.insertBefore(box,panel.firstChild);
+}
+
+/* Trailing-edge debounce, used so typing in a search box does not fire a
+   request (and a full re-render) on every keystroke. */
+function debounce(fn,wait){
+	var t=null;
+	return function(){
+		var args=arguments,self=this;
+		if(t)clearTimeout(t);
+		t=setTimeout(function(){t=null;fn.apply(self,args)},wait||250);
+	};
 }
 
 /* ─── Model Normalization & Aggregation ────────────────────────────────────── */
@@ -1109,13 +1150,15 @@ function timeSeriesBuckets(sum){
 }
 
 async function renderOverview(){
+	clearFetchError("panel-overview");
 	try{
 		if(!lastSummaryData)lastSummaryData=await fetchJSON("/summary");
 		if(!lastModelsData)lastModelsData=await fetchJSON("/models");
-		if(!lastEventsData)lastEventsData=await fetchJSON("/events?limit=500");
+		if(!lastEventsData)lastEventsData=await fetchJSON("/events",{limit:500});
 		if(!lastTimeseriesData)lastTimeseriesData=await fetchJSON("/timeseries",{buckets:12});
 	}catch(e){
 		console.error("fetch overview data failed",e);
+		showFetchError("panel-overview",e.message,"renderOverview()");
 	}
 	var sum=lastSummaryData||{};
 	var models=lastModelsData||[];
@@ -1486,10 +1529,12 @@ async function renderOverviewInsights(){
 
 /* ─── By Model Tab ────────────────────────────────────────────────────────── */
 async function renderModels(){
+	clearFetchError("panel-models");
 	try{
 		if(!lastModelsData)lastModelsData=await fetchJSON("/models");
 	}catch(e){
 		console.error("fetch models failed",e);
+		showFetchError("panel-models",e.message,"renderModels()");
 	}
 	var data=lastModelsData||[];
 	var displayData=modelViewMode==="aggregated"?aggregateModels(data):data;
@@ -1554,55 +1599,122 @@ function executorTag(name){
 }
 
 async function renderEvents(){
-	try{
-		if(!lastEventsData)lastEventsData=await fetchJSON("/events?limit=500");
-	}catch(e){
-		console.error("fetch events failed",e);
-	}
-	var data=lastEventsData||{};
-	var events=data.events||[];
+	var container=document.getElementById("eventTableContent");
+	if(!container)return;
+	if(!container.innerHTML)container.innerHTML=loadingState("加载请求日志…");
 
 	var statusFilter=(document.getElementById("events-filter-status")||{}).value||"all";
 	var execFilter=(document.getElementById("events-filter-executor")||{}).value||"all";
-	var q=((document.getElementById("events-search-input")||{}).value||"").toLowerCase().trim();
+	var q=((document.getElementById("events-search-input")||{}).value||"").trim();
 
-	var filtered=events.filter(function(e){
-		if(statusFilter==="success"&&e.failed)return false;
-		if(statusFilter==="failed"&&!e.failed)return false;
-		if(execFilter!=="all"&&(e.executor_type||"").toLowerCase()!==execFilter)return false;
-		if(q&&!(e.model||"").toLowerCase().includes(q)&&!(e.auth_id||"").toLowerCase().includes(q)&&!(e.executor_type||"").toLowerCase().includes(q))return false;
-		return true;
-	});
+	// Filters and paging run server-side, so results are never limited to
+	// whichever 500 events happened to load first.
+	var params={limit:eventsLimit,offset:eventsOffset};
+	if(statusFilter==="success")params.failed="0";
+	if(statusFilter==="failed")params.failed="1";
+	if(execFilter!=="all")params.executor=execFilter;
+	if(q)params.q=q;
 
-	var container=document.getElementById("eventTableContent");
-	if(!container)return;
-
-	if(!filtered||filtered.length===0){
-		container.innerHTML=emptyState("clock",q?'未找到匹配 "'+q+'" 的请求日志':"当前时间段暂无请求流水","请求产生后将按时间倒序展示");
+	try{
+		eventsPageData=await fetchJSON("/events",params);
+	}catch(e){
+		container.innerHTML=errorState("请求日志加载失败",e.message,"renderEvents()");
 		return;
 	}
 
-	currentEventsList=filtered;
+	var data=eventsPageData||{};
+	var events=data.events||[];
+	var total=Number(data.total)||0;
+
+	if(!events.length){
+		container.innerHTML=(q||statusFilter!=="all"||execFilter!=="all")
+			?emptyState("clock","未找到匹配的请求日志","试试放宽筛选条件或切换时间范围")
+			:emptyState("clock","当前时间段暂无请求流水","请求产生后将按时间倒序展示");
+		return;
+	}
+
+	currentEventsList=events;
 	var rowsHtml="";
 
-	for(var i=0;i<filtered.length;i++){
-		var e=filtered[i];
+	for(var i=0;i<events.length;i++){
+		var e=events[i];
 		var eid="evt_"+i;
-		var ts=e.timestamp?new Date(e.timestamp).toLocaleTimeString():"—";
-		var badge=e.failed?'<span class="badge badge-danger">FAIL</span>':'<span class="badge badge-success">OK 200</span>';
+		var ts=e.timestamp?new Date(e.timestamp).toLocaleString():"—";
+		var badge=e.failed
+			?'<span class="badge badge-danger">FAIL'+(e.failure_status_code?(" "+e.failure_status_code):"")+'</span>'
+			:'<span class="badge badge-success">OK</span>';
 		var click=e.failed&&e.failure_body?'onclick="toggleErrorRow(\''+eid+'\')"':'onclick="showEventDetailByIndex('+i+')"';
 		var rowCls=e.failed?"clickable-row error-row":"clickable-row";
 
-		rowsHtml+='<tr class="'+rowCls+'" '+click+' tabindex="0" onkeydown="if(event.key===\'Enter\'){showEventDetailByIndex('+i+')}"><td class="num-col" style="color:var(--muted);font-size:12px">'+ts+'</td><td><div style="font-weight:600">'+esc(e.model)+'</div><div style="font-size:11px;color:var(--muted)">'+esc(e.provider||"")+'</div></td><td>'+executorTag(e.executor_type)+'</td><td style="text-align:right" class="num-col">'+formatTokens(e.input_tokens)+' / '+formatTokens(e.output_tokens)+'</td><td style="text-align:right"><span class="badge '+(e.cache_hit_rate>0?"badge-success":"badge-neutral")+'">'+clampPct(e.cache_hit_rate).toFixed(0)+'%%</span></td><td style="text-align:right" class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
+		rowsHtml+='<tr class="'+rowCls+'" '+click+' tabindex="0" onkeydown="if(event.key===\'Enter\'){showEventDetailByIndex('+i+')}"><td class="num-col" style="color:var(--muted);font-size:12px">'+esc(ts)+'</td><td><div style="font-weight:600">'+esc(e.model)+'</div><div style="font-size:11px;color:var(--muted)">'+esc(e.provider||"")+'</div></td><td>'+executorTag(e.executor_type)+'</td><td style="text-align:right" class="num-col">'+formatTokens(e.input_tokens)+' / '+formatTokens(e.output_tokens)+'</td><td style="text-align:right"><span class="badge '+(e.cache_hit_rate>0?"badge-success":"badge-neutral")+'">'+clampPct(e.cache_hit_rate).toFixed(0)+'%%</span></td><td style="text-align:right" class="num-col">'+formatMs(e.latency_ms)+'</td><td>'+badge+'</td></tr>';
 
 		if(e.failed&&e.failure_body){
-			rowsHtml+='<tr class="error-detail-row" id="'+eid+'" style="display:none"><td colspan="7"><div class="error-detail-box">'+esc(e.failure_body.substring(0,600))+(e.failure_body.length>600?"…":"")+'</div><button class="btn btn-xs btn-secondary" style="margin-top:6px" onclick="event.stopPropagation();showEventDetailByIndex('+i+')">查看完整事件详情 →</button></td></tr>';
+			var body=String(e.failure_body);
+			rowsHtml+='<tr class="error-detail-row" id="'+eid+'" style="display:none"><td colspan="7"><div class="error-detail-box">'+esc(body.substring(0,600))+(body.length>600?"…":"")+'</div><button class="btn btn-xs btn-secondary" style="margin-top:6px" onclick="event.stopPropagation();showEventDetailByIndex('+i+')">查看完整事件详情 →</button></td></tr>';
 		}
 	}
 
-	var countNote=data.total>filtered.length?'<p style="text-align:center;color:var(--muted);margin:14px 0;font-size:12px">展示前 '+filtered.length+' 条 (共 '+formatNum(data.total)+' 条)</p>':'';
-	container.innerHTML='<div class="table-wrapper"><table class="data-table"><thead><tr><th>时间</th><th>模型 / 提供方</th><th>客户端来源</th><th style="text-align:right">Tokens (输入/输出)</th><th style="text-align:right">缓存命中</th><th style="text-align:right">耗时</th><th>状态</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div>'+countNote;
+	// Server-side paging controls.
+	var page=Math.floor(eventsOffset/eventsLimit)+1;
+	var pages=total>0?Math.max(1,Math.ceil(total/eventsLimit)):1;
+	var atEnd=(eventsOffset+events.length>=total)||events.length<eventsLimit;
+	var pager='<div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:14px;flex-wrap:wrap">'+
+		'<button class="btn btn-secondary btn-sm"'+(eventsOffset<=0?" disabled":"")+' onclick="eventsPage(-1)">← 上一页</button>'+
+		'<span style="font-size:12px;color:var(--muted)">第 '+page+' / '+pages+' 页 · 共 '+formatNum(total)+(total>=10001?"+":"")+' 条</span>'+
+		'<button class="btn btn-secondary btn-sm"'+(atEnd?" disabled":"")+' onclick="eventsPage(1)">下一页 →</button>'+
+		'</div>';
+
+	container.innerHTML='<div class="table-wrapper"><table class="data-table"><thead><tr><th>时间</th><th>模型 / 提供方</th><th>客户端来源</th><th style="text-align:right">Tokens (输入/输出)</th><th style="text-align:right">缓存命中</th><th style="text-align:right">耗时</th><th>状态</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div>'+pager;
 }
+
+function eventsPage(delta){
+	eventsOffset=Math.max(0,eventsOffset+delta*eventsLimit);
+	renderEvents();
+}
+
+function eventsFilterChanged(){
+	eventsOffset=0;
+	renderEvents();
+}
+
+var debouncedEventsFilterChanged=debounce(eventsFilterChanged,300);
+
+/* Charts are drawn into a fixed viewBox derived from the container width, so a
+   window resize must re-render the active tab's charts or they distort. */
+window.addEventListener("resize",debounce(function(){
+	if(currentTab==="overview")renderOverviewCharts();
+	else if(currentTab==="quota")renderQuotaCards();
+	else if(currentTab==="health")renderHealth();
+},250));
+
+/* Accessibility: link tabs to their panels and support arrow-key navigation. */
+(function initTabA11y(){
+	var tabs=Array.prototype.slice.call(document.querySelectorAll('.nav-tab-btn[role="tab"]'));
+	if(!tabs.length)return;
+	tabs.forEach(function(tab,i){
+		var name=tab.dataset.tab;
+		if(name&&!tab.getAttribute("aria-controls"))tab.setAttribute("aria-controls","panel-"+name);
+		tab.setAttribute("tabindex",tab.classList.contains("active")?"0":"-1");
+	});
+	document.querySelectorAll(".tab-panel").forEach(function(p){
+		var name=(p.id||"").replace(/^panel-/,"");
+		if(name&&!p.getAttribute("aria-labelledby"))p.setAttribute("aria-labelledby","tab-"+name);
+	});
+	function focusTab(i){
+		var t=tabs[(i+tabs.length)%%tabs.length];
+		t.focus();
+		if(t.dataset.tab)switchTab(t.dataset.tab);
+		tabs.forEach(function(x){x.setAttribute("tabindex",x===t?"0":"-1")});
+	}
+	tabs.forEach(function(tab,i){
+		tab.addEventListener("keydown",function(ev){
+			if(ev.key==="ArrowRight"||ev.key==="ArrowDown"){ev.preventDefault();focusTab(i+1)}
+			else if(ev.key==="ArrowLeft"||ev.key==="ArrowUp"){ev.preventDefault();focusTab(i-1)}
+			else if(ev.key==="Home"){ev.preventDefault();focusTab(0)}
+			else if(ev.key==="End"){ev.preventDefault();focusTab(tabs.length-1)}
+		});
+	});
+})();
 
 function toggleErrorRow(eid){
 	var el=document.getElementById(eid);
@@ -1618,7 +1730,7 @@ function showEventDetailByIndex(i){
 }
 
 function showEventDetail(e){
-	var badge=e.failed?'<span class="badge badge-danger">FAIL 429</span>':'<span class="badge badge-success">OK 200</span>';
+	var badge=e.failed?('<span class="badge badge-danger">FAIL'+(e.failure_status_code?(" "+e.failure_status_code):"")+'</span>'):'<span class="badge badge-success">OK</span>';
 	var rawObj={
 		event_id:e.id,
 		timestamp:e.timestamp,
@@ -1815,6 +1927,7 @@ function formatReset(secs){
 }
 
 async function renderQuota(){
+	clearFetchError("panel-quota");
 	try{
 		var ocData=await fetchJSON("/opencode-quota");quotaDataCache["opencode"]=(ocData.accounts)||[];
 		var glmData=await fetchJSON("/glmcoding-quota");quotaDataCache["glm"]=(glmData.accounts)||[];
@@ -1825,6 +1938,9 @@ async function renderQuota(){
 		renderQuotaCards();
 	}catch(e){
 		console.error("render quota failed",e);
+		showFetchError("panel-quota",e.message,"renderQuota()");
+		var qc=document.getElementById("quota-cards-container");
+		if(qc&&!qc.innerHTML)qc.innerHTML=errorState("配额数据加载失败",e.message,"renderQuota()");
 	}
 }
 
@@ -2180,10 +2296,12 @@ function togglePricingGroup(headerTr){
 }
 
 async function renderPricing(){
+	clearFetchError("panel-pricing");
 	try{
 		if(!lastPricesData)lastPricesData=await fetchJSON("/prices");
 	}catch(e){
 		console.error("fetch prices failed",e);
+		showFetchError("panel-pricing",e.message,"renderPricing()");
 	}
 	var data=lastPricesData||{};
 	var prices=data.prices||{};
@@ -2662,6 +2780,8 @@ async function refreshAll(){
 	lastSummaryData=null;
 	lastModelsData=null;
 	lastEventsData=null;
+	eventsPageData=null;
+	eventsOffset=0;
 	lastTimeseriesData=null;
 	lastPricesData=null;
 	lastHealthData=null;

@@ -186,9 +186,9 @@ plugins:
 | `/dashboard` | `GET` | 现代化 Apple 风格 Web Dashboard HTML（内嵌 Invoice 小票与趋势图） |
 | `/api/summary` | `GET` | 聚合统计（请求数、Token 拆分、缓存命中率、均延，支持 `range=1h/6h/24h/7d/30d`） |
 | `/api/models` | `GET` | 按模型聚合列表（请求数、Tokens、预估成本，支持 `provider` 过滤） |
-| `/api/events` | `GET` | 分页请求事件日志（支持 `limit`、`offset`、`model`、`source`、`auth` 过滤） |
+| `/api/events` | `GET` | 分页请求事件日志（服务端支持 `limit`、`offset`、`model`、`source`、`auth`、`executor`、`failed`、`q` 筛选） |
 | `/api/timeseries` | `GET` | 按 `range` 全量分桶的时间序列（请求数/Token/真实成本，支持 `buckets` 参数） |
-| `/api/health` | `GET` | 运行状态、异步落盘队列背压、SQLite 文件体积与写入延迟指标 |
+| `/api/health` | `GET` | 运行状态、异步落盘队列背压、价格同步状态、未定价模型数、SQLite 体积与写入延迟 |
 | `/api/prices` | `GET` | 模型定价规则列表 |
 | `/api/prices/sync` | `GET` | 触发从 modelprice.boxtech.icu 在线同步最新定价 |
 | `/api/colab-quota` | `GET/POST`| Google Colab PKCE 登录、配额查询与 7/30/90 天快照历史 |
@@ -197,6 +197,15 @@ plugins:
 | `/api/deepseek-quota` | `GET/POST` | DeepSeek 官方余额获取与管理 |
 | `/api/ollama-quota`   | `GET/POST` | Ollama Cloud 会话与周度限额获取 |
 | `/api/usage`          | `GET` | Quotio 格式兼容的聚合用量端点 |
+
+> 以下端点为**管理 API**（需 CPA management key，供脚本/运维使用，Dashboard 未接入 UI）：
+>
+> | 端点 | 方法 | 说明 |
+> |---|---|---|
+> | `/v0/management/usage-keeper/export` | `GET` | 导出用量原始数据 |
+> | `/v0/management/usage-keeper/export-jobs` | `POST/GET/DELETE` | 创建/查询/删除导出任务 |
+> | `/v0/management/usage-keeper/export-download` | `GET` | 下载导出结果 |
+> | `/v0/management/usage-keeper/import` | `POST` | 导入用量数据 |
 
 ---
 

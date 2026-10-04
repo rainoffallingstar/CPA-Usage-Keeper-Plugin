@@ -640,7 +640,7 @@ func TestHandleTimeseriesAggregatesFullRange(t *testing.T) {
 		insertTestEvent(t, d, "openai", "gpt-4", 1000000, 0, 1000000, false, now.Add(off).Format(time.RFC3339))
 	}
 
-	resp := handleTimeseries(map[string][]string{"range": {"30d"}, "buckets": {"12"}})
+	resp := handleTimeseries(map[string][]string{"range": {"30d"}, "buckets": {"12"}}, nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -687,7 +687,7 @@ func TestHandleTimeseriesClampsBucketCount(t *testing.T) {
 	_ = d
 
 	// Out-of-range bucket counts fall back to the default of 12.
-	resp := handleTimeseries(map[string][]string{"range": {"1h"}, "buckets": {"999"}})
+	resp := handleTimeseries(map[string][]string{"range": {"1h"}, "buckets": {"999"}}, nil)
 	var ts timeseriesResponse
 	if err := json.Unmarshal(resp.Body, &ts); err != nil {
 		t.Fatalf("unmarshal timeseries: %v", err)
@@ -700,6 +700,76 @@ func TestHandleTimeseriesClampsBucketCount(t *testing.T) {
 	}
 	if ts.Series[0].Label == "" {
 		t.Errorf("expected non-empty bucket labels")
+	}
+}
+
+func TestHandleEventsReturnsStatusAndAppliesServerSideFilters(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	now := time.Now().Format(time.RFC3339)
+	insert := func(model, executor string, failed, status int, body string) {
+		if _, err := d.Exec(`INSERT INTO usage_events (timestamp, provider, model, executor_type, input_tokens, output_tokens, total_tokens, cached_tokens, latency_ms, ttft_ms, failed, failure_status_code, failure_body)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, now, "p", model, executor, 100, 10, 110, 50, 20, 5, failed, status, body); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+	insert("model-a", "cursor", 1, 500, "boom")
+	insert("model-b", "api", 0, 0, "")
+
+	var out eventsResponse
+
+	// failed=1 is applied server-side and the real status code is returned.
+	resp := handleEvents(map[string][]string{"range": {"24h"}, "failed": {"1"}}, nil)
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Events) != 1 {
+		t.Fatalf("failed=1 returned %d events, want 1", len(out.Events))
+	}
+	e := out.Events[0]
+	if e.Model != "model-a" || !e.Failed || e.FailureStatusCode != 500 {
+		t.Errorf("unexpected event: %+v", e)
+	}
+	if e.CachedTokens != 50 || e.TTFTMs != 5 {
+		t.Errorf("new fields not returned: cached=%d ttft=%d", e.CachedTokens, e.TTFTMs)
+	}
+
+	// executor filter
+	resp = handleEvents(map[string][]string{"range": {"24h"}, "executor": {"api"}}, nil)
+	json.Unmarshal(resp.Body, &out)
+	if len(out.Events) != 1 || out.Events[0].Model != "model-b" {
+		t.Errorf("executor filter wrong: %+v", out.Events)
+	}
+
+	// free-text q search
+	resp = handleEvents(map[string][]string{"range": {"24h"}, "q": {"model-a"}}, nil)
+	json.Unmarshal(resp.Body, &out)
+	if len(out.Events) != 1 || out.Events[0].Model != "model-a" {
+		t.Errorf("q filter wrong: %+v", out.Events)
+	}
+
+	// no filter returns everything
+	resp = handleEvents(map[string][]string{"range": {"24h"}}, nil)
+	json.Unmarshal(resp.Body, &out)
+	if len(out.Events) != 2 {
+		t.Errorf("unfiltered returned %d events, want 2", len(out.Events))
+	}
+}
+
+func TestHealthReportsObservabilityFields(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	_ = d
+
+	body := string(handleHealthCheck().Body)
+	for _, key := range []string{`"plugin_panics"`, `"price_sync"`, `"unpriced_models"`, `"write_queue_size"`} {
+		if !strings.Contains(body, key) {
+			t.Errorf("health JSON missing %s: %s", key, body)
+		}
+	}
+	if strings.Contains(body, "ring_buffer") {
+		t.Errorf("health JSON should no longer expose ring_buffer: %s", body)
 	}
 }
 

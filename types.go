@@ -38,7 +38,7 @@ const (
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.11.12"
+var pluginVersion = "0.11.13"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -116,19 +116,27 @@ type modelBreakdown struct {
 	Cost         float64 `json:"cost"`
 }
 type usageEvent struct {
-	ID           int64   `json:"id"`
-	Timestamp    string  `json:"timestamp"`
-	Provider     string  `json:"provider"`
-	Model        string  `json:"model"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	LatencyMs    int64   `json:"latency_ms"`
-	Failed       bool    `json:"failed"`
-	CacheHitRate float64 `json:"cache_hit_rate"`
-	FailureBody  string  `json:"failure_body,omitempty"`
-	AuthID       string  `json:"auth_id"`
-	ExecutorType string  `json:"executor_type"`
+	ID                  int64   `json:"id"`
+	Timestamp           string  `json:"timestamp"`
+	Provider            string  `json:"provider"`
+	Model               string  `json:"model"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	ReasoningTokens     int64   `json:"reasoning_tokens"`
+	TotalTokens         int64   `json:"total_tokens"`
+	CachedTokens        int64   `json:"cached_tokens"`
+	CacheReadTokens     int64   `json:"cache_read_tokens"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	LatencyMs           int64   `json:"latency_ms"`
+	TTFTMs              int64   `json:"ttft_ms"`
+	Failed              bool    `json:"failed"`
+	FailureStatusCode   int64   `json:"failure_status_code"`
+	CacheHitRate        float64 `json:"cache_hit_rate"`
+	FailureBody         string  `json:"failure_body,omitempty"`
+	AuthID              string  `json:"auth_id"`
+	ExecutorType        string  `json:"executor_type"`
+	Source              string  `json:"source"`
+	ServiceTier         string  `json:"service_tier"`
 }
 type eventsResponse struct {
 	Events []usageEvent `json:"events"`

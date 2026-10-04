@@ -87,11 +87,24 @@ func cliproxy_plugin_init(_ *C.cliproxy_host_api, plugin *C.cliproxy_plugin_api)
 }
 
 //export cliproxyPluginCall
-func cliproxyPluginCall(method *C.char, request *C.uint8_t, requestLen C.size_t, response *C.cliproxy_buffer) C.int {
+func cliproxyPluginCall(method *C.char, request *C.uint8_t, requestLen C.size_t, response *C.cliproxy_buffer) (code C.int) {
 	if response != nil {
 		response.ptr = nil
 		response.len = 0
 	}
+
+	// This plugin is loaded in-process by CPA, so a panic that crosses the cgo
+	// boundary would terminate the whole host process. Never let one escape.
+	defer func() {
+		if r := recover(); r != nil {
+			cacheMu.Lock()
+			pluginPanics++
+			cacheMu.Unlock()
+			writeResponse(response, errorEnvelope("plugin_panic", fmt.Sprintf("recovered panic: %v", r)))
+			code = 1
+		}
+	}()
+
 	if method == nil {
 		writeResponse(response, errorEnvelope("invalid_method", "method is required"))
 		return 1
@@ -418,20 +431,49 @@ func sqliteDatabaseDSN(databasePath string) string {
 	return databasePath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_txlock=immediate"
 }
 
+// dbInitErr records a fatal database init failure instead of panicking, so the
+// rest of the plugin can keep answering (and health can report it) rather than
+// silently serving empty data.
+var (
+	dbInitErrMu sync.Mutex
+	dbInitErr   string
+)
+
+func setDBInitError(msg string) {
+	dbInitErrMu.Lock()
+	dbInitErr = msg
+	dbInitErrMu.Unlock()
+}
+
+func getDBInitError() string {
+	dbInitErrMu.Lock()
+	defer dbInitErrMu.Unlock()
+	return dbInitErr
+}
+
 func ensureDB() {
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			setDBInitError(fmt.Sprintf("database init panicked: %v", r))
+		}
+	}()
 	initOnce.Do(func() {
 		cfg := currentConfig()
 		var err error
 		db, err = sql.Open("sqlite", sqliteDatabaseDSN(cfg.DBPath))
 		if err != nil {
-			panic(fmt.Sprintf("usage-keeper: failed to open database: %v", err))
+			setDBInitError("open database: " + err.Error())
+			db = nil
+			return
 		}
 		db.SetMaxOpenConns(3)
 		db.SetMaxIdleConns(3)
 
 		if errCreate := createTables(); errCreate != nil {
-			panic(fmt.Sprintf("usage-keeper: failed to create tables: %v", errCreate))
+			setDBInitError("create tables: " + errCreate.Error())
+			_ = db.Close()
+			db = nil
+			return
 		}
 
 		// Migration: add cache detail columns for existing databases
@@ -475,6 +517,7 @@ func createTables() error {
 		CREATE INDEX IF NOT EXISTS idx_usage_events_provider ON usage_events(provider);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_failed ON usage_events(failed);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_ts_id ON usage_events(timestamp, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_usage_events_dt ON usage_events(datetime(timestamp));
 	`)
 	// Schema migration: add hashed_api_key for existing databases
 	_, _ = db.Exec(`ALTER TABLE usage_events ADD COLUMN hashed_api_key TEXT NOT NULL DEFAULT ''`)
@@ -811,7 +854,7 @@ func cleanupOldRecords(retentionDays int) {
 		return
 	}
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).Format(time.RFC3339)
-	_, _ = d.Exec("DELETE FROM usage_events WHERE timestamp < ?", cutoff)
+	_, _ = d.Exec("DELETE FROM usage_events WHERE datetime(timestamp) < datetime(?)", cutoff)
 }
 
 // ---------------------------------------------------------------------------
@@ -942,14 +985,16 @@ func handleManagement(raw []byte) ([]byte, error) {
 	switch {
 	case strings.EqualFold(req.Method, http.MethodGet) && path == resourceDashboardPath:
 		return okEnvelope(htmlResponse(http.StatusOK, renderDashboard()))
-	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPISummaryPath || path == managementSummaryPath || path == managementUsageCompatPath || path == resourceAPIUsagePath):
+	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPISummaryPath || path == managementSummaryPath):
 		return okEnvelope(handleSummary(req.Query, req.Headers))
+	case strings.EqualFold(req.Method, http.MethodGet) && (path == managementUsageCompatPath || path == resourceAPIUsagePath):
+		return okEnvelope(handleQuotioUsage())
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPIModelsPath || path == managementModelsPath):
 		return okEnvelope(handleModels(req.Query))
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPIEventsPath || path == managementEventsPath):
 		return okEnvelope(handleEvents(req.Query, req.Headers))
 	case strings.EqualFold(req.Method, http.MethodGet) && path == resourceAPITimeseriesPath:
-		return okEnvelope(handleTimeseries(req.Query))
+		return okEnvelope(handleTimeseries(req.Query, req.Headers))
 	case strings.EqualFold(req.Method, http.MethodPost) && path == managementCleanupPath:
 		return okEnvelope(handleCleanup())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
@@ -1023,12 +1068,6 @@ func parseRangeHours(query map[string][]string) int {
 }
 
 func handleSummary(query map[string][]string, headers map[string][]string) pluginapi.ManagementResponse {
-	// Detect Quotio caller: no range param means return the Quotio shape
-	_, hasRange := query["range"]
-	if !hasRange && len(query) == 0 {
-		return handleQuotioUsage()
-	}
-
 	rangeHours := parseRangeHours(query)
 
 	// Generate ETag for conditional caching
@@ -1055,7 +1094,7 @@ func handleSummary(query map[string][]string, headers map[string][]string) plugi
 
 	if d != nil {
 		_ = d.QueryRow(
-			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE timestamp >= ?",
+			"SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(failed),0), COUNT(DISTINCT model), COALESCE(AVG(latency_ms),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE datetime(timestamp) >= datetime(?)",
 			since,
 		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs, &cacheReadTotal)
 		resp.CacheHitRate = cacheHitRate(cacheReadTotal, resp.InputTokens)
@@ -1069,13 +1108,20 @@ func handleSummary(query map[string][]string, headers map[string][]string) plugi
 // of events (limit=500), so a 30-day chart really showed the last few hours.
 // This aggregates every event in range and prices each bucket with the real
 // per-model prices, so the chart matches the summary KPIs.
-func handleTimeseries(query map[string][]string) pluginapi.ManagementResponse {
+func handleTimeseries(query map[string][]string, headers map[string][]string) pluginapi.ManagementResponse {
 	rangeHours := parseRangeHours(query)
 	bucketCount := 12
 	if vals, ok := query["buckets"]; ok && len(vals) > 0 {
 		if n, err := strconv.Atoi(strings.TrimSpace(vals[0])); err == nil && n >= 2 && n <= 60 {
 			bucketCount = n
 		}
+	}
+
+	// ETag includes the data version, so a 304 is returned without re-running
+	// the per-bucket aggregation the overview triggers on every refresh.
+	etag := dashboardWeakETag("timeseries", fmt.Sprintf("%d-%d", rangeHours, bucketCount))
+	if checkETag(headers, etag) {
+		return notModifiedResponse(etag)
 	}
 
 	resp := timeseriesResponse{RangeHours: rangeHours, Buckets: bucketCount, Series: make([]timeseriesBucket, 0, bucketCount)}
@@ -1108,9 +1154,9 @@ func handleTimeseries(query map[string][]string) pluginapi.ManagementResponse {
 		}
 
 		// The last bucket is inclusive of "now" so the newest events are counted.
-		where := "timestamp >= ? AND timestamp < ?"
+		where := "datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)"
 		if i == bucketCount-1 {
-			where = "timestamp >= ? AND timestamp <= ?"
+			where = "datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?)"
 		}
 		// Aggregate per model so each bucket can be priced with computeCost.
 		rows, errQuery := d.Query(
@@ -1135,7 +1181,7 @@ func handleTimeseries(query map[string][]string) pluginapi.ManagementResponse {
 		resp.Series = append(resp.Series, bucket)
 	}
 
-	return jsonResponse(http.StatusOK, resp)
+	return jsonResponseWithETag(http.StatusOK, resp, etag)
 }
 
 // handleQuotioUsage returns the aggregate shape expected by Quotio (UsageStats).
@@ -1153,7 +1199,7 @@ func handleQuotioUsage() pluginapi.ManagementResponse {
 	since := time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
 	var total, failed, totalToks, inputToks, outputToks int64
 	_ = d.QueryRow(
-		"SELECT COUNT(*), COALESCE(SUM(failed),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0) FROM usage_events WHERE timestamp >= ?",
+		"SELECT COUNT(*), COALESCE(SUM(failed),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0) FROM usage_events WHERE datetime(timestamp) >= datetime(?)",
 		since,
 	).Scan(&total, &failed, &totalToks, &inputToks, &outputToks)
 
@@ -1190,12 +1236,12 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 		var err error
 		if provider != "" {
 			rows, err = d.Query(
-				"SELECT provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE timestamp >= ? AND provider = ? GROUP BY provider, model ORDER BY SUM(total_tokens) DESC",
+				"SELECT provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE datetime(timestamp) >= datetime(?) AND provider = ? GROUP BY provider, model ORDER BY SUM(total_tokens) DESC",
 				since, provider,
 			)
 		} else {
 			rows, err = d.Query(
-				"SELECT COALESCE(NULLIF(GROUP_CONCAT(DISTINCT provider),\"\"),\"multiple\") as provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE timestamp >= ? GROUP BY model ORDER BY SUM(total_tokens) DESC",
+				"SELECT COALESCE(NULLIF(GROUP_CONCAT(DISTINCT provider),\"\"),\"multiple\") as provider, model, COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE datetime(timestamp) >= datetime(?) GROUP BY model ORDER BY SUM(total_tokens) DESC",
 				since,
 			)
 		}
@@ -1225,7 +1271,7 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 		}
 	}
 	if vals, ok := query["offset"]; ok && len(vals) > 0 {
-		if n, errParse := parseInt(vals[0]); errParse == nil && n >= 0 {
+		if n, errParse := parseInt(vals[0]); errParse == nil && n >= 0 && n <= 1000000 {
 			offset = n
 		}
 	}
@@ -1244,9 +1290,33 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 	if vals, ok := query["auth"]; ok && len(vals) > 0 {
 		authFilter = strings.TrimSpace(vals[0])
 	}
+	executorFilter := ""
+	if vals, ok := query["executor"]; ok && len(vals) > 0 {
+		executorFilter = strings.TrimSpace(vals[0])
+	}
+	// failed: "" = all, "1"/"true" = only failures, "0"/"false" = only successes
+	failedFilter := ""
+	if vals, ok := query["failed"]; ok && len(vals) > 0 {
+		switch strings.ToLower(strings.TrimSpace(vals[0])) {
+		case "1", "true", "yes":
+			failedFilter = "1"
+		case "0", "false", "no":
+			failedFilter = "0"
+		}
+	}
+	// q is a free-text search applied server-side across model/auth/executor.
+	qFilter := ""
+	if vals, ok := query["q"]; ok && len(vals) > 0 {
+		qFilter = strings.TrimSpace(vals[0])
+		if len(qFilter) > 100 {
+			qFilter = qFilter[:100]
+		}
+	}
+
+	filterKey := fmt.Sprintf("%s-%s-%s-%s-%s-%s", modelFilter, sourceFilter, authFilter, executorFilter, failedFilter, qFilter)
 
 	// ETag for response caching (checked inside the response cache layer)
-	etag := dashboardWeakETag("events", fmt.Sprintf("%d-%d-%d-%s-%s-%s", limit, offset, rangeHours, modelFilter, sourceFilter, authFilter))
+	etag := dashboardWeakETag("events", fmt.Sprintf("%d-%d-%d-%s", limit, offset, rangeHours, filterKey))
 
 	since := time.Now().Add(-time.Duration(rangeHours) * time.Hour).Format(time.RFC3339)
 
@@ -1255,7 +1325,7 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 	resp.Offset = offset
 
 	// Check in-memory response cache (keyed by all query parameters)
-	cacheKey := fmt.Sprintf("ev-%d-%d-%d-%s-%s-%s", limit, offset, rangeHours, modelFilter, sourceFilter, authFilter)
+	cacheKey := fmt.Sprintf("ev-%d-%d-%d-%s", limit, offset, rangeHours, filterKey)
 	responseCacheMu.RLock()
 	if cached, ok := eventsResponseCache[cacheKey]; ok && time.Since(cached.cachedAt) < responseCacheTTL {
 		// Check ETag for 304 response
@@ -1279,8 +1349,11 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 	dbMu.RUnlock()
 
 	if d != nil {
-		// Build dynamic query with filters
-		where := "WHERE timestamp >= ?"
+		// Build dynamic query with filters.
+		// datetime() normalises any RFC3339 offset to UTC, so range comparisons
+		// and ordering stay correct even if stored rows mix offsets (e.g. after
+		// a machine timezone/DST change) - plain string comparison would not.
+		where := "WHERE datetime(timestamp) >= datetime(?)"
 		args := []interface{}{since}
 		if modelFilter != "" {
 			where += " AND model = ?"
@@ -1294,6 +1367,23 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 			where += " AND auth_id = ?"
 			args = append(args, authFilter)
 		}
+		if executorFilter != "" {
+			where += " AND executor_type = ?"
+			args = append(args, executorFilter)
+		}
+		if failedFilter != "" {
+			where += " AND failed = ?"
+			failedInt := 0
+			if failedFilter == "1" {
+				failedInt = 1
+			}
+			args = append(args, failedInt)
+		}
+		if qFilter != "" {
+			like := "%" + qFilter + "%"
+			where += " AND (model LIKE ? OR auth_id LIKE ? OR executor_type LIKE ?)"
+			args = append(args, like, like, like)
+		}
 
 		// Capped count: only scan up to 10001 rows to determine if total exceeds 10000.
 		// The frontend only shows "Showing 100 of N", so an exact count for large N is unnecessary.
@@ -1301,8 +1391,10 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 		_ = d.QueryRow("SELECT COUNT(*) FROM (SELECT 1 FROM usage_events "+where+" LIMIT 10001)", countArgs...).Scan(&resp.Total)
 
 		queryArgs := append(args, limit, offset)
+		// COALESCE keeps rows with NULL columns from being silently dropped when
+		// scanned into plain Go strings/ints.
 		rows, err := d.Query(
-			"SELECT id, timestamp, provider, model, input_tokens, output_tokens, total_tokens, latency_ms, failed, failure_body, auth_id, executor_type, cached_tokens FROM usage_events "+where+" ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
+			"SELECT id, COALESCE(timestamp,''), COALESCE(provider,''), COALESCE(model,''), COALESCE(input_tokens,0), COALESCE(output_tokens,0), COALESCE(reasoning_tokens,0), COALESCE(total_tokens,0), COALESCE(cached_tokens,0), COALESCE(cache_read_tokens,0), COALESCE(cache_creation_tokens,0), COALESCE(latency_ms,0), COALESCE(ttft_ms,0), COALESCE(failed,0), COALESCE(failure_status_code,0), COALESCE(failure_body,''), COALESCE(auth_id,''), COALESCE(executor_type,''), COALESCE(source,''), COALESCE(service_tier,'') FROM usage_events "+where+" ORDER BY datetime(timestamp) DESC, id DESC LIMIT ? OFFSET ?",
 			queryArgs...,
 		)
 		if err == nil {
@@ -1310,7 +1402,8 @@ func handleEvents(query map[string][]string, headers map[string][]string) plugin
 			for rows.Next() {
 				var e usageEvent
 				var cachedEvt int64
-				if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &cachedEvt); errScan == nil {
+				if errScan := rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.ReasoningTokens, &e.TotalTokens, &e.CachedTokens, &e.CacheReadTokens, &e.CacheCreationTokens, &e.LatencyMs, &e.TTFTMs, &e.Failed, &e.FailureStatusCode, &e.FailureBody, &e.AuthID, &e.ExecutorType, &e.Source, &e.ServiceTier); errScan == nil {
+					cachedEvt = e.CachedTokens
 					e.CacheHitRate = cacheHitRate(cachedEvt, e.InputTokens)
 					resp.Events = append(resp.Events, e)
 				}
