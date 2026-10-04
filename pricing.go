@@ -32,6 +32,26 @@ var pricesStore = make(map[string]modelPrice)
 // DB persistence
 // ---------------------------------------------------------------------------
 
+// defaultPrices seeds prices only for models that the upstream price feed does
+// not publish under the name they appear in usage, so a known-cheap lookup
+// still resolves. Values are the provider's published price in USD per 1M
+// tokens. They never override a synced or user-set entry (see loadPricesFromDB).
+var defaultPrices = map[string]modelPrice{
+	// Gemini 3.1 Pro is only published as "gemini-3-1-pro-preview"
+	// (input $2.00 / output $12.00 / cache read $0.20 per 1M).
+	"gemini-3.1-pro": {Prompt: 2.0, Completion: 12.0, Cache: 0.2},
+}
+
+func seedDefaultPrices() {
+	pricesMu.Lock()
+	defer pricesMu.Unlock()
+	for model, price := range defaultPrices {
+		if _, exists := pricesStore[model]; !exists {
+			pricesStore[model] = price
+		}
+	}
+}
+
 func loadPricesFromDB() {
 	dbMu.RLock()
 	d := db
@@ -59,6 +79,7 @@ func loadPricesFromDB() {
 		}
 	}
 	pricesMu.Unlock()
+	seedDefaultPrices()
 }
 
 func persistPrice(model string, mp modelPrice) {
@@ -231,7 +252,7 @@ func computeCost(model string, inputTokens, outputTokens, cachedTokens int64) fl
 
 // matchPrice looks up a model name with fuzzy matching against pricesStore.
 func matchPrice(model string) (modelPrice, bool) {
-	price, _, ok := matchPriceDetailed(model)
+	price, _, ok := matchPriceDetailedWithPreview(model)
 	return price, ok
 }
 
@@ -271,6 +292,39 @@ func matchPriceDetailed(model string) (modelPrice, string, bool) {
 			return p, stripped, true
 		}
 	}
+	// Unify with the dashboard's normaliser: drop free/low suffixes and fix the
+	// letter-digit boundary (grok4.5 → grok-4.5).
+	if norm := normalizePriceModel(lower); norm != "" && norm != lower {
+		if p, key, ok := matchPriceDetailed(norm); ok {
+			return p, key, true
+		}
+	}
+	return modelPrice{}, "", false
+}
+
+// matchPriceDetailedWithPreview additionally accepts a bare name against a
+// published "-preview" entry (gemini-3.1-pro → gemini-3-1-pro-preview). This
+// lives outside matchPriceDetailed because that function strips "-preview" as a
+// variant suffix — doing it there would recurse forever.
+func matchPriceDetailedWithPreview(model string) (modelPrice, string, bool) {
+	// Try the raw name first, then its normalised form, so that e.g.
+	// gemini-3.1-pro-low → gemini-3.1-pro → gemini-3-1-pro-preview resolves.
+	seen := map[string]bool{}
+	for _, candidate := range []string{model, normalizePriceModel(model)} {
+		l := strings.ToLower(strings.TrimSpace(candidate))
+		if l == "" || seen[l] {
+			continue
+		}
+		seen[l] = true
+		if p, key, ok := matchPriceDetailed(l); ok {
+			return p, key, true
+		}
+		if !strings.HasSuffix(l, "-preview") {
+			if p, key, ok := matchPriceDetailed(l + "-preview"); ok {
+				return p, key, true
+			}
+		}
+	}
 	return modelPrice{}, "", false
 }
 
@@ -306,6 +360,53 @@ func stripVariantSuffix(name string) string {
 	return name
 }
 
+// priceVariantSuffixes are suffixes the price table does not carry separately.
+// The dashboard's normalizeModelName strips the same set, so pricing and the
+// UI's model grouping stay consistent instead of some variants costing $0.
+var priceVariantSuffixes = []string{"（free）", "(free)", ":free", "-free", "-low"}
+
+// insertLetterDigitDash turns "grok4.5" into "grok-4.5", mirroring the
+// dashboard normaliser so both resolve against the same price key.
+func insertLetterDigitDash(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= 'a' && s[i] <= 'z' {
+		i++
+	}
+	if i == 0 || i >= len(s) || s[i] < '0' || s[i] > '9' {
+		return s
+	}
+	rest := s[i:]
+	for j := 0; j < len(rest); j++ {
+		if c := rest[j]; !(c >= '0' && c <= '9') && c != '.' {
+			return s
+		}
+	}
+	return s[:i] + "-" + rest
+}
+
+// normalizePriceModel applies the dashboard's variant normalisation to a model
+// name: strip a provider prefix, drop free/low suffixes, then fix the
+// letter-digit boundary. Idempotent, so the recursive price lookup terminates.
+func normalizePriceModel(name string) string {
+	s := strings.ToLower(strings.TrimSpace(name))
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	for {
+		trimmed := s
+		for _, suffix := range priceVariantSuffixes {
+			if strings.HasSuffix(trimmed, suffix) {
+				trimmed = strings.TrimSuffix(trimmed, suffix)
+				break
+			}
+		}
+		if trimmed == s {
+			break
+		}
+		s = trimmed
+	}
+	return insertLetterDigitDash(s)
+}
 func isVersionNumber(s string) bool {
 	if len(s) < 2 || len(s) > 8 {
 		return false

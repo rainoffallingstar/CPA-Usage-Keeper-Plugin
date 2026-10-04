@@ -147,3 +147,36 @@ func TestComputeCost(t *testing.T) {
 		t.Errorf("computeCost(unknown) = %v, want 0", cost)
 	}
 }
+
+// The dashboard groups "-low"/"free" variants with their base model, so pricing
+// must resolve them the same way instead of silently costing $0.
+func TestMatchPriceNormalizesVariants(t *testing.T) {
+	setTestPrices(map[string]modelPrice{
+		"gemini-3-5-flash":       {Prompt: 0.3, Completion: 2.5, Cache: 0.075},
+		"deepseek-v4-flash":      {Prompt: 0.08, Completion: 0.16, Cache: 0.016},
+		"grok-4-5":               {Prompt: 3, Completion: 15, Cache: 0.75},
+		"gemini-3-1-pro-preview": {Prompt: 2, Completion: 12, Cache: 0.2},
+	})
+	defer setTestPrices(nil)
+
+	cases := []struct{ model, wantKey string }{
+		{"gemini-3.5-flash", "gemini-3-5-flash"},
+		{"gemini-3.5-flash-low", "gemini-3-5-flash"},
+		{"deepseek-v4-flash-free", "deepseek-v4-flash"},
+		{"deepseek-v4-flash:free", "deepseek-v4-flash"},
+		{"grok4.5（free）", "grok-4-5"},
+		{"grok4.5", "grok-4-5"},
+		{"gemini-3.1-pro", "gemini-3-1-pro-preview"},
+		{"gemini-3.1-pro-low", "gemini-3-1-pro-preview"},
+	}
+	for _, tc := range cases {
+		_, key, ok := matchPriceDetailedWithPreview(tc.model)
+		if !ok {
+			t.Errorf("no price matched for %q", tc.model)
+			continue
+		}
+		if key != tc.wantKey {
+			t.Errorf("%q matched %q, want %q", tc.model, key, tc.wantKey)
+		}
+	}
+}

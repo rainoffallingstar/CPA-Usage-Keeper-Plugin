@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.11.14 (2026-10-04)
+
+### Fixes
+- **6 个模型成本恒为 $0（定价与前端口径不一致）**: 前端 `normalizeModelName` 会把 `-low` / `-free` / `:free` / `（free）` 合并到基础模型，但后端定价匹配不会，导致同族模型"部分有价、部分 $0"。现补齐统一归一化：
+  - 新增 `normalizePriceModel`，剥离 `（free）`/`(free)`/`:free`/`-free`/`-low`（可叠加），并补上字母-数字连字符（`grok4.5` → `grok-4-5`）；
+  - 裸名缺失时回退到已发布的 `-preview` 条目（`gemini-3.1-pro` → `gemini-3-1-pro-preview`），该回退放在非递归包装层以避免与 `stripVariantSuffix` 形成死循环；
+  - 实测：真实库中 44 个已用模型中，未定价数量从 **6 → 0**。
+
+  受影响并已修复的模型：`gemini-3.5-flash-low`、`gemini-3.1-pro`、`gemini-3.1-pro-low`、`grok4.5（free）`、`deepseek-v4-flash-free`、`deepseek-v4-flash:free`。
+- **内置兜底定价**: `gemini-3.1-pro` 上游只发布 preview 形态，新增 `defaultPrices` 播入一条默认价（输入 $2 / 输出 $12 / 缓存 $0.2 每 1M，来源为上游 `gemini-3-1-pro-preview`），仅在本地/同步/手填均缺失时生效。
+- **回归测试**: 新增 `TestMatchPriceNormalizesVariants` 覆盖上述 8 种写法的匹配与目标键。
+
 ## v0.11.13 (2026-10-04)
 
 ### Fixes（按一轮完整前后端审查逐项修复）

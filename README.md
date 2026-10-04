@@ -71,6 +71,8 @@
 ### 📊 4. 650+ 模型动态定价与智能匹配
 - **云端自动同步**：每 6 小时自动从 [modelprice.boxtech.icu](https://modelprice.boxtech.icu) 拉取 650+ 主流大模型的官方最新定价（Prompt / Completion / Cache）。
 - **变体后缀自动回退**：对带冒号版本（如 `deepseek-v4-pro:0813`）或变体后缀（如 `claude-opus-4-6-thinking`、`gemini-3-7-flash-high`、`deepseek-v4-pro:preview`）自动模糊回退匹配基础型号单价。
+- **与看板归一化口径一致**：定价匹配会剥离 `-low` / `-free` / `:free` / `(free)` / `（free）`，并补上字母-数字连字符（`grok4.5` → `grok-4-5`），裸名缺失时还会回退到已发布的 `-preview`（`gemini-3.1-pro` → `gemini-3-1-pro-preview`），避免同一模型"部分计价、部分 $0"。
+- **内置兜底定价**：上游未按实际调用名发布的型号（如 `gemini-3.1-pro`）内置一条默认价（USD / 1M tokens），仅在本地与同步均缺失时生效，不覆盖任何已同步/手填价格。
 - **在线维护与编辑**：支持按提供商分类折叠管理，可在 Web 端直接通过模态弹窗修改或新增定价规则。
 
 ---
