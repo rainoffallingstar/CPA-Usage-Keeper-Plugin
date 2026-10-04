@@ -784,6 +784,36 @@ function formatMs(ms){var v=Number(ms);if(isNaN(v)||v<=0)return"0ms";if(v>=60000
 function formatCost(c){var v=Number(c);if(isNaN(v)||v===0)return"$0.00";if(v<0.01)return"$"+v.toFixed(4);return"$"+v.toFixed(2)}
 function clampPct(v){var n=Number(v);if(!isFinite(n)||n<0)return 0;return n>100?100:n}
 function bucketCost(input,output,cached){var fresh=Math.max(0,input-Math.max(0,cached));return fresh/1e6*0.5+output/1e6*2.0+Math.max(0,cached)/1e6*0.1}
+// Smooth SVG line path through pts ([{x,y},...]) using monotone cubic
+// interpolation (Fritsch-Carlson). Unlike Catmull-Rom it never overshoots the
+// data range, so a smoothed area never dips below its baseline or above peaks.
+function smoothPath(pts){
+	if(!pts||!pts.length)return"";
+	var finite=pts.length>=2;
+	for(var k=0;k<pts.length;k++){if(!isFinite(pts[k].x)||!isFinite(pts[k].y)){finite=false;break;}}
+	if(!finite){
+		return pts.map(function(p,i){return (i===0?"M":"L")+" "+(Number(p.x)||0).toFixed(1)+" "+(Number(p.y)||0).toFixed(1)}).join(" ");
+	}
+	var n=pts.length;
+	if(n===2){return "M "+pts[0].x.toFixed(1)+" "+pts[0].y.toFixed(1)+" L "+pts[1].x.toFixed(1)+" "+pts[1].y.toFixed(1)}
+	var dx=new Array(n-1),slope=new Array(n-1),m=new Array(n);
+	for(var i=0;i<n-1;i++){dx[i]=pts[i+1].x-pts[i].x;slope[i]=dx[i]===0?0:(pts[i+1].y-pts[i].y)/dx[i]}
+	m[0]=slope[0];m[n-1]=slope[n-2];
+	for(var i=1;i<n-1;i++){m[i]=(slope[i-1]+slope[i])/2}
+	for(var i=0;i<n-1;i++){
+		if(slope[i]===0){m[i]=0;m[i+1]=0;continue}
+		var a=m[i]/slope[i],b=m[i+1]/slope[i],s=a*a+b*b;
+		if(s>9){var t=3/Math.sqrt(s);m[i]=t*a*slope[i];m[i+1]=t*b*slope[i]}
+	}
+	var d="M "+pts[0].x.toFixed(1)+" "+pts[0].y.toFixed(1);
+	for(var i=0;i<n-1;i++){
+		var x0=pts[i].x,y0=pts[i].y,x1=pts[i+1].x,y1=pts[i+1].y;
+		var c1x=x0+dx[i]/3,c1y=y0+m[i]*dx[i]/3;
+		var c2x=x1-dx[i]/3,c2y=y1-m[i+1]*dx[i]/3;
+		d+=" C "+c1x.toFixed(1)+" "+c1y.toFixed(1)+" "+c2x.toFixed(1)+" "+c2y.toFixed(1)+" "+x1.toFixed(1)+" "+y1.toFixed(1);
+	}
+	return d;
+}
 
 function icon(name){
 	var m={
@@ -1146,9 +1176,9 @@ function renderMiniSparkline(elementId,values,color){
 	var points=values.map(function(v,i){
 		var x=(i/(values.length-1))*w;
 		var y=h-6-((v-min)/range)*(h-12);
-		return x.toFixed(1)+","+y.toFixed(1);
+		return {x:x,y:y};
 	});
-	var linePath="M "+points.join(" L ");
+	var linePath=smoothPath(points);
 	var areaPath=linePath+" L "+w+","+h+" L 0,"+h+" Z";
 	var gid="grad-"+elementId;
 
@@ -1182,7 +1212,7 @@ function renderMainTimeline(){
 		return {x:x,y:y,val:v,label:labels[i],raw:buckets[i]};
 	});
 
-	var pathStr=points.map(function(p,i){return (i===0?"M":"L")+" "+p.x.toFixed(1)+" "+p.y.toFixed(1)}).join(" ");
+	var pathStr=smoothPath(points);
 	var areaStr=pathStr+" L "+points[points.length-1].x.toFixed(1)+" "+(padding.top+innerH)+" L "+points[0].x.toFixed(1)+" "+(padding.top+innerH)+" Z";
 
 	var yTicksHtml="";
@@ -1841,16 +1871,12 @@ function renderColabHistoryChart(container,points,days){
 	function y(v){return pad.top+innerH-((v-vMin)/span)*innerH}
 
 	function buildLine(flagField,valField){
-		var dstr="";
-		var first=true;
+		var pts=[];
 		points.forEach(function(p){
 			if(!p[flagField])return;
-			var px=x(new Date(p.ts).getTime()).toFixed(1);
-			var py=y(Number(p[valField])).toFixed(1);
-			dstr+=(first?"M":"L")+px+" "+py+" ";
-			first=false;
+			pts.push({x:x(new Date(p.ts).getTime()),y:y(Number(p[valField]))});
 		});
-		return dstr;
+		return smoothPath(pts);
 	}
 
 	function fmt(v){
