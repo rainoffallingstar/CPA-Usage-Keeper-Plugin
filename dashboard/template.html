@@ -518,7 +518,7 @@ tr:hover .filter-link{opacity:1}
             <div class="card-header">
               <div class="card-header-titles">
                 <h2 class="card-title">模型开销 Top 5</h2>
-                <p class="card-subtitle">高耗资模型排行 · 开销曲线</p>
+                <p class="card-subtitle">高耗资模型排行 · 帕累托累计占比</p>
               </div>
               <button class="btn btn-ghost btn-sm" onclick="switchTab('models')">查看全部 →</button>
             </div>
@@ -1387,53 +1387,58 @@ function renderTopModels(){
 		return;
 	}
 
-	var values=top5.map(function(m){return Math.max(0,Number(m.cost)||0)});
-	var peak=Math.max.apply(null,values);
-	var maxVal=(isFinite(peak)&&peak>0?peak:1)*1.15;
+	var ranked=models.slice().sort(function(a,b){return (b.cost||0)-(a.cost||0)});
+	var totalCost=ranked.reduce(function(s,m){return s+Math.max(0,Number(m.cost)||0)},0);
+	var denom=totalCost>0?totalCost:1;
+
+	// Cumulative share of total spend after each top model (Pareto curve).
+	var running=0;
+	var points=top5.map(function(m){
+		var c=Math.max(0,Number(m.cost)||0);
+		running+=c;
+		return {item:m,cost:c,share:(c/denom)*100,cum:Math.min(100,(running/denom)*100)};
+	});
+	var top5Share=points[points.length-1].cum;
 
 	var w=container.clientWidth||420;
 	var h=210;
-	var padding={top:28,right:16,bottom:48,left:54};
+	var padding={top:28,right:18,bottom:48,left:46};
 	var innerW=Math.max(1,w-padding.left-padding.right);
 	var innerH=Math.max(1,h-padding.top-padding.bottom);
 	var baseline=padding.top+innerH;
 	var strokeColor="var(--accent)";
-	var n=values.length;
+	var n=points.length;
+	var maxVal=100;
 
-	var points=values.map(function(v,i){
+	var pts=points.map(function(p,i){
 		var x=n>1?padding.left+(i/(n-1))*innerW:padding.left+innerW/2;
-		var y=padding.top+innerH-(v/maxVal)*innerH;
-		return {x:x,y:y,val:v,item:top5[i]};
+		var y=padding.top+innerH-(p.cum/maxVal)*innerH;
+		return {x:x,y:y,cum:p.cum};
 	});
 
-	var linePath=smoothPath(points);
-	var areaStr=linePath+" L "+points[n-1].x.toFixed(1)+" "+baseline+" L "+points[0].x.toFixed(1)+" "+baseline+" Z";
+	var linePath=smoothPath(pts);
+	var areaStr=linePath+" L "+pts[n-1].x.toFixed(1)+" "+baseline+" L "+pts[0].x.toFixed(1)+" "+baseline+" Z";
 
-	function axisMoney(v){
-		if(v===0)return "$0";
-		if(maxVal>=1e6)return "$"+(v/1e6).toFixed(1)+"M";
-		if(maxVal>=1e3)return "$"+(v/1e3).toFixed(1)+"k";
-		if(maxVal>=1)return "$"+v.toFixed(0);
-		return "$"+v.toFixed(2);
-	}
 	var yTicks="";
-	for(var i=0;i<=3;i++){
-		var val=maxVal*(i/3),yPos=baseline-(i/3)*innerH;
+	[0,25,50,75,100].forEach(function(v){
+		var yPos=baseline-(v/maxVal)*innerH;
 		yTicks+='<line x1="'+padding.left+'" y1="'+yPos.toFixed(1)+'" x2="'+(w-padding.right)+'" y2="'+yPos.toFixed(1)+'" stroke="var(--border-soft)" stroke-dasharray="3 3"/>'+
-			'<text x="'+(padding.left-7)+'" y="'+(yPos+4).toFixed(1)+'" font-size="10" fill="var(--meta)" text-anchor="end" font-family="var(--font-mono)">'+axisMoney(val)+'</text>';
-	}
+			'<text x="'+(padding.left-7)+'" y="'+(yPos+4).toFixed(1)+'" font-size="10" fill="var(--meta)" text-anchor="end" font-family="var(--font-mono)">'+v+'%%</text>';
+	});
 
 	function shortModelName(s){s=String(s||"");return s.length>11?s.slice(0,10)+"…":s}
 	var anchorFor=function(i){return i===0?"start":(i===n-1?"end":"middle")};
 	var marksHtml="",dotsHtml="";
-	points.forEach(function(p,i){
+	pts.forEach(function(p,i){
 		var anchor=anchorFor(i);
-		marksHtml+='<text x="'+p.x.toFixed(1)+'" y="'+(p.y-10).toFixed(1)+'" font-size="10" font-weight="600" fill="var(--fg)" text-anchor="'+anchor+'" font-family="var(--font-mono)">'+formatCost(p.val)+'</text>';
+		marksHtml+='<text x="'+p.x.toFixed(1)+'" y="'+(p.y-10).toFixed(1)+'" font-size="10" font-weight="600" fill="var(--fg)" text-anchor="'+anchor+'" font-family="var(--font-mono)">'+p.cum.toFixed(1)+'%%</text>';
 		marksHtml+='<text x="'+p.x.toFixed(1)+'" y="'+(h-16)+'" font-size="10" fill="var(--meta)" text-anchor="'+anchor+'" font-family="var(--font-mono)">'+esc(shortModelName(p.item.model))+'</text>';
 		dotsHtml+='<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="var(--surface-card)" stroke="'+strokeColor+'" stroke-width="2.5" class="chart-point" data-idx="'+i+'" style="cursor:pointer;transition:transform 0.15s ease" />';
 	});
 
-	container.innerHTML='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="color:'+strokeColor+'"><defs><linearGradient id="top5-area-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%%" stop-color="currentColor" stop-opacity="0.30"/><stop offset="100%%" stop-color="currentColor" stop-opacity="0.02"/></linearGradient></defs>'+yTicks+'<path d="'+areaStr+'" fill="url(#top5-area-grad)" /><path d="'+linePath+'" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />'+marksHtml+dotsHtml+'</svg>';
+	var caption='<div style="margin-top:4px;font-size:11px;color:var(--muted);text-align:center">Top 5 合计占总开销 <span style="font-weight:600;color:var(--fg)">'+top5Share.toFixed(1)+'%%</span> · 头部「'+esc(shortModelName(top5[0].model))+'」占 '+points[0].share.toFixed(1)+'%%</div>';
+
+	container.innerHTML='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="color:'+strokeColor+'"><defs><linearGradient id="top5-pareto-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%%" stop-color="currentColor" stop-opacity="0.30"/><stop offset="100%%" stop-color="currentColor" stop-opacity="0.02"/></linearGradient></defs>'+yTicks+'<path d="'+areaStr+'" fill="url(#top5-pareto-grad)" /><path d="'+linePath+'" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />'+marksHtml+dotsHtml+'</svg>'+caption;
 
 	container.querySelectorAll(".chart-point").forEach(function(el){
 		el.addEventListener("mouseenter",function(e){
@@ -1441,7 +1446,7 @@ function renderTopModels(){
 			var p=points[idx];
 			if(!p)return;
 			var m=p.item;
-			var text="<strong>"+esc(m.model)+"</strong><br/>开销: "+formatCost(m.cost)+"<br/>"+esc(cleanProviderName(m.provider))+" · "+formatNum(m.requests)+" 次请求<br/>Tokens: "+formatTokens(m.total_tokens);
+			var text="<strong>"+esc(m.model)+"</strong><br/>开销: "+formatCost(m.cost)+"（占 "+(p.share).toFixed(1)+"%%）<br/>累计占比: "+(p.cum).toFixed(1)+"%%<br/>"+esc(cleanProviderName(m.provider))+" · "+formatNum(m.requests)+" 次请求<br/>Tokens: "+formatTokens(m.total_tokens);
 			showTooltip(e,text);
 			el.setAttribute("r","6");
 		});

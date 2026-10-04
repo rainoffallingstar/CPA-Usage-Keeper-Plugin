@@ -44,7 +44,7 @@ test('smoothPath is wired into all line/area charts', () => {
   assert.ok(templateSource.includes('return smoothPath(pts)'), 'colab history chart should smooth');
 });
 
-test('top models card renders a curve chart, not progress bars', () => {
+test('top models card renders a Pareto cumulative curve, not progress bars', () => {
   const start = templateSource.indexOf('function renderTopModels(');
   const end = templateSource.indexOf('\nasync function renderOverviewInsights', start);
   assert.ok(start >= 0 && end > start, 'renderTopModels should be present');
@@ -52,7 +52,9 @@ test('top models card renders a curve chart, not progress bars', () => {
   assert.ok(body.includes('smoothPath('), 'should draw a smooth curve');
   assert.ok(body.includes('<path d="'), 'should emit an SVG path');
   assert.ok(!body.includes('progress-bar-fill'), 'should no longer use progress bars');
-  assert.ok(body.includes('top5-area-grad'), 'should fill the area under the curve');
+  assert.ok(body.includes('top5-pareto-grad'), 'should fill the area under the curve');
+  assert.ok(body.includes('totalCost'), 'cumulative share must be relative to total spend');
+  assert.ok(body.includes('cum'), 'should compute a cumulative series');
 });
 
 test('smoothPath handles empty and single points', () => {
