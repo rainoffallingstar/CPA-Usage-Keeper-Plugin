@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.12 (2026-10-04)
+
+### Fixes
+- **「模型开销 Top 5」空白不渲染**: 帕累托改版中，绘图点集 `pts` 缺少 `item` 字段，而标签循环仍读取 `p.item.model`，导致 `renderTopModels` 抛出 TypeError 并在写入 DOM 之前中断 —— 卡片一片空白，且同一批调用里随后执行的「系统健康与运行洞察」也一并被跳过。已补回字段。
+- **补充运行时回归测试**: 新增 `dashboard/render_top_models.test.js`，用最小的 DOM stub **真实执行** `renderTopModels()`（含单模型、空数据边界），静态字符串断言无法发现这类运行时异常。
+
 ## v0.11.11 (2026-10-04)
 
 ### Features

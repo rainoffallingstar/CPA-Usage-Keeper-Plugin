@@ -1413,7 +1413,7 @@ function renderTopModels(){
 	var pts=points.map(function(p,i){
 		var x=n>1?padding.left+(i/(n-1))*innerW:padding.left+innerW/2;
 		var y=padding.top+innerH-(p.cum/maxVal)*innerH;
-		return {x:x,y:y,cum:p.cum};
+		return {x:x,y:y,cum:p.cum,share:p.share,item:p.item};
 	});
 
 	var linePath=smoothPath(pts);
