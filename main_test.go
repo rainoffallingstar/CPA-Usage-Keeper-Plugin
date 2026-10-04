@@ -663,6 +663,86 @@ func TestHandleSummaryWithDB(t *testing.T) {
 	}
 }
 
+func TestHandleTimeseriesAggregatesFullRange(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	setTestPrices(map[string]modelPrice{
+		"gpt-4": {Prompt: 30, Completion: 60, Cache: 15, AutoSynced: true},
+	})
+	defer setTestPrices(nil)
+
+	now := time.Now()
+	// Spread events across the whole 30d window instead of clustering them in
+	// the most recent hours - this is what the /events?limit=500 page did.
+	offsets := []time.Duration{-1 * time.Hour, -100 * time.Hour, -250 * time.Hour, -600 * time.Hour}
+	for _, off := range offsets {
+		insertTestEvent(t, d, "openai", "gpt-4", 1000000, 0, 1000000, false, now.Add(off).Format(time.RFC3339))
+	}
+
+	resp := handleTimeseries(map[string][]string{"range": {"30d"}, "buckets": {"12"}})
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var ts timeseriesResponse
+	if err := json.Unmarshal(resp.Body, &ts); err != nil {
+		t.Fatalf("unmarshal timeseries: %v", err)
+	}
+	if ts.RangeHours != 720 {
+		t.Errorf("range_hours = %d, want 720", ts.RangeHours)
+	}
+	if len(ts.Series) != 12 {
+		t.Fatalf("series length = %d, want 12", len(ts.Series))
+	}
+
+	var totalReq, totalTokens int64
+	nonEmpty := 0
+	totalCost := 0.0
+	for _, b := range ts.Series {
+		totalReq += b.Requests
+		totalTokens += b.Tokens
+		totalCost += b.Cost
+		if b.Requests > 0 {
+			nonEmpty++
+		}
+	}
+	if totalReq != int64(len(offsets)) {
+		t.Errorf("total requests across buckets = %d, want %d (events must not be dropped)", totalReq, len(offsets))
+	}
+	if nonEmpty < 4 {
+		t.Errorf("non-empty buckets = %d, want >= 4 (full-range aggregation)", nonEmpty)
+	}
+	if totalTokens != 4*1000000 {
+		t.Errorf("total tokens = %d, want %d", totalTokens, 4*1000000)
+	}
+	// 4 events * 1M input tokens * $30/1M = $120, priced with real prices.
+	if totalCost < 119.999999 || totalCost > 120.000001 {
+		t.Errorf("total cost = %v, want 120", totalCost)
+	}
+}
+
+func TestHandleTimeseriesClampsBucketCount(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	_ = d
+
+	// Out-of-range bucket counts fall back to the default of 12.
+	resp := handleTimeseries(map[string][]string{"range": {"1h"}, "buckets": {"999"}})
+	var ts timeseriesResponse
+	if err := json.Unmarshal(resp.Body, &ts); err != nil {
+		t.Fatalf("unmarshal timeseries: %v", err)
+	}
+	if ts.RangeHours != 1 {
+		t.Errorf("range_hours = %d, want 1", ts.RangeHours)
+	}
+	if ts.Buckets != 12 || len(ts.Series) != 12 {
+		t.Errorf("buckets = %d / series = %d, want 12", ts.Buckets, len(ts.Series))
+	}
+	if ts.Series[0].Label == "" {
+		t.Errorf("expected non-empty bucket labels")
+	}
+}
+
 func TestHandleQuotioUsage(t *testing.T) {
 	d, cleanup := setupTestDB(t)
 	defer cleanup()

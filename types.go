@@ -28,6 +28,7 @@ const (
 	resourceAPISummaryPath    = "/v0/resource/plugins/usage-keeper/api/summary"
 	resourceAPIModelsPath     = "/v0/resource/plugins/usage-keeper/api/models"
 	resourceAPIEventsPath     = "/v0/resource/plugins/usage-keeper/api/events"
+	resourceAPITimeseriesPath = "/v0/resource/plugins/usage-keeper/api/timeseries"
 	managementUsageCompatPath = "/v0/management/usage"
 	resourceAPIUsagePath      = "/v0/resource/plugins/usage-keeper/api/usage"
 	resourceAPIHealthPath     = "/v0/resource/plugins/usage-keeper/api/health"
@@ -38,7 +39,7 @@ const (
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.11.7"
+var pluginVersion = "0.11.8"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -137,6 +138,22 @@ type eventsResponse struct {
 	Total  int64        `json:"total"`
 	Limit  int          `json:"limit"`
 	Offset int          `json:"offset"`
+}
+type timeseriesBucket struct {
+	Label        string  `json:"label"`
+	Start        string  `json:"start"`
+	End          string  `json:"end"`
+	Requests     int64   `json:"requests"`
+	Tokens       int64   `json:"tokens"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	CachedTokens int64   `json:"cached_tokens"`
+	Cost         float64 `json:"cost"`
+}
+type timeseriesResponse struct {
+	RangeHours int                `json:"range_hours"`
+	Buckets    int                `json:"buckets"`
+	Series     []timeseriesBucket `json:"series"`
 }
 type quotioUsageResponse struct {
 	Usage      quotioUsageData `json:"usage"`

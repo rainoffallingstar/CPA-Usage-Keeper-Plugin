@@ -865,6 +865,7 @@ var currentQuotaProvider="opencode";
 var lastSummaryData=null;
 var lastModelsData=null;
 var lastEventsData=null;
+var lastTimeseriesData=null;
 var lastPricesData=null;
 var lastHealthData=null;
 var quotaDataCache={};
@@ -1059,7 +1060,9 @@ function buildTimeBuckets(events, rangeHours){
 			endTime: bEnd,
 			requests: 0,
 			tokens: 0,
-			cost: 0
+			cost: 0,
+			inputTokens: 0,
+			cachedTokens: 0
 		});
 	}
 
@@ -1074,6 +1077,8 @@ function buildTimeBuckets(events, rangeHours){
 				var output=Number(e.output_tokens)||0;
 				var cached=Math.round(input*clampPct(e.cache_hit_rate||0)/100);
 				buckets[b].cost += bucketCost(input,output,cached);
+				buckets[b].inputTokens += input;
+				buckets[b].cachedTokens += cached;
 				break;
 			}
 		}
@@ -1081,11 +1086,34 @@ function buildTimeBuckets(events, rangeHours){
 	return buckets;
 }
 
+/* Prefer server-side bucketing (full range, real prices). Falls back to
+   client-side bucketing over the currently loaded events page. */
+function timeSeriesBuckets(sum){
+	var ts=lastTimeseriesData;
+	var series=ts&&ts.series;
+	if(series&&series.length){
+		return series.map(function(b){
+			return {
+				label: b.label||"",
+				startTime: Date.parse(b.start)||0,
+				endTime: Date.parse(b.end)||0,
+				requests: Number(b.requests)||0,
+				tokens: Number(b.tokens)||0,
+				cost: Number(b.cost)||0,
+				inputTokens: Number(b.input_tokens)||0,
+				cachedTokens: Number(b.cached_tokens)||0
+			};
+		});
+	}
+	return buildTimeBuckets((lastEventsData&&lastEventsData.events)||[],(sum&&sum.range_hours)||24);
+}
+
 async function renderOverview(){
 	try{
 		if(!lastSummaryData)lastSummaryData=await fetchJSON("/summary");
 		if(!lastModelsData)lastModelsData=await fetchJSON("/models");
 		if(!lastEventsData)lastEventsData=await fetchJSON("/events?limit=500");
+		if(!lastTimeseriesData)lastTimeseriesData=await fetchJSON("/timeseries",{buckets:12});
 	}catch(e){
 		console.error("fetch overview data failed",e);
 	}
@@ -1138,16 +1166,15 @@ async function renderOverview(){
 }
 
 function renderOverviewCharts(){
-	var events=(lastEventsData&&lastEventsData.events)||[];
 	var models=lastModelsData||[];
 	var sum=lastSummaryData||{};
-	var buckets=buildTimeBuckets(events,sum.range_hours||24);
+	var buckets=timeSeriesBuckets(sum);
 
 	// Render Sparklines
 	var costVals=buckets.map(function(b){return b.cost});
 	var reqVals=buckets.map(function(b){return b.requests});
 	var tokVals=buckets.map(function(b){return b.tokens});
-	var cacheVals=buckets.map(function(b){return b.requests>0?Math.min(100,b.tokens/1000):0});
+	var cacheVals=buckets.map(function(b){return b.requests>0?clampPct((Number(b.cachedTokens)||0)/Math.max(1,Number(b.inputTokens)||0)*100):0});
 
 	renderMiniSparkline("kpi-chart-cost",costVals,"var(--chart-1)");
 	renderMiniSparkline("kpi-chart-requests",reqVals,"var(--chart-2)");
@@ -1189,9 +1216,8 @@ function renderMiniSparkline(elementId,values,color){
 function renderMainTimeline(){
 	var container=document.getElementById("main-timeseries-chart");
 	if(!container)return;
-	var events=(lastEventsData&&lastEventsData.events)||[];
 	var sum=lastSummaryData||{};
-	var buckets=buildTimeBuckets(events,sum.range_hours||24);
+	var buckets=timeSeriesBuckets(sum);
 
 	var w=container.clientWidth||600;
 	var h=260;
@@ -2571,6 +2597,7 @@ async function refreshAll(){
 	lastSummaryData=null;
 	lastModelsData=null;
 	lastEventsData=null;
+	lastTimeseriesData=null;
 	lastPricesData=null;
 	lastHealthData=null;
 	quotaDataCache={};

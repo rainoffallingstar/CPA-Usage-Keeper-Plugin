@@ -964,6 +964,11 @@ func managementRegResponse() managementRegistrationResponse {
 				Description: "Usage events JSON API.",
 			},
 			{
+				Path:        "/api/timeseries",
+				Menu:        "",
+				Description: "Bucketed usage time series JSON API.",
+			},
+			{
 				Path:        "/api/usage",
 				Menu:        "",
 				Description: "Quotio-compatible aggregate usage JSON API.",
@@ -1039,6 +1044,8 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(handleModels(req.Query))
 	case strings.EqualFold(req.Method, http.MethodGet) && (path == resourceAPIEventsPath || path == managementEventsPath):
 		return okEnvelope(handleEvents(req.Query, req.Headers))
+	case strings.EqualFold(req.Method, http.MethodGet) && path == resourceAPITimeseriesPath:
+		return okEnvelope(handleTimeseries(req.Query))
 	case strings.EqualFold(req.Method, http.MethodPost) && path == managementCleanupPath:
 		return okEnvelope(handleCleanup())
 	case strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/health"):
@@ -1148,6 +1155,80 @@ func handleSummary(query map[string][]string, headers map[string][]string) plugi
 			since,
 		).Scan(&resp.TotalRequests, &resp.TotalTokens, &resp.InputTokens, &resp.OutputTokens, &resp.FailedRequests, &resp.UniqueModels, &resp.AvgLatencyMs, &cacheReadTotal)
 		resp.CacheHitRate = cacheHitRate(cacheReadTotal, resp.InputTokens)
+	}
+
+	return jsonResponse(http.StatusOK, resp)
+}
+
+// handleTimeseries aggregates usage into fixed time buckets across the whole
+// requested range. The dashboard previously bucketed only the most recent page
+// of events (limit=500), so a 30-day chart really showed the last few hours.
+// This aggregates every event in range and prices each bucket with the real
+// per-model prices, so the chart matches the summary KPIs.
+func handleTimeseries(query map[string][]string) pluginapi.ManagementResponse {
+	rangeHours := parseRangeHours(query)
+	bucketCount := 12
+	if vals, ok := query["buckets"]; ok && len(vals) > 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(vals[0])); err == nil && n >= 2 && n <= 60 {
+			bucketCount = n
+		}
+	}
+
+	resp := timeseriesResponse{RangeHours: rangeHours, Buckets: bucketCount, Series: make([]timeseriesBucket, 0, bucketCount)}
+
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return jsonResponse(http.StatusOK, resp)
+	}
+
+	now := time.Now()
+	start := now.Add(-time.Duration(rangeHours) * time.Hour)
+	step := time.Duration(rangeHours) * time.Hour / time.Duration(bucketCount)
+	if step <= 0 {
+		step = time.Hour
+	}
+
+	for i := 0; i < bucketCount; i++ {
+		bStart := start.Add(time.Duration(i) * step)
+		bEnd := bStart.Add(step)
+		if i == bucketCount-1 {
+			bEnd = now
+		}
+		bucket := timeseriesBucket{Start: bStart.Format(time.RFC3339), End: bEnd.Format(time.RFC3339)}
+		if rangeHours > 48 {
+			bucket.Label = fmt.Sprintf("%d/%d", bEnd.Month(), bEnd.Day())
+		} else {
+			bucket.Label = bEnd.Format("15:04")
+		}
+
+		// The last bucket is inclusive of "now" so the newest events are counted.
+		where := "timestamp >= ? AND timestamp < ?"
+		if i == bucketCount-1 {
+			where = "timestamp >= ? AND timestamp <= ?"
+		}
+		// Aggregate per model so each bucket can be priced with computeCost.
+		rows, errQuery := d.Query(
+			"SELECT model, COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE "+where+" GROUP BY model",
+			bStart.Format(time.RFC3339), bEnd.Format(time.RFC3339),
+		)
+		if errQuery == nil {
+			for rows.Next() {
+				var model string
+				var requests, tokens, input, output, cached int64
+				if errScan := rows.Scan(&model, &requests, &tokens, &input, &output, &cached); errScan == nil {
+					bucket.Requests += requests
+					bucket.Tokens += tokens
+					bucket.InputTokens += input
+					bucket.OutputTokens += output
+					bucket.CachedTokens += cached
+					bucket.Cost += computeCost(model, input, output, cached)
+				}
+			}
+			rows.Close()
+		}
+		resp.Series = append(resp.Series, bucket)
 	}
 
 	return jsonResponse(http.StatusOK, resp)
