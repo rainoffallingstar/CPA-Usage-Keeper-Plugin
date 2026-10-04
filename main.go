@@ -100,7 +100,9 @@ func cliproxyPluginCall(method *C.char, request *C.uint8_t, requestLen C.size_t,
 			cacheMu.Lock()
 			pluginPanics++
 			cacheMu.Unlock()
-			writeResponse(response, errorEnvelope("plugin_panic", fmt.Sprintf("recovered panic: %v", r)))
+			msg := fmt.Sprintf("recovered panic: %v", r)
+			recordError("plugin_panic", msg)
+			writeResponse(response, errorEnvelope("plugin_panic", msg))
 			code = 1
 		}
 	}()
@@ -443,6 +445,7 @@ func setDBInitError(msg string) {
 	dbInitErrMu.Lock()
 	dbInitErr = msg
 	dbInitErrMu.Unlock()
+	recordError("database_unavailable", msg)
 }
 
 func getDBInitError() string {
@@ -481,6 +484,7 @@ func ensureDB() {
 		_, _ = db.Exec("ALTER TABLE usage_events ADD COLUMN cache_creation_tokens INTEGER NOT NULL DEFAULT 0")
 	})
 	startUsageWriter()
+	startMaintenance()
 }
 
 func createTables() error {
@@ -512,12 +516,17 @@ func createTables() error {
 			source TEXT NOT NULL DEFAULT '',
 			service_tier TEXT NOT NULL DEFAULT ''
 		);
-		CREATE INDEX IF NOT EXISTS idx_usage_events_timestamp ON usage_events(timestamp);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_model ON usage_events(model);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_provider ON usage_events(provider);
 		CREATE INDEX IF NOT EXISTS idx_usage_events_failed ON usage_events(failed);
-		CREATE INDEX IF NOT EXISTS idx_usage_events_ts_id ON usage_events(timestamp, id DESC);
-		CREATE INDEX IF NOT EXISTS idx_usage_events_dt ON usage_events(datetime(timestamp));
+		-- Range queries filter and order by datetime(timestamp); the plain
+		-- timestamp indexes can no longer serve them (they wrap the column) and
+		-- only cost write amplification, so they are dropped. The composite
+		-- expression index serves both the range predicate and the ORDER BY.
+		DROP INDEX IF EXISTS idx_usage_events_timestamp;
+		DROP INDEX IF EXISTS idx_usage_events_ts_id;
+		DROP INDEX IF EXISTS idx_usage_events_dt;
+		CREATE INDEX IF NOT EXISTS idx_usage_events_dt_id ON usage_events(datetime(timestamp) DESC, id DESC);
 	`)
 	// Schema migration: add hashed_api_key for existing databases
 	_, _ = db.Exec(`ALTER TABLE usage_events ADD COLUMN hashed_api_key TEXT NOT NULL DEFAULT ''`)
@@ -675,6 +684,7 @@ func runUsageWriter(queue <-chan pluginapi.UsageRecord, stop <-chan struct{}, do
 			cacheMu.Lock()
 			storageErrCount++
 			cacheMu.Unlock()
+			recordError("storage_write_error", err.Error())
 		} else {
 			persistedEventsSinceCleanup += batchLength
 			if persistedEventsSinceCleanup >= 1000 {
@@ -855,6 +865,41 @@ func cleanupOldRecords(retentionDays int) {
 	}
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).Format(time.RFC3339)
 	_, _ = d.Exec("DELETE FROM usage_events WHERE datetime(timestamp) < datetime(?)", cutoff)
+}
+
+// startMaintenance runs hourly housekeeping. Retention used to be enforced only
+// after 1000 persisted events, so a low-traffic instance could keep data well
+// past retention_days; the timer makes it predictable. The SQLite maintenance
+// keeps query plans fresh and stops the WAL growing unbounded.
+var maintenanceOnce sync.Once
+
+func startMaintenance() {
+	maintenanceOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if getDBInitError() != "" {
+					continue
+				}
+				cleanupOldRecords(currentConfig().RetentionDays)
+				runSQLiteMaintenance()
+			}
+		}()
+	})
+}
+
+func runSQLiteMaintenance() {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	// Best-effort: both can fail with SQLITE_BUSY while readers are active,
+	// which is harmless because they run again on the next tick.
+	_, _ = d.Exec("PRAGMA optimize")
+	_, _ = d.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
 }
 
 // ---------------------------------------------------------------------------
@@ -1124,7 +1169,7 @@ func handleTimeseries(query map[string][]string, headers map[string][]string) pl
 		return notModifiedResponse(etag)
 	}
 
-	resp := timeseriesResponse{RangeHours: rangeHours, Buckets: bucketCount, Series: make([]timeseriesBucket, 0, bucketCount)}
+	resp := timeseriesResponse{RangeHours: rangeHours, Buckets: bucketCount}
 
 	dbMu.RLock()
 	d := db
@@ -1140,6 +1185,9 @@ func handleTimeseries(query map[string][]string, headers map[string][]string) pl
 		step = time.Hour
 	}
 
+	// Pre-build the buckets (labels/bounds) so the single aggregate query below
+	// only has to fill in the numbers.
+	resp.Series = make([]timeseriesBucket, bucketCount)
 	for i := 0; i < bucketCount; i++ {
 		bStart := start.Add(time.Duration(i) * step)
 		bEnd := bStart.Add(step)
@@ -1152,33 +1200,45 @@ func handleTimeseries(query map[string][]string, headers map[string][]string) pl
 		} else {
 			bucket.Label = bEnd.Format("15:04")
 		}
+		resp.Series[i] = bucket
+	}
 
-		// The last bucket is inclusive of "now" so the newest events are counted.
-		where := "datetime(timestamp) >= datetime(?) AND datetime(timestamp) < datetime(?)"
-		if i == bucketCount-1 {
-			where = "datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?)"
-		}
-		// Aggregate per model so each bucket can be priced with computeCost.
-		rows, errQuery := d.Query(
-			"SELECT model, COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(cached_tokens),0) FROM usage_events WHERE "+where+" GROUP BY model",
-			bStart.Format(time.RFC3339), bEnd.Format(time.RFC3339),
-		)
-		if errQuery == nil {
-			for rows.Next() {
-				var model string
-				var requests, tokens, input, output, cached int64
-				if errScan := rows.Scan(&model, &requests, &tokens, &input, &output, &cached); errScan == nil {
-					bucket.Requests += requests
-					bucket.Tokens += tokens
-					bucket.InputTokens += input
-					bucket.OutputTokens += output
-					bucket.CachedTokens += cached
-					bucket.Cost += computeCost(model, input, output, cached)
-				}
+	// One pass instead of one query per bucket: group every row by
+	// (bucket, model) and price each group with computeCost.
+	stepDays := step.Hours() / 24.0
+	startStr := start.Format(time.RFC3339)
+	rows, errQuery := d.Query(
+		`SELECT CAST((julianday(timestamp) - julianday(?)) / ? AS INTEGER) AS bucket,
+		        model, COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(input_tokens),0),
+		        COALESCE(SUM(output_tokens),0), COALESCE(SUM(cached_tokens),0)
+		   FROM usage_events
+		  WHERE datetime(timestamp) >= datetime(?) AND datetime(timestamp) <= datetime(?)
+		  GROUP BY bucket, model`,
+		startStr, stepDays, startStr, now.Format(time.RFC3339),
+	)
+	if errQuery == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var bucketIndex int
+			var model string
+			var requests, tokens, input, output, cached int64
+			if errScan := rows.Scan(&bucketIndex, &model, &requests, &tokens, &input, &output, &cached); errScan != nil {
+				continue
 			}
-			rows.Close()
+			if bucketIndex < 0 {
+				bucketIndex = 0
+			}
+			if bucketIndex >= bucketCount {
+				bucketIndex = bucketCount - 1
+			}
+			b := &resp.Series[bucketIndex]
+			b.Requests += requests
+			b.Tokens += tokens
+			b.InputTokens += input
+			b.OutputTokens += output
+			b.CachedTokens += cached
+			b.Cost += computeCost(model, input, output, cached)
 		}
-		resp.Series = append(resp.Series, bucket)
 	}
 
 	return jsonResponseWithETag(http.StatusOK, resp, etag)

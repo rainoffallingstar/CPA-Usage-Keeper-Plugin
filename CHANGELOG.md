@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.11.17 (2026-10-04)
+
+### Performance
+- **删除失效索引并让索引真正服务查询**: 改用 `datetime(timestamp)` 过滤后，`idx_usage_events_timestamp` / `idx_usage_events_ts_id` 已不被任何查询使用，却仍在每次写入时被维护（纯写放大）。现 `DROP` 这两个死索引与旧的 `idx_usage_events_dt`，改为复合表达式索引 `(datetime(timestamp) DESC, id DESC)`；`EXPLAIN QUERY PLAN` 确认事件查询已走 **COVERING INDEX**（`SEARCH usage_events USING COVERING INDEX idx_usage_events_dt_id`）。
+- **`/api/timeseries` 由每桶一条查询合并为单条聚合 SQL**: 原来 12 个桶 = 12 条 `GROUP BY model`，现在用 `julianday` 计算桶序号，一次 `GROUP BY bucket, model` 取回全部数据；配合已有 ETag，概览刷新的查询开销从 12 条降到 1 条。
+
+### Fixes
+- **保留期清理改为定时触发**: 原先只在累计落盘 ≥1000 条时触发，低流量实例可能长期不清理、数据超过 `retention_days`。现增加每小时维护任务执行清理。
+- **新增 SQLite 周期性维护**: 每小时执行 `PRAGMA optimize` 与 `PRAGMA wal_checkpoint(TRUNCATE)`，避免查询计划退化与 WAL 无限增长（此前全库没有这两条）。
+- **新增内存环形错误日志（容量 20）**: 健康接口新增 `runtime.recent_errors`，记录最近的 panic / 落盘失败 / 定价同步失败 / 数据库初始化失败（含时间、错误码、消息），健康页新增「最近错误」卡片 —— 计数器只能告诉你"出错了"，它能告诉你"错在哪"。有界且真正被读取（这是 v0.11.9 删掉的那个环形缓冲该有的用途）。
+- **概览页不再无条件拉取 500 条事件**: 图表已由 `/timeseries` 驱动，`/events?limit=500` 改为**仅在 timeseries 失败时**兜底加载。
+
+### Tests
+- 新增 `TestCreateTablesAndIndexes`（`createTables` 在每次启动运行，索引表达式写错会让插件直接不可用，故显式守护并打印查询计划）。
+- 新增 `TestHandleTimeseriesBucketPlacement`（校验 SQL 侧 `julianday` 分桶位置正确）。
+- 新增 `TestErrorLogIsBoundedAndNewestLast`（有界、淘汰最旧、返回副本）。
+
 ## v0.11.16 (2026-10-04)
 
 ### Fixes

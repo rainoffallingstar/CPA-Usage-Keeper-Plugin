@@ -581,6 +581,9 @@ func doPriceSync() (int, error) {
 		priceLastSync = time.Now().UTC().Format(time.RFC3339)
 	}
 	priceSyncMu.Unlock()
+	if err != nil {
+		recordError("price_sync_failed", err.Error())
+	}
 	return count, err
 }
 

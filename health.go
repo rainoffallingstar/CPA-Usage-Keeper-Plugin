@@ -27,19 +27,20 @@ type healthResponse struct {
 }
 
 type runtimeHealthStatus struct {
-	UptimeSeconds       int64   `json:"uptime_seconds"`
-	TotalRequests       int64   `json:"total_requests"`
-	WriteQueueSize      int     `json:"write_queue_size"`
-	WriteQueueUsed      int     `json:"write_queue_used"`
-	SummaryCacheHitRate float64 `json:"summary_cache_hit_rate"`
-	EventsCacheHitRate  float64 `json:"events_cache_hit_rate"`
-	LastWriteDurationMs int64   `json:"last_write_duration_ms"`
-	StorageWriteErrors  int64   `json:"storage_write_errors"`
-	DroppedUsageEvents  int64   `json:"dropped_usage_events"`
-	PluginPanics        int64   `json:"plugin_panics"`
-	PriceSync           string  `json:"price_sync"`
-	UnpricedModels      int64   `json:"unpriced_models"`
-	DBInitError         string  `json:"db_init_error,omitempty"`
+	UptimeSeconds       int64           `json:"uptime_seconds"`
+	TotalRequests       int64           `json:"total_requests"`
+	WriteQueueSize      int             `json:"write_queue_size"`
+	WriteQueueUsed      int             `json:"write_queue_used"`
+	SummaryCacheHitRate float64         `json:"summary_cache_hit_rate"`
+	EventsCacheHitRate  float64         `json:"events_cache_hit_rate"`
+	LastWriteDurationMs int64           `json:"last_write_duration_ms"`
+	StorageWriteErrors  int64           `json:"storage_write_errors"`
+	DroppedUsageEvents  int64           `json:"dropped_usage_events"`
+	PluginPanics        int64           `json:"plugin_panics"`
+	PriceSync           string          `json:"price_sync"`
+	UnpricedModels      int64           `json:"unpriced_models"`
+	DBInitError         string          `json:"db_init_error,omitempty"`
+	RecentErrors        []errorLogEntry `json:"recent_errors,omitempty"`
 }
 
 type storageHealthStatus struct {
@@ -75,6 +76,47 @@ type eventsCacheEntry struct {
 	response eventsResponse
 	etag     string
 	cachedAt time.Time
+}
+
+// errorLog is a small bounded in-memory ring of the most recent errors. The
+// counters in health tell you *that* something failed; this tells you what.
+// (This is the useful half of the ring buffer removed in v0.11.9: bounded,
+// and actually read.)
+type errorLogEntry struct {
+	Time    string `json:"time"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+const errorLogCap = 20
+
+var (
+	errorLogMu sync.Mutex
+	errorLog   []errorLogEntry
+)
+
+func recordError(code, message string) {
+	errorLogMu.Lock()
+	defer errorLogMu.Unlock()
+	if len(message) > 300 {
+		message = message[:300]
+	}
+	errorLog = append(errorLog, errorLogEntry{
+		Time:    time.Now().UTC().Format(time.RFC3339),
+		Code:    code,
+		Message: message,
+	})
+	if len(errorLog) > errorLogCap {
+		errorLog = errorLog[len(errorLog)-errorLogCap:]
+	}
+}
+
+func recentErrors() []errorLogEntry {
+	errorLogMu.Lock()
+	defer errorLogMu.Unlock()
+	out := make([]errorLogEntry, len(errorLog))
+	copy(out, errorLog)
+	return out
 }
 
 type summaryCacheEntry struct {
@@ -179,6 +221,7 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 			PriceSync:           priceSync,
 			UnpricedModels:      unpriced,
 			DBInitError:         dbErr,
+			RecentErrors:        recentErrors(),
 		},
 		Storage: storageHealthStatus{
 			DBPath:      dbPath,

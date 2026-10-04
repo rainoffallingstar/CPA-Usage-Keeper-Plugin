@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -770,6 +771,126 @@ func TestHealthReportsObservabilityFields(t *testing.T) {
 	}
 	if strings.Contains(body, "ring_buffer") {
 		t.Errorf("health JSON should no longer expose ring_buffer: %s", body)
+	}
+}
+
+// createTables runs on every startup; a bad index expression there would leave
+// the plugin with dbInitErr and no working database, so guard it explicitly.
+func TestCreateTablesAndIndexes(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	if err := createTables(); err != nil {
+		t.Fatalf("createTables() error = %v", err)
+	}
+
+	rows, err := d.Query("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='usage_events'")
+	if err != nil {
+		t.Fatalf("list indexes: %v", err)
+	}
+	defer rows.Close()
+	have := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if rows.Scan(&name) == nil {
+			have[name] = true
+		}
+	}
+
+	if !have["idx_usage_events_dt_id"] {
+		t.Errorf("composite expression index missing; have %v", have)
+	}
+	for _, dead := range []string{"idx_usage_events_timestamp", "idx_usage_events_ts_id", "idx_usage_events_dt"} {
+		if have[dead] {
+			t.Errorf("dead index %s should have been dropped; have %v", dead, have)
+		}
+	}
+
+	// The composite index must actually serve the events range+order query.
+	var plan string
+	_ = d.QueryRow("EXPLAIN QUERY PLAN SELECT id FROM usage_events WHERE datetime(timestamp) >= datetime(?) ORDER BY datetime(timestamp) DESC, id DESC LIMIT 10",
+		time.Now().Format(time.RFC3339)).Scan(new(string), new(int), new(int), &plan)
+	t.Logf("events plan: %s", plan)
+}
+
+// The single-query implementation computes the bucket index in SQL via
+// julianday arithmetic, so verify events land in the expected buckets.
+func TestHandleTimeseriesBucketPlacement(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	setTestPrices(map[string]modelPrice{"m": {Prompt: 1, Completion: 1, Cache: 0.1}})
+	defer setTestPrices(nil)
+
+	now := time.Now()
+	// 24h range / 12 buckets => 2h buckets. Offsets chosen inside distinct buckets.
+	cases := []struct {
+		offset time.Duration
+		bucket int
+	}{
+		{-30 * time.Minute, 11}, // last bucket
+		{-3 * time.Hour, 10},    // (24-3)/2 = 10.5 -> 10
+		{-11 * time.Hour, 6},    // 13/2 = 6.5 -> 6
+		{-23 * time.Hour, 0},    // 1/2 = 0.5 -> 0
+	}
+	for _, tc := range cases {
+		insertTestEvent(t, d, "p", "m", 1000, 100, 1100, false, now.Add(tc.offset).Format(time.RFC3339))
+	}
+
+	resp := handleTimeseries(map[string][]string{"range": {"24h"}, "buckets": {"12"}}, nil)
+	var ts timeseriesResponse
+	if err := json.Unmarshal(resp.Body, &ts); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, tc := range cases {
+		if got := ts.Series[tc.bucket].Requests; got != 1 {
+			t.Errorf("offset %s: bucket %d has %d requests, want 1 (series=%v)",
+				tc.offset, tc.bucket, got, bucketRequestCounts(ts))
+		}
+	}
+}
+
+func bucketRequestCounts(ts timeseriesResponse) []int64 {
+	out := make([]int64, len(ts.Series))
+	for i, b := range ts.Series {
+		out[i] = b.Requests
+	}
+	return out
+}
+
+func TestErrorLogIsBoundedAndNewestLast(t *testing.T) {
+	errorLogMu.Lock()
+	saved := errorLog
+	errorLog = nil
+	errorLogMu.Unlock()
+	defer func() {
+		errorLogMu.Lock()
+		errorLog = saved
+		errorLogMu.Unlock()
+	}()
+
+	for i := 0; i < errorLogCap+5; i++ {
+		recordError("test_code", fmt.Sprintf("failure %d", i))
+	}
+	got := recentErrors()
+	if len(got) != errorLogCap {
+		t.Fatalf("error log length = %d, want cap %d", len(got), errorLogCap)
+	}
+	if got[len(got)-1].Message != fmt.Sprintf("failure %d", errorLogCap+4) {
+		t.Errorf("newest entry = %q, want the last recorded", got[len(got)-1].Message)
+	}
+	if got[0].Message != "failure 5" {
+		t.Errorf("oldest retained entry = %q, want failure 5", got[0].Message)
+	}
+	for _, e := range got {
+		if e.Time == "" || e.Code != "test_code" {
+			t.Errorf("entry missing fields: %+v", e)
+		}
+	}
+
+	// A caller mutating the returned slice must not corrupt the log.
+	got[0].Message = "mutated"
+	if recentErrors()[0].Message == "mutated" {
+		t.Error("recentErrors must return a copy")
 	}
 }
 
