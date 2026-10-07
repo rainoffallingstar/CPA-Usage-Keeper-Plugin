@@ -270,9 +270,16 @@ trigger_hot_reload() {
 
 # Verify the plugin is serving requests.
 verify_plugin() {
+    local port
+    port="$(yaml_value port)"
+    [ -z "$port" ] && port="8317"
     local code
     code="$(curl -s -o /dev/null -w '%{http_code}' \
-        'http://localhost:18317/v0/resource/plugins/usage-keeper/dashboard' 2>/dev/null)" || code="000"
+        "http://localhost:${port}/v0/resource/plugins/usage-keeper/dashboard" 2>/dev/null)" || code="000"
+    if [ "$code" != "200" ]; then
+        code="$(curl -s -o /dev/null -w '%{http_code}' \
+            'http://localhost:18317/v0/resource/plugins/usage-keeper/dashboard' 2>/dev/null)" || code="000"
+    fi
     [ "$code" = "200" ]
 }
 
@@ -531,7 +538,10 @@ main() {
     else
         echo "  Version DB:          (not linked yet)"
     fi
-    echo "  Dashboard:           http://localhost:18317/v0/resource/plugins/usage-keeper/dashboard"
+    local display_port
+    display_port="$(yaml_value port)"
+    [ -z "$display_port" ] && display_port="8317"
+    echo "  Dashboard:           http://localhost:${display_port}/v0/resource/plugins/usage-keeper/dashboard"
     echo "────────────────────────────────────────────────────────"
 }
 

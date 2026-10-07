@@ -6,7 +6,7 @@
 <title>Usage Keeper · AI 用量与成本分析中心</title>
 <style>
 /* ─── Apple Design System Tokens ─────────────────────────────────────────── */
-:root {
+:root, [data-theme="light"] {
 	--bg: #ffffff;
 	--surface: #f5f5f7;
 	--surface-warm: #fbfbfd;
@@ -90,6 +90,142 @@
 	--chart-6: #bf5af2;
 	--chart-teal: #40c8ae;
 }
+[data-theme="nord"] {
+	--bg: #242933;
+	--surface: #2e3440;
+	--surface-warm: #353c4a;
+	--surface-card: #2e3440;
+	--fg: #eceff4;
+	--fg-2: #d8dee9;
+	--muted: #9aaec7;
+	--meta: #6c7d95;
+	--border: #434c5e;
+	--border-soft: #384152;
+	--accent: #88c0d0;
+	--accent-on: #1e222a;
+	--accent-hover: #9ad5e6;
+	--accent-active: #81a1c1;
+	--accent-subtle: rgba(136, 192, 208, 0.15);
+	--elev-raised: 0 10px 30px rgba(15, 18, 26, 0.45);
+	--elev-floating: 0 20px 44px rgba(15, 18, 26, 0.65);
+	--success: #a3be8c;
+	--success-bg: rgba(163, 190, 140, 0.16);
+	--warn: #ebcb8b;
+	--warn-bg: rgba(235, 203, 139, 0.16);
+	--danger: #bf616a;
+	--danger-bg: rgba(191, 97, 106, 0.16);
+	--danger-border: rgba(191, 97, 106, 0.32);
+	--focus-ring: 0 0 0 4px rgba(136, 192, 208, 0.4);
+	--chart-1: #88c0d0;
+	--chart-2: #81a1c1;
+	--chart-3: #a3be8c;
+	--chart-4: #ebcb8b;
+	--chart-5: #d08770;
+	--chart-6: #b48ead;
+	--chart-teal: #8fbcbb;
+}
+[data-theme="dracula"] {
+	--bg: #1e1f29;
+	--surface: #282a36;
+	--surface-warm: #303342;
+	--surface-card: #252733;
+	--fg: #f8f8f2;
+	--fg-2: #e2e2dc;
+	--muted: #959bbb;
+	--meta: #6272a4;
+	--border: #44475a;
+	--border-soft: #343746;
+	--accent: #bd93f9;
+	--accent-on: #1e1f29;
+	--accent-hover: #caa5ff;
+	--accent-active: #ae7aff;
+	--accent-subtle: rgba(189, 147, 249, 0.15);
+	--elev-raised: 0 10px 30px rgba(10, 10, 15, 0.5);
+	--elev-floating: 0 20px 48px rgba(10, 10, 15, 0.65);
+	--success: #50fa7b;
+	--success-bg: rgba(80, 250, 123, 0.15);
+	--warn: #ffb86c;
+	--warn-bg: rgba(255, 184, 108, 0.16);
+	--danger: #ff5555;
+	--danger-bg: rgba(255, 85, 85, 0.16);
+	--danger-border: rgba(255, 85, 85, 0.32);
+	--focus-ring: 0 0 0 4px rgba(189, 147, 249, 0.4);
+	--chart-1: #bd93f9;
+	--chart-2: #ff79c6;
+	--chart-3: #50fa7b;
+	--chart-4: #ffb86c;
+	--chart-5: #ff5555;
+	--chart-6: #8be9fd;
+	--chart-teal: #50fa7b;
+}
+[data-theme="sepia"] {
+	--bg: #f8f5ee;
+	--surface: #eee7da;
+	--surface-warm: #f4eee2;
+	--surface-card: #ffffff;
+	--fg: #2c2523;
+	--fg-2: #4a3e39;
+	--muted: #7d6e65;
+	--meta: #9e8e84;
+	--border: #dcd3c3;
+	--border-soft: #eae3d5;
+	--accent: #c25e2e;
+	--accent-on: #ffffff;
+	--accent-hover: #d36936;
+	--accent-active: #ab4e22;
+	--accent-subtle: rgba(194, 94, 46, 0.1);
+	--elev-raised: 0 10px 28px rgba(80, 60, 40, 0.07);
+	--elev-floating: 0 18px 36px rgba(80, 60, 40, 0.14);
+	--success: #2e7d32;
+	--success-bg: rgba(46, 125, 50, 0.12);
+	--warn: #b45309;
+	--warn-bg: rgba(180, 83, 9, 0.14);
+	--danger: #c53030;
+	--danger-bg: rgba(197, 48, 48, 0.12);
+	--danger-border: rgba(197, 48, 48, 0.28);
+	--focus-ring: 0 0 0 4px rgba(194, 94, 46, 0.35);
+	--chart-1: #c25e2e;
+	--chart-2: #8c564b;
+	--chart-3: #2e7d32;
+	--chart-4: #d97706;
+	--chart-5: #9c27b0;
+	--chart-6: #178582;
+	--chart-teal: #178582;
+}
+[data-theme="emerald"] {
+	--bg: #080f0c;
+	--surface: #0f1c16;
+	--surface-warm: #14241d;
+	--surface-card: #112018;
+	--fg: #e2f4ea;
+	--fg-2: #b4d9c4;
+	--muted: #77a88e;
+	--meta: #527c67;
+	--border: #1f382b;
+	--border-soft: #172c21;
+	--accent: #10b981;
+	--accent-on: #04140b;
+	--accent-hover: #34d399;
+	--accent-active: #059669;
+	--accent-subtle: rgba(16, 185, 129, 0.14);
+	--elev-raised: 0 10px 30px rgba(0, 15, 8, 0.55);
+	--elev-floating: 0 20px 48px rgba(0, 15, 8, 0.7);
+	--success: #10b981;
+	--success-bg: rgba(16, 185, 129, 0.16);
+	--warn: #f59e0b;
+	--warn-bg: rgba(245, 158, 11, 0.15);
+	--danger: #f43f5e;
+	--danger-bg: rgba(244, 63, 94, 0.16);
+	--danger-border: rgba(244, 63, 94, 0.32);
+	--focus-ring: 0 0 0 4px rgba(16, 185, 129, 0.4);
+	--chart-1: #10b981;
+	--chart-2: #06b6d4;
+	--chart-3: #84cc16;
+	--chart-4: #eab308;
+	--chart-5: #f43f5e;
+	--chart-6: #a855f7;
+	--chart-teal: #14b8a6;
+}
 @media(prefers-color-scheme:dark){html:not([data-theme]){
 	--bg:#000000;--surface:#141416;--surface-warm:#1c1c1e;--surface-card:#1c1c1e;
 	--fg:#f5f5f7;--fg-2:#d2d2d7;--muted:#86868b;--meta:#6e6e73;
@@ -108,16 +244,19 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%%;height:100%%}
 body{min-height:100%%;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:var(--text-base);line-height:1.5;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;transition:background-color var(--motion-base) var(--ease-standard),color var(--motion-base) var(--ease-standard)}
+.header-bar,.nav-tabs-wrapper,.kpi-card,.content-card,.quota-card,.data-table th,.data-table td,.btn,.select-control,.text-input,.search-input,#drawer-panel,.modal-card{transition:background-color var(--motion-base) var(--ease-standard),border-color var(--motion-base) var(--ease-standard),color var(--motion-base) var(--ease-standard)}
 .app-shell{display:flex;flex-direction:column;min-height:100vh}
 .container{width:100%%;max-width:var(--container-max);margin-inline:auto;padding-inline:var(--container-gutter)}
 
 /* ─── Header Bar ─────────────────────────────────────────────────────────── */
 .header-bar{position:sticky;top:0;z-index:100;background:color-mix(in srgb,var(--bg) 82%%,transparent);backdrop-filter:blur(20px) saturate(180%%);-webkit-backdrop-filter:blur(20px) saturate(180%%);border-bottom:1px solid var(--border-soft)}
-.header-inner{display:flex;align-items:center;justify-content:space-between;height:52px;gap:16px}
-.brand-group{display:flex;align-items:center;gap:8px}
-.brand-title{font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--fg);letter-spacing:-0.015em}
-.brand-status-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:var(--surface-warm);border:1px solid var(--border-soft);padding:2px 8px;border-radius:var(--radius-pill);font-weight:500;margin-left:4px}
-.header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.header-inner{display:flex;align-items:center;justify-content:space-between;height:52px;gap:12px;min-width:0}
+.brand-group{display:flex;align-items:center;gap:8px;flex-shrink:0;white-space:nowrap}
+.brand-title{font-family:var(--font-display);font-size:16px;font-weight:600;color:var(--fg);letter-spacing:-0.015em;white-space:nowrap;margin:0;line-height:1;flex-shrink:0}
+.brand-status-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);background:var(--surface-warm);border:1px solid var(--border-soft);padding:2px 8px;border-radius:var(--radius-pill);font-weight:500;margin-left:4px;white-space:nowrap;flex-shrink:0;line-height:1.3}
+.brand-status-pill span{white-space:nowrap}
+.header-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:nowrap}
+.header-divider{width:1px;height:16px;background:var(--border-soft);margin:0 2px;flex-shrink:0}
 
 /* ─── Buttons & Controls ─────────────────────────────────────────────────── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font-body);font-size:13px;font-weight:400;height:28px;padding:0 12px;border-radius:var(--radius-pill);border:1px solid var(--border-soft);cursor:pointer;background:transparent;color:var(--fg);transition:all var(--motion-fast) var(--ease-standard);white-space:nowrap;user-select:none;text-decoration:none}
@@ -143,6 +282,22 @@ body{min-height:100%%;background:var(--bg);color:var(--fg);font-family:var(--fon
 .select-control{font-family:var(--font-body);font-size:13px;height:28px;padding:0 24px 0 10px;border-radius:var(--radius-pill);border:1px solid var(--border-soft);background-color:var(--surface);color:var(--fg);cursor:pointer;appearance:none;-webkit-appearance:none;transition:border-color var(--motion-fast) var(--ease-standard),background-color var(--motion-fast) var(--ease-standard);background-image:url("data:image/svg+xml,%%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%%236e6e73' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%%3E%%3Cpath d='m6 9 6 6 6-6'/%%3E%%3C/svg%%3E");background-repeat:no-repeat;background-position:right 8px center}
 .select-control:hover{background-color:var(--border-soft)}
 .select-control:focus-visible{outline:none;box-shadow:var(--focus-ring);border-color:var(--accent)}
+
+/* ─── Theme Switcher Dropdown ─────────────────────────────────────────────── */
+.theme-dropdown-wrap{position:relative;display:inline-flex}
+.theme-popover-menu{position:absolute;top:calc(100%% + 6px);right:0;width:250px;background:color-mix(in srgb,var(--surface-card) 94%%,transparent);backdrop-filter:blur(24px) saturate(180%%);-webkit-backdrop-filter:blur(24px) saturate(180%%);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--elev-floating);padding:6px;z-index:200;display:flex;flex-direction:column;gap:2px;animation:themePopoverIn var(--motion-fast) var(--ease-standard)}
+@keyframes themePopoverIn{from{opacity:0;transform:translateY(-4px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.theme-menu-header{padding:6px 10px 4px;font-size:11px;font-weight:600;color:var(--meta);text-transform:uppercase;letter-spacing:0.04em}
+.theme-menu-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--radius-sm);border:none;background:transparent;color:var(--fg);font-family:var(--font-body);font-size:13px;cursor:pointer;text-align:left;width:100%%;transition:background-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard);user-select:none}
+.theme-menu-item:hover{background:var(--surface)}
+.theme-menu-item.active{background:var(--accent-subtle);color:var(--accent);font-weight:600}
+.theme-item-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0}
+.theme-item-text{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.theme-item-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme-item-en{font-size:10px;color:var(--meta);font-family:var(--font-mono);margin-top:1px}
+.theme-swatch{display:inline-flex;align-items:center;gap:3px;margin-left:auto;flex-shrink:0}
+.theme-swatch-dot{width:9px;height:9px;border-radius:50%%;border:1px solid rgba(128,128,128,0.25);box-sizing:border-box}
+.theme-check-icon{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;margin-left:4px}
 
 /* ─── Navigation Tabs ────────────────────────────────────────────────────── */
 .nav-tabs-wrapper{background:var(--bg);border-bottom:1px solid var(--border-soft);position:sticky;top:52px;z-index:90}
@@ -296,7 +451,9 @@ tr:hover .filter-link{opacity:1}
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-row-2,.grid-row-equal,.grid-row-3{grid-template-columns:1fr}}
-@media(max-width:640px){.kpi-grid{grid-template-columns:1fr}.header-inner{height:auto;padding-block:8px;flex-wrap:wrap}.header-actions{width:100%%;justify-content:flex-end}.search-input,.search-input:focus{width:100%%}#drawer-panel{width:100vw}.quota-grid{grid-template-columns:1fr}.key-value-list{grid-template-columns:1fr}}
+@media(max-width:860px){.brand-status-pill span:not(.status-dot){display:none}.brand-status-pill{padding:3px 6px;margin-left:2px}}
+@media(max-width:720px){#auto-refresh-select{display:none}.header-divider{display:none}}
+@media(max-width:640px){.kpi-grid{grid-template-columns:1fr}.header-actions{gap:4px}#btn-export-receipt .btn-text{display:none}#btn-export-receipt{width:28px;height:28px;padding:0;border-radius:var(--radius-pill);justify-content:center}.search-input,.search-input:focus{width:100%%}#drawer-panel{width:100vw}.quota-grid{grid-template-columns:1fr}.key-value-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}#drawer-panel.dragging{transition:none}}
 
 /* ─── Receipt Export Modal ────────────────────────────────────────────────── */
@@ -377,15 +534,21 @@ tr:hover .filter-link{opacity:1}
         <button id="btn-refresh" class="btn btn-secondary btn-icon-only" title="立即刷新" aria-label="立即刷新" onclick="refreshAll()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
         </button>
+        <span class="header-divider" aria-hidden="true"></span>
         <!-- Export Receipt Button -->
         <button id="btn-export-receipt" class="btn btn-secondary" title="导出用量小票 (PDF / 图片)" aria-label="导出用量小票" onclick="openReceiptModal()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-          导出小票
+          <span class="btn-text">导出小票</span>
         </button>
-        <!-- Dark/Light Theme Toggle -->
-        <button id="btn-theme" class="btn btn-secondary btn-icon-only" title="切换深浅主题" aria-label="切换深浅主题" onclick="toggleTheme()">
-          <svg id="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        </button>
+        <!-- Theme Switcher Dropdown -->
+        <div class="theme-dropdown-wrap" id="theme-dropdown-wrap">
+          <button id="btn-theme" class="btn btn-secondary btn-icon-only" title="选择主题风格" aria-label="选择主题风格" aria-haspopup="true" aria-expanded="false" onclick="toggleThemeDropdown(event)">
+            <span id="theme-btn-icon" style="display:inline-flex;align-items:center;justify-content:center"></span>
+            <span id="theme-btn-label" style="display:none">浅色极简</span>
+            <span id="theme-btn-chevron" style="display:none"></span>
+          </button>
+          <div id="theme-menu-popover" class="theme-popover-menu" role="menu" aria-label="主题列表" style="display:none"></div>
+        </div>
       </div>
     </div>
   </header>
@@ -830,29 +993,227 @@ function icon(name){
 		tag:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
 		clock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
 		google:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/></svg>',
-		key:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 6.35a5 5 0 0 1 6.1 1.6 5 5 0 0 1-6.68 6.9L4.5 21.5 1 18l1.3-1.3H5V14h2.7l1.5-1.5a5 5 0 0 1 6.4-6.15z"/></svg>'
+		key:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.6 6.35a5 5 0 0 1 6.1 1.6 5 5 0 0 1-6.68 6.9L4.5 21.5 1 18l1.3-1.3H5V14h2.7l1.5-1.5a5 5 0 0 1 6.4-6.15z"/></svg>',
+		snowflake:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></svg>',
+		ghost:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/></svg>',
+		coffee:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+		terminal:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+		monitor:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
 	};
 	return m[name]||'';
 }
 
 /* ─── Theme Management ────────────────────────────────────────────────────── */
-(function(){
-	var s=localStorage.getItem("theme");
-	if(s)document.documentElement.setAttribute("data-theme",s);
-	updateThemeIcon();
-})();
-function toggleTheme(){
-	var el=document.documentElement,n=el.getAttribute("data-theme")==="dark"?"light":"dark";
-	el.setAttribute("data-theme",n);
-	localStorage.setItem("theme",n);
-	updateThemeIcon();
-	if(currentTab==="overview")renderOverviewCharts();
+var THEMES = [
+	{ id: "light", name: "浅色极简", en: "Apple Light", icon: "sun", desc: "经典明亮 · 科技蓝", bg: "#ffffff", card: "#f5f5f7", accent: "#0071e3" },
+	{ id: "dark", name: "暗黑深邃", en: "Apple Dark", icon: "moon", desc: "纯黑夜色 · 高对比", bg: "#000000", card: "#1c1c1e", accent: "#2997ff" },
+	{ id: "nord", name: "极客冰霜", en: "Nord Aurora", icon: "snowflake", desc: "北欧冷调 · 极光雪青", bg: "#242933", card: "#2e3440", accent: "#88c0d0" },
+	{ id: "dracula", name: "赛博暗夜", en: "Dracula Neon", icon: "ghost", desc: "霓虹紫夜 · 幽灵电光", bg: "#1e1f29", card: "#282a36", accent: "#bd93f9" },
+	{ id: "sepia", name: "暖阳纸墨", en: "Warm Sepia", icon: "coffee", desc: "羊皮纸感 · 温润护眼", bg: "#f8f5ee", card: "#ede7da", accent: "#c25e2e" },
+	{ id: "emerald", name: "终端翡翠", en: "Cyber Emerald", icon: "terminal", desc: "黑客矩阵 · 荧光翡翠", bg: "#080f0c", card: "#112018", accent: "#10b981" },
+	{ id: "auto", name: "跟随系统", en: "System Auto", icon: "monitor", desc: "自动同步系统明暗", bg: "#6e6e73", card: "#242426", accent: "#0071e3" }
+];
+
+function getActiveTheme(){
+	var stored = "";
+	try { stored = localStorage.getItem("theme"); } catch(e){}
+	if(!stored || stored === "auto") return "auto";
+	for(var i=0; i<THEMES.length; i++){
+		if(THEMES[i].id === stored) return stored;
+	}
+	return "light";
 }
+
+function getEffectiveTheme(){
+	var active = getActiveTheme();
+	if(active === "auto"){
+		var isSysDark = false;
+		try {
+			isSysDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+		} catch(e){}
+		return isSysDark ? "dark" : "light";
+	}
+	return active;
+}
+
+function applyTheme(themeId, save){
+	if(save !== false){
+		try { localStorage.setItem("theme", themeId); } catch(e){}
+	}
+	var root = document.documentElement;
+	if(themeId === "auto"){
+		root.removeAttribute("data-theme");
+	} else {
+		root.setAttribute("data-theme", themeId);
+	}
+	updateThemeButtonUI();
+	if(typeof renderOverviewCharts === "function" && currentTab === "overview"){
+		renderOverviewCharts();
+	}
+}
+
+function updateThemeButtonUI(){
+	var activeId = getActiveTheme();
+	var effectiveId = getEffectiveTheme();
+	var themeObj = null;
+	for(var i=0; i<THEMES.length; i++){
+		if(THEMES[i].id === activeId){
+			themeObj = THEMES[i];
+			break;
+		}
+	}
+	if(!themeObj) themeObj = THEMES[0];
+
+	var iconSpan = document.getElementById("theme-btn-icon");
+	if(iconSpan){
+		var iconName = themeObj.icon;
+		if(activeId === "auto"){
+			iconName = "monitor";
+		}
+		iconSpan.innerHTML = icon(iconName);
+	}
+
+	var labelSpan = document.getElementById("theme-btn-label");
+	if(labelSpan){
+		labelSpan.textContent = themeObj.name;
+	}
+
+	var btn = document.getElementById("btn-theme");
+	if(btn){
+		btn.setAttribute("title", "当前主题: " + themeObj.name + " (" + themeObj.en + ") · 点击切换");
+	}
+}
+
 function updateThemeIcon(){
-	var isDark=document.documentElement.getAttribute("data-theme")==="dark";
-	var btn=document.getElementById("btn-theme");
-	if(btn)btn.innerHTML=icon(isDark?"moon":"sun");
+	updateThemeButtonUI();
 }
+
+function toggleTheme(){
+	var cur = getActiveTheme();
+	var idx = 0;
+	for(var i=0; i<THEMES.length; i++){
+		if(THEMES[i].id === cur){
+			idx = i;
+			break;
+		}
+	}
+	var next = THEMES[(idx + 1) %% THEMES.length].id;
+	selectTheme(next);
+}
+
+function toggleThemeDropdown(e){
+	if(e){
+		if(e.stopPropagation) e.stopPropagation();
+		if(e.preventDefault) e.preventDefault();
+	}
+	var popover = document.getElementById("theme-menu-popover");
+	if(!popover) return;
+	if(popover.style.display === "none" || popover.style.display === ""){
+		openThemeDropdown();
+	} else {
+		closeThemeDropdown();
+	}
+}
+
+function openThemeDropdown(){
+	var popover = document.getElementById("theme-menu-popover");
+	var btn = document.getElementById("btn-theme");
+	if(!popover) return;
+	renderThemeMenuList();
+	popover.style.display = "flex";
+	if(btn){
+		btn.setAttribute("aria-expanded", "true");
+		var ch = document.getElementById("theme-btn-chevron");
+		if(ch) ch.style.transform = "rotate(180deg)";
+	}
+}
+
+function closeThemeDropdown(){
+	var popover = document.getElementById("theme-menu-popover");
+	var btn = document.getElementById("btn-theme");
+	if(popover) popover.style.display = "none";
+	if(btn){
+		btn.setAttribute("aria-expanded", "false");
+		var ch = document.getElementById("theme-btn-chevron");
+		if(ch) ch.style.transform = "";
+	}
+}
+
+function renderThemeMenuList(){
+	var popover = document.getElementById("theme-menu-popover");
+	if(!popover) return;
+	var activeId = getActiveTheme();
+	var html = '<div class="theme-menu-header">视觉风格与主题</div>';
+	THEMES.forEach(function(t){
+		var isActive = (t.id === activeId);
+		html += '<button type="button" class="theme-menu-item' + (isActive ? ' active' : '') + '" onclick="selectTheme(\'' + t.id + '\')" role="menuitem">' +
+			'<span class="theme-item-icon" style="color:' + (isActive ? 'var(--accent)' : 'var(--muted)') + '">' + icon(t.icon) + '</span>' +
+			'<div class="theme-item-text">' +
+				'<div class="theme-item-name">' + esc(t.name) + '</div>' +
+				'<div class="theme-item-en">' + esc(t.en) + (t.desc ? ' · ' + esc(t.desc) : '') + '</div>' +
+			'</div>' +
+			'<div class="theme-swatch">' +
+				'<span class="theme-swatch-dot" style="background:' + t.bg + '" title="底色"></span>' +
+				'<span class="theme-swatch-dot" style="background:' + t.card + '" title="卡片色"></span>' +
+				'<span class="theme-swatch-dot" style="background:' + t.accent + '" title="强调色"></span>' +
+			'</div>' +
+			(isActive ? '<span class="theme-check-icon">' + icon("check") + '</span>' : '<span style="width:14px;flex-shrink:0"></span>') +
+		'</button>';
+	});
+	popover.innerHTML = html;
+}
+
+function selectTheme(themeId){
+	applyTheme(themeId, true);
+	closeThemeDropdown();
+	var t = null;
+	for(var i=0; i<THEMES.length; i++){
+		if(THEMES[i].id === themeId){
+			t = THEMES[i];
+			break;
+		}
+	}
+	if(t && typeof showToast === "function"){
+		showToast("已切换至「" + t.name + "」主题", "success");
+	}
+}
+
+(function initTheme(){
+	var s = "";
+	try { s = localStorage.getItem("theme"); } catch(e){}
+	if(s && s !== "auto"){
+		document.documentElement.setAttribute("data-theme", s);
+	} else if(s === "auto"){
+		document.documentElement.removeAttribute("data-theme");
+	}
+	updateThemeButtonUI();
+	try {
+		if(window.matchMedia){
+			var mq = window.matchMedia("(prefers-color-scheme: dark)");
+			if(mq && typeof mq.addEventListener === "function"){
+				mq.addEventListener("change", function(){
+					if(getActiveTheme() === "auto"){
+						updateThemeButtonUI();
+						if(typeof renderOverviewCharts === "function" && currentTab === "overview"){
+							renderOverviewCharts();
+						}
+					}
+				});
+			}
+		}
+	} catch(e){}
+	document.addEventListener("click", function(e){
+		var wrap = document.getElementById("theme-dropdown-wrap");
+		if(wrap && typeof wrap.contains === "function" && !wrap.contains(e.target)){
+			closeThemeDropdown();
+		}
+	});
+	document.addEventListener("keydown", function(e){
+		if(e && e.key === "Escape"){
+			closeThemeDropdown();
+		}
+	});
+})();
 
 /* ─── State & Cache ───────────────────────────────────────────────────────── */
 var API_BASE=window.location.pathname.replace(/\/dashboard$/,"")+"/api";
@@ -1381,15 +1742,15 @@ function renderProviderDonut(){
 	}
 
 	var dynamicPalette=[
-		"#0071e3", // Apple Blue
-		"#5856d6", // Indigo / Purple
-		"#34c759", // Green
-		"#ff9500", // Orange
-		"#ff2d55", // Rose Pink
-		"#af52de", // Purple
-		"#10a37f", // Teal
-		"#00c7be", // Cyan
-		"#86868b"  // Gray for others
+		"var(--chart-1)",
+		"var(--chart-2)",
+		"var(--chart-3)",
+		"var(--chart-4)",
+		"var(--chart-5)",
+		"var(--chart-6)",
+		"var(--chart-teal)",
+		"var(--accent)",
+		"var(--meta)"
 	];
 
 	var entries=Object.entries(providerCosts).sort(function(a,b){return b[1]-a[1]});
@@ -2102,8 +2463,8 @@ function renderColabHistoryChart(container,points,days){
 	for(var i=0;i<=3;i++){
 		var gv=vMin+span*(i/3);
 		var gy=y(gv).toFixed(1);
-		grid+='<line x1="'+pad.left+'" y1="'+gy+'" x2="'+(w-pad.right)+'" y2="'+gy+'" stroke="#ddd" stroke-width="0.5" stroke-dasharray="2 2"/>';
-		grid+='<text x="'+(pad.left-6)+'" y="'+(Number(gy)+3)+'" font-size="9" fill="#888" text-anchor="end">'+fmt(gv)+'</text>';
+		grid+='<line x1="'+pad.left+'" y1="'+gy+'" x2="'+(w-pad.right)+'" y2="'+gy+'" stroke="var(--border-soft)" stroke-width="0.5" stroke-dasharray="2 2"/>';
+		grid+='<text x="'+(pad.left-6)+'" y="'+(Number(gy)+3)+'" font-size="9" fill="var(--meta)" text-anchor="end">'+fmt(gv)+'</text>';
 	}
 
 	var paidLine=hasPaid?buildLine("has_paid","paid_balance"):"";
@@ -2116,17 +2477,17 @@ function renderColabHistoryChart(container,points,days){
 		var d=new Date(t);
 		var lbl=(d.getMonth()+1)+"/"+d.getDate();
 		var px=x(t).toFixed(1);
-		xLabels+='<text x="'+px+'" y="'+(h-6)+'" font-size="9" fill="#888" text-anchor="middle">'+lbl+'</text>';
+		xLabels+='<text x="'+px+'" y="'+(h-6)+'" font-size="9" fill="var(--meta)" text-anchor="middle">'+lbl+'</text>';
 	});
 
 	var legend='<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:4px">';
-	if(hasPaid)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:#34c759;border-radius:2px;vertical-align:middle;margin-right:4px"></span>付费 CCU 余额</span>';
-	if(hasFree)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:#0071e3;border-radius:2px;vertical-align:middle;margin-right:4px"></span>免费额度 (mCCUs)</span>';
+	if(hasPaid)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:var(--success);border-radius:2px;vertical-align:middle;margin-right:4px"></span>付费 CCU 余额</span>';
+	if(hasFree)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:var(--accent);border-radius:2px;vertical-align:middle;margin-right:4px"></span>免费额度 (mCCUs)</span>';
 	legend+='<span style="margin-left:auto">最近 '+days+' 天</span></div>';
 
 	chartBox.innerHTML='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'+grid;
-	if(paidLine)chartBox.innerHTML+='<path d="'+paidLine+'" fill="none" stroke="#34c759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-	if(freeLine)chartBox.innerHTML+='<path d="'+freeLine+'" fill="none" stroke="#0071e3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	if(paidLine)chartBox.innerHTML+='<path d="'+paidLine+'" fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	if(freeLine)chartBox.innerHTML+='<path d="'+freeLine+'" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
 	chartBox.innerHTML+=xLabels+'</svg>'+legend;
 }
 
