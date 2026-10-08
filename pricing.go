@@ -324,6 +324,30 @@ func matchPriceDetailedWithPreview(model string) (modelPrice, string, bool) {
 				return p, key, true
 			}
 		}
+		// Client-prefixed names refer to the same underlying model
+		// (e.g. kiro-claude-opus-4-5 → claude-opus-4-5). Peel leading segments
+		// and retry, so a prefix we have never seen still prices correctly.
+		// Only an exact existing key can match, which keeps this bounded.
+		rest := l
+		for {
+			idx := strings.IndexAny(rest, "-:")
+			if idx <= 0 {
+				break
+			}
+			rest = rest[idx+1:]
+			if rest == "" || seen[rest] {
+				break
+			}
+			seen[rest] = true
+			if p, key, ok := matchPriceDetailed(rest); ok {
+				return p, key, true
+			}
+			if !strings.HasSuffix(rest, "-preview") {
+				if p, key, ok := matchPriceDetailed(rest + "-preview"); ok {
+					return p, key, true
+				}
+			}
+		}
 	}
 	return modelPrice{}, "", false
 }
@@ -626,7 +650,13 @@ func countUnpricedModels() int64 {
 	if d == nil {
 		return 0
 	}
-	rows, err := d.Query("SELECT DISTINCT model FROM usage_events WHERE model != ''")
+	// Only models that actually consumed tokens are relevant: a model seen
+	// solely in zero-token requests (e.g. failed probes) costs $0 whether or
+	// not it is priced, so counting it would raise a permanent false alarm.
+	rows, err := d.Query(`SELECT model FROM usage_events WHERE model != '' GROUP BY model
+	                      HAVING COALESCE(SUM(total_tokens),0) > 0
+	                          OR COALESCE(SUM(input_tokens),0) > 0
+	                          OR COALESCE(SUM(output_tokens),0) > 0`)
 	if err != nil {
 		return 0
 	}

@@ -186,7 +186,7 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "price_sync_failed", Message: "Model price sync failed (" + strings.TrimPrefix(priceSync, "error: ") + ")" + detail})
 	}
 	if unpriced > 0 {
-		alerts = append(alerts, healthAlert{Severity: "warn", Code: "models_without_price", Message: fmt.Sprintf("%d model(s) in usage have no price - their cost shows as $0", unpriced)})
+		alerts = append(alerts, healthAlert{Severity: "warn", Code: "models_without_price", Message: fmt.Sprintf("%d model(s) with token usage have no price - their cost shows as $0", unpriced)})
 	}
 
 	status := "ok"

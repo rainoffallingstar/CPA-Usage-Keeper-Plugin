@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.23 (2026-10-08)
+
+### Fixes
+- **`models_without_price` 误报（0 token 的失败请求）**: 健康页报「2 model(s) in usage have no price」，查证为 `kiro-claude-opus-4-5` / `kiro-claude-sonnet-4-5` —— 来自新 `kiro` provider 的**全部失败（HTTP 400）、0 token** 探测请求。0 token 的请求无论是否定价成本都是 $0，因此把「出现在用量里」当作「缺定价」属于误报。
+  - `countUnpricedModels` 改为**只统计真正消耗过 token 的模型**（`HAVING SUM(total_tokens)>0 OR SUM(input_tokens)>0 OR SUM(output_tokens)>0`），单次失败探测不会再造成永久告警；
+  - 告警文案同步改为「N model(s) **with token usage** have no price」。
+- **客户端前缀模型名无法定价（未来会真实少算）**: 价格表只有 `claude-opus-4-5` / `claude-sonnet-4-5`，没有 `kiro-` 变体；若 kiro 之后返回带 token 的真实流量，`kiro-claude-opus-4-5` 会被记为 $0。现在 `matchPriceDetailedWithPreview` 增加**逐级剥离前导分段**的回退（`kiro-claude-opus-4-5` → `claude-opus-4-5`），可泛化覆盖任何未见过的前缀（如 cursor-），且因为必须精确命中已存在的价格键，匹配范围有界；精确匹配仍然优先。
+
+### Tests
+- `TestMatchPriceResolvesClientPrefixedModels`（前缀回退 + 精确匹配优先 + 未知模型不得凭空匹配）。
+- `TestCountUnpricedModelsIgnoresZeroTokenModels`（0 token 模型不计入告警）。
+
+实机验证：真实库未定价模型数由 2 → **0**（`kiro-*` 均解析到对应 Claude 价格）。
+
 ## v0.11.22 (2026-10-08)
 
 ### Fixes
