@@ -30,23 +30,34 @@ const (
 	ollamaUserAgent    = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 	ollamaHTTPTimeout  = 20 * time.Second
 	ollamaMaxHTMLBytes = 4 << 20 // 4 MB
-	ollamaLabelSession = "Session"
-	ollamaLabelWeekly  = "Weekly"
+	// Upper bound on the extracted Cloud usage region; the real region is a
+	// few KB, so this only guards against a pathological page.
+	ollamaMaxCloudUsageBlockBytes = 256 << 10 // 256 KB
+	ollamaLabelSession            = "Session"
+	ollamaLabelWeekly             = "Weekly"
 )
 
 var (
-	reOllamaCloudUsageBlock = regexp.MustCompile(`(?is)<span>Cloud usage</span>(.*?)</div>\s*<script>`)
-	reOllamaPlan            = regexp.MustCompile(`(?is)rounded-full[^>]*capitalize[^>]*>\s*([^<]+?)\s*</span`)
-	reOllamaPctUsed         = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*%\s*used`)
-	reOllamaUsageTrack      = regexp.MustCompile(`(?is)data-usage-track[^>]*aria-label="([^"]+)"[^>]*>(.*?)</div>`)
-	reOllamaUsageSegment    = regexp.MustCompile(`(?is)<button\b[^>]*data-usage-segment[^>]*>`)
-	reOllamaModel           = regexp.MustCompile(`data-model="([^"]+)"`)
-	reOllamaRequests        = regexp.MustCompile(`data-requests="(\d+)"`)
-	reOllamaWidth           = regexp.MustCompile(`width:\s*([\d.]+)%`)
-	reOllamaPeriodHeader    = regexp.MustCompile(`(?s)<div class="flex justify-between mb-2">(.*?)</div>`)
-	reOllamaHeaderSpan      = regexp.MustCompile(`(?s)<span class="text-sm[^"]*"[^>]*>\s*([^<]+?)\s*</span`)
-	reOllamaResetInfo       = regexp.MustCompile(`(?is)class="[^"]*local-time[^"]*"[^>]*data-time="([^"]+)"[^>]*>\s*([^<]+?)\s*</div>`)
-	reOllamaNotLoggedIn     = regexp.MustCompile(`(?i)(sign in|log in|invalid credentials)`)
+	// ollama.com re-skinned /settings in 2026-10: the section heading moved
+	// from <span>Cloud usage</span> to <h2 class="...">Cloud usage</h2> and the
+	// old "</div><script>" terminator drifted far past the section. Match the
+	// heading tag-agnostically and end the region at the "notify me" form that
+	// directly follows the usage meters.
+	reOllamaCloudUsageHeading = regexp.MustCompile(`(?is)<(?:h[1-6]|span|div|p)\b[^>]*>\s*Cloud usage\s*</(?:h[1-6]|span|div|p)>`)
+	reOllamaCloudUsageEndHx   = regexp.MustCompile(`(?is)<form\b[^>]*hx-post="/settings"`)
+	reOllamaCloudUsageEndForm = regexp.MustCompile(`(?is)<form\b[^>]*action="/settings"`)
+
+	reOllamaPlan         = regexp.MustCompile(`(?is)rounded-full[^>]*capitalize[^>]*>\s*([^<]+?)\s*</span`)
+	reOllamaPctUsed      = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*%\s*used`)
+	reOllamaUsageTrack   = regexp.MustCompile(`(?is)data-usage-track[^>]*aria-label="([^"]+)"[^>]*>(.*?)</div>`)
+	reOllamaUsageSegment = regexp.MustCompile(`(?is)<button\b[^>]*data-usage-segment[^>]*>`)
+	reOllamaModel        = regexp.MustCompile(`data-model="([^"]+)"`)
+	reOllamaRequests     = regexp.MustCompile(`data-requests="(\d+)"`)
+	reOllamaWidth        = regexp.MustCompile(`width:\s*([\d.]+)%`)
+	reOllamaPeriodHeader = regexp.MustCompile(`(?s)<div class="flex justify-between mb-2">(.*?)</div>`)
+	reOllamaHeaderSpan   = regexp.MustCompile(`(?s)<span class="text-sm[^"]*"[^>]*>\s*([^<]+?)\s*</span`)
+	reOllamaResetInfo    = regexp.MustCompile(`(?is)class="[^"]*local-time[^"]*"[^>]*data-time="([^"]+)"[^>]*>\s*([^<]+?)\s*</div>`)
+	reOllamaNotLoggedIn  = regexp.MustCompile(`(?i)(sign in|log in|invalid credentials)`)
 )
 
 // ---------------------------------------------------------------------------
@@ -127,33 +138,113 @@ func refreshOllamaQuota(acct *ollamaAccountRuntime) {
 // HTTP + Parse
 // ---------------------------------------------------------------------------
 
+// ollamaCookieCleaner rewrites the punctuation that clipboard round-trips
+// silently substitute for ASCII. A Chinese-locale browser — or a chat app used
+// to relay the value — turns ";" into the full-width "；" (U+FF1B). ollama.com
+// splits the Cookie header on ASCII ";" only, so a cookie pasted as
+// "aid=…；__Secure-session=…" is sent as a single aid cookie: the session
+// cookie never arrives, the settings page renders logged-out, and we wrongly
+// blame the user's cookie for being invalid.
+var ollamaCookieCleaner = strings.NewReplacer(
+	"\uFF1B", ";", "\uFF1D", "=", "\uFF0C", ",", "\uFF1A", ":",
+	"\u3000", " ",
+	"\u201C", "\"", "\u201D", "\"", "\u2018", "'", "\u2019", "'",
+	"\u200B", "", "\u200C", "", "\u200D", "", "\uFEFF", "",
+	"\r", " ", "\n", " ", "\t", " ",
+)
+
+// normalizeOllamaCookie turns any accepted user-supplied shape — a full
+// "Cookie: ..." header, a "name=value; name2=value2" string, or a bare session
+// value — into a canonical Cookie header value, repairing full-width
+// punctuation and stray separators along the way.
+func normalizeOllamaCookie(raw string) string {
+	cookie := strings.TrimSpace(raw)
+	if cookie == "" {
+		return ""
+	}
+	cookie = ollamaCookieCleaner.Replace(cookie)
+	if strings.HasPrefix(strings.ToLower(cookie), "cookie:") {
+		cookie = strings.TrimSpace(cookie[len("cookie:"):])
+	}
+	// Re-assemble clean "name=value" pairs; this drops duplicated separator
+	// runs, empty pairs and trailing semicolons left behind by copy-paste.
+	pairs := make([]string, 0, 4)
+	for _, part := range strings.Split(cookie, ";") {
+		if part = strings.TrimSpace(part); part != "" {
+			pairs = append(pairs, part)
+		}
+	}
+	if len(pairs) == 0 {
+		return ""
+	}
+	joined := strings.Join(pairs, "; ")
+	if !looksLikeOllamaCookiePairs(joined) {
+		// A bare session value carries no usable "name=" prefix. This cannot be
+		// decided with a plain "contains '='" test: the real __Secure-session
+		// token is base64 and ends in "==", so that test would treat ~460
+		// characters of base64 as the cookie *name* and send a header the
+		// server can never match.
+		return "__Secure-session=" + joined
+	}
+	return joined
+}
+
+// ollamaCookieNameOK matches an RFC 6265 cookie-name token.
+var ollamaCookieNameOK = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+
+// looksLikeOllamaCookiePairs reports whether s is a "name=value[; name=value]"
+// list rather than a single opaque session token.
+func looksLikeOllamaCookiePairs(s string) bool {
+	if strings.Contains(s, ";") {
+		return true
+	}
+	name, _, ok := strings.Cut(s, "=")
+	// A real cookie name is short and made of token characters; a base64 blob
+	// is long, and by the time it reaches '=' it is already hundreds of bytes in.
+	return ok && name != "" && len(name) <= 32 && ollamaCookieNameOK.MatchString(name)
+}
+
 // buildOllamaCookieHeader normalizes the session cookie. It accepts either a
 // full "aid=...; __Secure-session=..." string, a "Cookie: ..." header, or a
 // bare session value (in which case it is wrapped as __Secure-session=...).
 func buildOllamaCookieHeader(sessionCookie string) string {
-	cookie := strings.TrimSpace(sessionCookie)
-	if strings.HasPrefix(strings.ToLower(cookie), "cookie:") {
-		cookie = strings.TrimSpace(cookie[7:])
-	}
-	if cookie == "" {
-		return ""
-	}
-	if !strings.Contains(cookie, "=") {
-		return "__Secure-session=" + cookie
-	}
-	return strings.TrimRight(cookie, ";")
+	return normalizeOllamaCookie(sessionCookie)
 }
 
+// extractOllamaCloudUsageBlock returns the markup between the "Cloud usage"
+// heading and the "notify me" form that follows it. Both ends are matched
+// loosely on purpose: the previous exact-match extraction broke silently the
+// moment ollama.com re-skinned the page.
 func extractOllamaCloudUsageBlock(html string) (string, error) {
-	m := reOllamaCloudUsageBlock.FindStringSubmatch(html)
-	if m == nil {
+	loc := reOllamaCloudUsageHeading.FindStringIndex(html)
+	if loc == nil {
 		return "", fmt.Errorf("页面中未找到 Cloud usage 区块（可能未登录或页面结构已变更）")
 	}
-	return m[1], nil
+	rest := html[loc[1]:]
+
+	end := len(rest)
+	for _, re := range []*regexp.Regexp{reOllamaCloudUsageEndHx, reOllamaCloudUsageEndForm} {
+		if m := re.FindStringIndex(rest); m != nil && m[0] < end {
+			end = m[0]
+		}
+	}
+	if end > ollamaMaxCloudUsageBlockBytes {
+		end = ollamaMaxCloudUsageBlockBytes
+	}
+
+	block := rest[:end]
+	if strings.TrimSpace(block) == "" {
+		return "", fmt.Errorf("Cloud usage 区块为空（可能未登录或页面结构已变更）")
+	}
+	return block, nil
 }
 
-func parseOllamaPlan(block string) string {
-	m := reOllamaPlan.FindStringSubmatch(block)
+// parseOllamaPlan reads the plan badge (e.g. "pro") off the settings page. The
+// badge renders inside the "Usage credits" card, which sits *above* the Cloud
+// usage heading, so this must be fed the whole document and not the extracted
+// usage block.
+func parseOllamaPlan(page string) string {
+	m := reOllamaPlan.FindStringSubmatch(page)
 	if m == nil {
 		return ""
 	}
@@ -315,7 +406,7 @@ func parseOllamaQuotaHTML(html string, now time.Time) (string, []quotaWindow, er
 	if err != nil {
 		return "", nil, err
 	}
-	plan := parseOllamaPlan(block)
+	plan := parseOllamaPlan(html)
 	tracks := parseOllamaUsageTracks(block)
 	statusTexts := parseOllamaPeriodHeaders(block)
 	resets := parseOllamaResetInfo(block)

@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.22 (2026-10-08)
+
+### Fixes
+- **Ollama Cloud 配额恢复可用（两处真实根因）**: 用户反馈「显示 cookie 无效，或者没有抓到页面」。
+  - **① Cookie 被全角标点污染**：从中文环境浏览器/聊天工具复制的 Cookie 里，分隔用的 `;` 被替换成了全角 `；`（U+FF1B）。ollama.com 只按 ASCII `;` 切分 Cookie 头，于是 `aid=…；__Secure-session=…` 被当成**单个** aid Cookie 发出，`__Secure-session` 从未送达 → 服务端按未登录渲染 → 我们误报「cookie 无效」。现在新增 `normalizeOllamaCookie`：统一修正全角 `；＝，：`、全角空格、弯引号与零宽字符，并重新拼装规范的 `name=value` 片段（顺带清掉重复分隔符与尾随分号）。
+    - 同时修正「裸 session 值」识别：真实的 `__Secure-session` 是 base64 且以 `==` 结尾，原先用「是否含 `=`」判断会把 ~460 字符的 base64 误当成 cookie **名**。现改为校验首段是否为合法且足够短的 RFC 6265 cookie 名。
+  - **② settings 页面改版导致区块提取失效**：ollama.com 于 2026-10 改版，`Cloud usage` 由 `<span>` 变为 `<h2>`，旧的 `<span>Cloud usage</span>` 精确匹配与 `</div><script>` 终止符双双失配。现改为**标签无关**地匹配标题，并把区块结束锚定在其后紧随的「notify me」表单上。
+    - 另修正套餐徽章（`pro`）解析：它已迁移到 `Cloud usage` 上方的「Usage credits」卡片中，因此必须从**整页**而非提取出的区块里解析。
+    - 「Session usage / Weekly usage」标签、`data-usage-track`、`data-usage-segment`、`local-time` 重置时间在新版页面下均已验证可正常解析。
+
+### Tests
+- 新增 `testdata/ollama_settings_cloud_usage.html`：**真实抓取**的改版后 settings 页面片段（已剥离凭证与邮箱），作为回归夹具；
+- 新增 `TestParseOllamaQuotaHTMLNewSettingsLayout`（新版版式端到端解析：套餐/双窗口/模型用量/重置时间）、`TestBuildOllamaCookieHeaderRepairsFullWidthPunctuation`（全角分号回归）、`TestBuildOllamaCookieHeaderCleansPairList`（6 组 Cookie 形态，含 base64 填充边界）、`TestExtractOllamaCloudUsageBlockAcceptsBothHeadingTags`（新旧标题标签与终止符）。
+
 ## v0.11.21 (2026-10-08)
 
 ### Features & UI
