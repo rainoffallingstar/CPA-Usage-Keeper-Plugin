@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.11.21 (2026-10-08)
+
+### Features & UI
+- **推出 5 款鲜艳明快的 Material Design 3 (M3) 亮色系主题**:
+  - 应用户对更多鲜艳与亮色系、Material Design 3 风格的诉求，全面引入 Google M3 动态色彩体系（Dynamic Color / Tonal Palettes）；
+  - **M3 紫罗兰 (`m3-purple` / Material Iris)**：Google 经典标志紫调（`#6750a4`），艺术优雅且富有层次；
+  - **M3 蔚蓝晴空 (`m3-ocean` / Material Ocean)**：高饱和清澈加州晴海蓝（`#0284c7`），明朗通透；
+  - **M3 薄荷青翠 (`m3-mint` / Material Mint)**：高生机活力薄荷青绿（`#059669`），自然呼吸与舒润护眼；
+  - **M3 落日珊瑚 (`m3-sunset` / Material Sunset)**：热烈灿烂的落日暖阳与珊瑚橙红（`#f95738`），能量充沛；
+  - **M3 糖果玫瑰 (`m3-rose` / Material Rose)**：元气甜美的时尚覆盆子洋红（`#e11d48`），灵动吸睛；
+  - 全部 M3 主题拥有定制的彩色高对比度图表色盘（涵盖折线图、甜甜圈图、条形图与指示点）；
+- **主题下拉菜单升级为分类分组（Grouped Popover）**:
+  - 菜单划分为「Material 3 鲜艳系」、「经典浅色」、「暗黑与极客」、「系统自适应」四大阵营；
+  - 支持精致的内部平滑滚动条与各主题专属矢量图标（花朵、波浪、绿叶、烈焰、心形等），视觉一目了然。
+
 ## v0.11.20 (2026-10-08)
 
 ### Features & UI
