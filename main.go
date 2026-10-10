@@ -388,8 +388,8 @@ func pluginRegistration() registration {
 		Metadata: pluginapi.Metadata{
 			Name:             "Usage Keeper",
 			Version:          pluginVersion,
-			Author:           "router-for-me",
-			GitHubRepository: "https://github.com/router-for-me/cpa-plugin-usage-keeper",
+			Author:           "rainoffallingstar",
+			GitHubRepository: "https://github.com/rainoffallingstar/CPA-Usage-Keeper-Plugin",
 			ConfigFields: []pluginapi.ConfigField{
 				{
 					Name:        "db_path",

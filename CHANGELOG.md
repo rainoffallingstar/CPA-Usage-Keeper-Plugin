@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.27 (2026-10-10)
+
+### Fixes
+- **插件身份元数据仍指向上游仓库**: `registry.json` 与 `pluginRegistration()` 里的 `author` / `repository` 还是脚手架残留的 `router-for-me` / `https://github.com/router-for-me/cpa-plugin-usage-keeper`。前者是插件市场清单（`registry.json` 的 version 已在 v0.11.26 同步），后者会随注册信息返回给 CPA、显示在插件列表里。现统一改为本仓库 `rainoffallingstar` / `https://github.com/rainoffallingstar/CPA-Usage-Keeper-Plugin`。
+  - 未改动：`go.mod` 的 `module github.com/router-for-me/cpa-plugin-usage-keeper`（Go 模块路径，对 c-shared 构建无影响，改它属于一次重命名决策）；对 CLIProxyAPI SDK 的 `github.com/router-for-me/CLIProxyAPI/v7` 引用是宿主项目本身，保持不变。
+
 ## v0.11.26 (2026-10-10)
 
 ### Fixes
