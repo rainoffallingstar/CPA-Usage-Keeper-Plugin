@@ -2631,12 +2631,45 @@ function renderColabHistoryChart(container,points,days){
 	function x(t){return pad.left+((t-t0)/(t1-t0))*innerW}
 	function y(v){return pad.top+innerH-((v-vMin)/span)*innerH}
 
+	// Resample the raw snapshots onto an evenly-spaced grid and run a small
+	// centred moving average before drawing. The balance series is step-shaped
+	// (long plateaus separated by near-instant jumps, because the quota only
+	// changes at discrete times), so a spline through the raw points still looks
+	// like a staircase — every jump is vertical in time. Averaging first turns
+	// the jumps into short ramps and yields a genuinely smooth trend curve.
 	function buildLine(flagField,valField){
-		var pts=[];
+		var valid=[];
 		points.forEach(function(p){
-			if(!p[flagField])return;
-			pts.push({x:x(new Date(p.ts).getTime()),y:y(Number(p[valField]))});
+			if(p[flagField]&&p[valField]!=null&&isFinite(Number(p[valField])))valid.push({t:new Date(p.ts).getTime(),v:Number(p[valField])});
 		});
+		if(!valid.length)return"";
+		if(valid.length===1)return smoothPath([{x:x(valid[0].t),y:y(valid[0].v)}]);
+		var N=Math.max(24,Math.min(160,Math.round((t1-t0)/36e5))); // ~1 sample/hour, bounded
+		var ser=[],j=0;
+		for(var i=0;i<=N;i++){
+			var bt=t0+((t1-t0)*i)/N;
+			while(j+1<valid.length&&valid[j+1].t<=bt)j++;
+			ser.push(valid[j].v);
+		}
+		var win=Math.max(3,Math.round(ser.length*0.05));win=(win&1)?win:win+1; // odd window
+		var half=(win-1)/2;
+		function boxPass(a){
+			var o=[];
+			for(var i=0;i<a.length;i++){
+				var sum=0,cnt=0;
+				for(var k=-half;k<=half;k++){var idx=i+k;if(idx>=0&&idx<a.length){sum+=a[idx];cnt++}}
+				o.push(sum/cnt);
+			}
+			return o;
+		}
+		// Two passes ≈ a triangular kernel: a single box pass would turn each
+		// jump into a straight segment, two passes round the corners.
+		var smoothed=boxPass(boxPass(ser));
+		var pts=[];
+		for(var i=0;i<=N;i++){
+			var bt=t0+((t1-t0)*i)/N;
+			pts.push({x:x(bt),y:y(smoothed[i])});
+		}
 		return smoothPath(pts);
 	}
 
@@ -2673,10 +2706,17 @@ function renderColabHistoryChart(container,points,days){
 	if(hasFree)legend+='<span><span style="display:inline-block;width:10px;height:3px;background:var(--accent);border-radius:2px;vertical-align:middle;margin-right:4px"></span>免费额度 (mCCUs)</span>';
 	legend+='<span style="margin-left:auto">最近 '+days+' 天</span></div>';
 
-	chartBox.innerHTML='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'+grid;
-	if(paidLine)chartBox.innerHTML+='<path d="'+paidLine+'" fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-	if(freeLine)chartBox.innerHTML+='<path d="'+freeLine+'" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-	chartBox.innerHTML+=xLabels+'</svg>'+legend;
+	// Assemble the whole SVG as a single string and assign it once. Appending to
+	// chartBox.innerHTML *after* the opening <svg> re-parses the fragment in the
+	// HTML namespace, so the <path>/<text> nodes are created OUTSIDE the <svg>
+	// and never render — the card showed its grid, axis labels and legend but
+	// never the data line (the x labels also collapsed to the left edge as
+	// inline text).
+	var svgHtml='<svg width="100%%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'+grid;
+	if(paidLine)svgHtml+='<path d="'+paidLine+'" fill="none" stroke="var(--success)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	if(freeLine)svgHtml+='<path d="'+freeLine+'" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+	svgHtml+=xLabels+'</svg>';
+	chartBox.innerHTML=svgHtml+legend;
 }
 
 function doAddQuotaAccount(){
