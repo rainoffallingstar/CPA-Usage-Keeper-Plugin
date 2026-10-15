@@ -2462,8 +2462,13 @@ function buildQuotaFields(provider){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. ollama-pro"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Session Cookie</label><input class="text-input" id="qa-cookie" placeholder="aid=...; __Secure-session=..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="colab"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. colab-main"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doColabLogin()">'+icon("google")+' 登录 Google Colab</button></div>';
-		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">点击登录后，浏览器将弹出 Google 授权页，完成授权后回跳本机回调端点；若回跳失败，可复制地址栏回调 URL 中的 <code>code=...</code> 参数粘贴回下方输入框。</div>';
-		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:8px"><div class="form-group" style="flex:3;min-width:260px;margin-bottom:0"><label class="form-label">手动授权码 (可选回退)</label><input class="text-input" id="qa-code" placeholder="粘贴回调 URL 中的 code=..."></div><button class="btn btn-secondary" style="height:34px;padding:0 16px" onclick="doColabManualCode()">'+icon("key")+' 提交授权码</button></div>';
+		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">点击登录后浏览器会打开 Google 授权页。授权完成后 Google 会跳转到本机回调地址 <code>http://127.0.0.1:&lt;端口&gt;</code>：若你的浏览器与本插件在同一台机器上，页面会显示「授权成功」并自动完成；若你从远程/另一台设备访问本面板，该回跳地址在此设备上打不开，请用下方「远程回投」。</div>';
+		f+='<div style="margin-top:10px;padding:12px;border:1px solid var(--border-soft);border-radius:var(--radius-md);background:var(--surface-warm)">';
+		f+='<div style="font-size:12px;font-weight:600;color:var(--fg);margin-bottom:6px">远程回投（回调地址打不开时用这个）</div>';
+		f+='<div style="font-size:11px;color:var(--muted);margin-bottom:8px">在授权后的设备上，复制其地址栏里以 <code>http://127.0.0.1:...</code> 开头的完整回调地址（或仅 <code>code=</code> 后面的值），粘贴到下方提交即可完成登录。</div>';
+		f+='<div id="colab-callback-hint" style="display:none;font-size:11px;font-family:var(--font-mono);color:var(--accent);margin-bottom:8px;word-break:break-all"></div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:3;min-width:260px;margin-bottom:0"><label class="form-label">回调地址 / 授权码</label><input class="text-input" id="qa-code" placeholder="http://127.0.0.1:xxxxx/?code=... 或 直接粘贴 code 值"></div><button class="btn btn-secondary" id="btn-colab-code" style="height:34px;padding:0 16px" onclick="doColabManualCode()">'+icon("key")+' 提交回调</button></div>';
+		f+='</div>';
 	}else{
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. deepseek-main"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
 	}
@@ -2786,6 +2791,12 @@ function doColabLogin(){
 			}
 			var url=payload.auth_url;
 			var loginId=payload.login_id;
+			colabLoginId=loginId;
+			var hint=document.getElementById("colab-callback-hint");
+			if(hint&&payload.redirect_uri){
+				hint.style.display="block";
+				hint.textContent="本机回调地址："+payload.redirect_uri+"（完成后 Google 会跳到此处）";
+			}
 			// Open the authorization page in a new tab.
 			window.open(url,"_blank");
 			showToast("已在浏览器打开 Google 授权页，请完成登录…","success");
@@ -2822,20 +2833,67 @@ function startColabLoginPoll(loginId){
 	},2500);
 }
 
-function doColabManualCode(){
+var colabLoginId=null;
+
+// startColabManualLogin kicks off a login purely to obtain PKCE state for the
+// remote callback fallback — it does not open a browser tab. Used when the user
+// has a callback URL to paste but no live login session (e.g. after a reload).
+function startColabManualLogin(then){
 	var n=(document.getElementById("qa-name")||{}).value||"";
-	var code=(document.getElementById("qa-code")||{}).value||"";
-	n=n.trim();code=code.trim();
+	n=n.trim();
 	if(!n){showToast("请输入账号标识","danger");return;}
-	if(!code){showToast("请输入授权码 (code=...)","danger");return;}
-	// Strip a full callback URL down to just the code parameter.
-	var m=code.match(/[?&]code=([^&]+)/);
-	if(m)code=m[1];
-	// Manual code entry cannot complete PKCE exchange without the matching
-	// verifier, which the loopback flow owns. For reliability we instruct the
-	// user to instead paste a refresh_token obtained from the extension, or
-	// retry the browser login (the recommended path).
-	showToast("请优先使用浏览器登录；手动 code 需配套 PKCE verifier，当前版本仅支持浏览器回跳","danger");
+	fetch(API_BASE+"/colab-quota?action=login&account="+encodeURIComponent(n))
+		.then(function(r){return r.json()})
+		.then(function(d){
+			var payload=(d&&d.result)?d.result:d;
+			if(!payload||!payload.login_id){
+				showToast("登录启动失败","danger");
+				return;
+			}
+			colabLoginId=payload.login_id;
+			var hint=document.getElementById("colab-callback-hint");
+			if(hint&&payload.redirect_uri){
+				hint.style.display="block";
+				hint.textContent="本机回调地址："+payload.redirect_uri+"（完成后 Google 会跳到此处）";
+			}
+			if(then)then();
+		})
+		.catch(function(){showToast("登录请求失败","danger")});
+}
+
+function doColabManualCode(){
+	var code=(document.getElementById("qa-code")||{}).value||"";
+	code=code.trim();
+	if(!code){showToast("请粘贴回调地址或授权码","danger");return;}
+	if(!colabLoginId){
+		// No in-flight login (e.g. the page was reloaded): start one so there is
+		// a matching PKCE verifier + redirect_uri to complete the exchange.
+		showToast("尚未发起登录，正在重新发起…","tag");
+		startColabManualLogin(function(){doColabManualCode();});
+		return;
+	}
+	var btn=document.getElementById("btn-colab-code");
+	if(btn)setBtnLoading(btn,true);
+	// GET with the code URL-encoded, matching how the rest of the quota API is
+	// called; the backend decodes it back to the raw callback URL/code.
+	fetch(API_BASE+"/colab-quota?action=manualcode&login_id="+encodeURIComponent(colabLoginId)+"&code="+encodeURIComponent(code))
+		.then(function(r){return r.json()})
+		.then(function(d){
+			if(btn)setBtnLoading(btn,false);
+			var payload=(d&&d.result)?d.result:d;
+			if((d&&d.ok===false)||(payload&&payload.error)){
+				var em=(d.error&&(d.error.message||d.error))||(payload&&payload.error)||"提交失败";
+				showToast(String(em),"danger");
+				return;
+			}
+			// Submitted — poll for the exchange result (same path as browser login).
+			showToast("已提交回调，正在换取令牌…","success");
+			startColabLoginPoll(colabLoginId);
+		})
+		.catch(function(){
+			if(btn)setBtnLoading(btn,false);
+			showToast("提交回调失败","danger");
+		});
 }
 
 function quotaPath(provider){

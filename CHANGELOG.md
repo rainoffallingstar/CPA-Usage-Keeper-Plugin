@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.11.29 (2026-10-15)
+
+### Fixes
+- **Colab 订阅登录在远程访问下无法完成**: OAuth `redirect_uri` 是插件宿主机的 loopback 地址（`http://127.0.0.1:<port>`），只有跑插件的机器自身能访问。通过反代 / Tailscale 从**另一台设备**打开面板时，Google 授权页回调到这个 127.0.0.1 会打不开，登录卡死；而界面上那个「手动授权码」回退是**硬编码拒绝**的（提示需 PKCE verifier，实际后端从不接受它），登录接口返回的 `redirect_uri` 也是 `http://127.0.0.1:<port>/...` 字面占位符，用户根本不知道真实端口。
+  - 新增**远程回投**流程：登录接口现在返回**真实** `redirect_uri`（实际端口）；用户把授权后地址栏里那个打不开的 `http://127.0.0.1:.../?code=...&state=...` **整段**粘回面板提交，后端用**已保存的 PKCE code_verifier + redirect_uri** 完成换取（`action=manualcode`）。回投的 `state` 会与会话 nonce 校验，防止粘错/串会话。
+  - 支持粘贴完整回调 URL 或**仅 code 值**两种形式；`code` 里可能含 `/`、`+` 等字符，回投改走 **POST JSON** 避免 URL 编码破坏。
+  - 前端把原本失效的「手动授权码」区块换成醒目的「远程回投」面板：展示真实回调地址，并说明本机/远程两种情形；页面刷新丢了会话时，提交回调会自动重新发起一次登录以获得配套 PKCE。
+
+### Tests
+- `TestParseColabCallback`（完整 URL / 裸 code / 无 scheme / state 在 code 前 / 百分号编码 / 空串）、`TestColabLoginSubmitCode`（绑定会话、state 校验、未知会话、缺 code 拒绝）、`TestColabLoginResponseHasRedirectURI`（返回真实端口而非 `<port>` 占位）。
+
 ## v0.11.28 (2026-10-15)
 
 ### Fixes

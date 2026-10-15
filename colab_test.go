@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestColabObfuscateRoundTrip(t *testing.T) {
@@ -134,4 +136,108 @@ func TestUnmaskSecret(t *testing.T) {
 	if len(colabOAuthClientSecret) < 20 || colabOAuthClientSecret[:3] != "GOC" {
 		t.Fatalf("unmasked client secret invalid: %q", colabOAuthClientSecret)
 	}
+}
+
+func TestParseColabCallback(t *testing.T) {
+	cases := []struct{ raw, wantCode, wantState string }{
+		{"http://127.0.0.1:54321/?code=4/0AXabc-def&state=nonce=deadbeef", "4/0AXabc-def", "nonce=deadbeef"},
+		{"http://127.0.0.1:54321?code=abc123", "abc123", ""},
+		{"127.0.0.1:54321/?code=xyz&state=nonce=x", "xyz", "nonce=x"},
+		{"code=just-the-code", "just-the-code", ""},
+		{"4/0AXbare-code-value", "4/0AXbare-code-value", ""},
+		{"http://127.0.0.1:1/?state=nonce=abc&code=after-state", "after-state", "nonce=abc"},
+		{"code=a%2Fb%2Bc", "a/b+c", ""},
+		{"", "", ""},
+	}
+	for _, c := range cases {
+		code, state := parseColabCallback(c.raw)
+		if code != c.wantCode || state != c.wantState {
+			t.Errorf("parseColabCallback(%q) = (%q, %q), want (%q, %q)", c.raw, code, state, c.wantCode, c.wantState)
+		}
+	}
+}
+
+// colabLoginSubmitCode must attach a manually-relayed code to the right pending
+// login and reject a state that belongs to a different session.
+func TestColabLoginSubmitCode(t *testing.T) {
+	colabLoginMu.Lock()
+	savedState := colabLoginState
+	colabLoginState = make(map[string]*colabLoginPending)
+	colabLoginMu.Unlock()
+	defer func() {
+		colabLoginMu.Lock()
+		colabLoginState = savedState
+		colabLoginMu.Unlock()
+	}()
+
+	const id = "session-1"
+	colabLoginMu.Lock()
+	colabLoginState[id] = &colabLoginPending{Nonce: "abc", StartedAt: time.Now()}
+	colabLoginMu.Unlock()
+
+	// Bare code.
+	if err := colabLoginSubmitCode(id, "the-code"); err != nil {
+		t.Fatalf("bare code rejected: %v", err)
+	}
+	colabLoginMu.Lock()
+	got := colabLoginState[id].Code
+	colabLoginMu.Unlock()
+	if got != "the-code" {
+		t.Fatalf("stored code = %q, want the-code", got)
+	}
+
+	// Full callback URL with matching state.
+	if err := colabLoginSubmitCode(id, "http://127.0.0.1:9/?code=code2&state=nonce=abc"); err != nil {
+		t.Fatalf("full URL rejected: %v", err)
+	}
+
+	// Wrong state must be refused.
+	if err := colabLoginSubmitCode(id, "http://127.0.0.1:9/?code=code3&state=nonce=WRONG"); err == nil {
+		t.Fatal("mismatched state should be rejected")
+	}
+	// Unknown session must be refused.
+	if err := colabLoginSubmitCode("nope", "code"); err == nil {
+		t.Fatal("unknown session should be rejected")
+	}
+	// Missing code must be refused.
+	if err := colabLoginSubmitCode(id, "http://127.0.0.1:9/?state=nonce=abc"); err == nil {
+		t.Fatal("missing code should be rejected")
+	}
+}
+
+// A login response must expose the real redirect_uri so a remote user knows
+// where the callback lands.
+func TestColabLoginResponseHasRedirectURI(t *testing.T) {
+	colabLoginMu.Lock()
+	savedState := colabLoginState
+	colabLoginState = make(map[string]*colabLoginPending)
+	colabLoginMu.Unlock()
+	defer func() {
+		colabLoginMu.Lock()
+		savedState2 := savedState
+		_ = savedState2
+		colabLoginState = savedState
+		colabLoginMu.Unlock()
+	}()
+
+	resp := handleColabQuotaGet(map[string][]string{"action": {"login"}, "account": {"colab-remote-test"}})
+	var payload struct {
+		AuthURL     string `json:"auth_url"`
+		LoginID     string `json:"login_id"`
+		RedirectURI string `json:"redirect_uri"`
+	}
+	if err := json.Unmarshal(resp.Body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if payload.RedirectURI == "" || !strings.HasPrefix(payload.RedirectURI, "http://127.0.0.1:") {
+		t.Fatalf("redirect_uri = %q, want a real http://127.0.0.1:<port>", payload.RedirectURI)
+	}
+	if strings.Contains(payload.RedirectURI, "<port>") {
+		t.Fatalf("redirect_uri still uses the <port> placeholder: %q", payload.RedirectURI)
+	}
+	if !strings.Contains(payload.AuthURL, "redirect_uri=") {
+		t.Fatalf("auth_url missing redirect_uri: %q", payload.AuthURL)
+	}
+	// Clean up the loopback server this test opened.
+	shutdownColabLoopback()
 }

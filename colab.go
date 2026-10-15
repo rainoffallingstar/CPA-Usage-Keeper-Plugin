@@ -659,7 +659,7 @@ func colabFetchEmail(accessToken string) (string, error) {
 // Loopback login server
 // ---------------------------------------------------------------------------
 
-func startColabLoginServer(account string) (authURL, loginID string, err error) {
+func startColabLoginServer(account string) (authURL, loginID, redirectURI string, err error) {
 	colabLoginMu.Lock()
 	defer colabLoginMu.Unlock()
 
@@ -675,10 +675,10 @@ func startColabLoginServer(account string) (authURL, loginID string, err error) 
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to open loopback listener: %w", err)
+		return "", "", "", fmt.Errorf("failed to open loopback listener: %w", err)
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
-	redirectURI := fmt.Sprintf("http://127.0.0.1:%d", port)
+	redirectURI = fmt.Sprintf("http://127.0.0.1:%d", port)
 
 	nonce := generateNonce()
 	codeVerifier := generateCodeVerifier()
@@ -735,7 +735,89 @@ func startColabLoginServer(account string) (authURL, loginID string, err error) 
 		"prompt":                {"consent"},
 	}.Encode())
 
-	return authURL, loginID, nil
+	return authURL, loginID, redirectURI, nil
+}
+
+// colabLoginSubmitCode records a manually-relayed authorization code against
+// an in-flight login. It exists for remote deployments: the OAuth redirect_uri
+// is the plugin host's loopback address (http://127.0.0.1:<port>), which a
+// browser on another machine cannot reach, so the loopback server never sees
+// the callback. The user can instead copy the callback URL out of the failed
+// page's address bar and paste it here; the exchange still succeeds because the
+// PKCE code_verifier and redirect_uri live in the pending login.
+//
+// raw may be either a bare code or the full callback URL
+// (http://127.0.0.1:<port>/?code=...&state=nonce=...).
+func colabLoginSubmitCode(loginID, raw string) error {
+	code, state := parseColabCallback(raw)
+	if code == "" {
+		return fmt.Errorf("未找到授权码：请粘贴回调地址（含 code=...）或直接粘贴 code 值")
+	}
+	colabLoginMu.Lock()
+	defer colabLoginMu.Unlock()
+	p, ok := colabLoginState[loginID]
+	if !ok {
+		return fmt.Errorf("登录会话不存在或已过期，请重新点击登录")
+	}
+	// If the pasted URL carries a state, it must belong to this login; this
+	// guards against pasting a stale/foreign callback.
+	if state != "" && state != "nonce="+p.Nonce {
+		return fmt.Errorf("state 不匹配：该回调不属于当前登录会话，请重新登录")
+	}
+	p.Code = code
+	p.CodeReceived = true
+	return nil
+}
+
+// parseColabCallback extracts the authorization code and state from either a
+// bare code value or a full callback URL. It tolerates the URL being pasted
+// with or without the scheme and with extra query parameters.
+func parseColabCallback(raw string) (code, state string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ""
+	}
+	// Prefer real URL/query parsing when the input looks like a URL or query.
+	if strings.ContainsAny(raw, "?&=") {
+		candidate := raw
+		if !strings.Contains(candidate, "://") && !strings.HasPrefix(candidate, "/") {
+			// e.g. "127.0.0.1:1234/?code=..." — give it a scheme so url.Parse
+			// treats the part before '?' as authority, not a path.
+			candidate = "http://" + candidate
+		}
+		if u, err := url.Parse(candidate); err == nil {
+			q := u.Query()
+			code = q.Get("code")
+			state = q.Get("state")
+			if code != "" {
+				return strings.TrimSpace(code), strings.TrimSpace(state)
+			}
+		}
+		// Fall back to manual parsing for odd shapes.
+		if i := strings.Index(raw, "code="); i >= 0 {
+			rest := raw[i+len("code="):]
+			if j := strings.IndexAny(rest, "&"); j >= 0 {
+				rest = rest[:j]
+			}
+			if c, err := url.QueryUnescape(rest); err == nil {
+				code = strings.TrimSpace(c)
+			} else {
+				code = strings.TrimSpace(rest)
+			}
+		}
+		if i := strings.Index(raw, "state="); i >= 0 {
+			rest := raw[i+len("state="):]
+			if j := strings.IndexAny(rest, "&"); j >= 0 {
+				rest = rest[:j]
+			}
+			if st, err := url.QueryUnescape(rest); err == nil {
+				state = strings.TrimSpace(st)
+			}
+		}
+		return code, state
+	}
+	// Bare code value.
+	return raw, ""
 }
 
 // checkColabLoginCode polls for a received code; if present, exchanges it,
@@ -861,15 +943,15 @@ func handleColabQuotaGet(query map[string][]string) pluginapi.ManagementResponse
 			if colabLoginAccountExists(acctName) {
 				return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
 			}
-			authURL, id, err := startColabLoginServer(acctName)
+			authURL, id, redirectURI, err := startColabLoginServer(acctName)
 			if err != nil {
 				return jsonResponse(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			}
 			return jsonResponse(http.StatusOK, map[string]any{
-				"auth_url": authURL,
-				"login_id": id,
-				"account":  acctName,
-				"redirect_uri": fmt.Sprintf("http://127.0.0.1:<port>/?code=...&state=nonce=%s", id),
+				"auth_url":     authURL,
+				"login_id":     id,
+				"account":      acctName,
+				"redirect_uri": redirectURI,
 			})
 		case "loginstate":
 			if loginID == "" {
@@ -880,6 +962,21 @@ func handleColabQuotaGet(query map[string][]string) pluginapi.ManagementResponse
 				return jsonResponse(http.StatusOK, map[string]any{"done": false, "error": err.Error()})
 			}
 			return jsonResponse(http.StatusOK, map[string]any{"done": done, "email": email})
+		case "manualcode":
+			// Fallback for remote deployments where the loopback callback page
+			// cannot load in the user's browser. The user pastes the callback
+			// URL (or just the code); the pending PKCE verifier finishes it.
+			if loginID == "" {
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "login_id is required"})
+			}
+			rawCode, _ := getQueryParam(query, "code")
+			if strings.TrimSpace(rawCode) == "" {
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "code is required"})
+			}
+			if err := colabLoginSubmitCode(loginID, rawCode); err != nil {
+				return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
+			}
+			return jsonResponse(http.StatusOK, map[string]any{"submitted": true})
 		case "addaccount":
 			// Direct credentials (refresh_token) entry — used as fallback when
 			// loopback is unavailable.
@@ -1018,6 +1115,7 @@ func handleColabQuotaPost(body []byte) pluginapi.ManagementResponse {
 		RefreshToken string `json:"refresh_token"`
 		Email        string `json:"email"`
 		LoginID      string `json:"login_id"`
+		Code         string `json:"code"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -1030,6 +1128,10 @@ func handleColabQuotaPost(body []byte) pluginapi.ManagementResponse {
 		return handleColabQuotaGet(map[string][]string{"action": {"login"}, "account": {acctName}})
 	case "loginstate":
 		return handleColabQuotaGet(map[string][]string{"action": {"loginstate"}, "login_id": {req.LoginID}})
+	case "manualcode":
+		return handleColabQuotaGet(map[string][]string{
+			"action": {"manualcode"}, "login_id": {req.LoginID}, "code": {req.Code},
+		})
 	case "addaccount":
 		return handleColabQuotaGet(map[string][]string{
 			"action": {"addaccount"}, "account": {acctName}, "refresh_token": {req.RefreshToken},
@@ -1039,7 +1141,7 @@ func handleColabQuotaPost(body []byte) pluginapi.ManagementResponse {
 	case "refresh":
 		return handleColabQuotaGet(map[string][]string{"action": {"refresh"}, "account": {acctName}})
 	default:
-		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'login', 'loginstate', 'refresh', 'addaccount', or 'removeaccount'"})
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'login', 'loginstate', 'manualcode', 'refresh', 'addaccount', or 'removeaccount'"})
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.11.28** — `models_without_price` 豁免包月占位模型（`cursor/default` 等，含 `unpriced_ignore_models` 配置项）；价格同步更抗上游冷启动（超时 90s、3 次指数退避、gzip），成功后清除残留的 `price_sync_failed` 错误。
+**v0.11.29** — Colab 订阅登录支持**远程回投**：登录返回真实回调地址，把授权后打不开的 `http://127.0.0.1:.../?code=...&state=...` 整段粘回面板即可完成（后端用已保存的 PKCE verifier 换取）。
 
 ## ⚠️ Before Building — Version Checklist
 
@@ -226,6 +226,7 @@ upstream/
 
 | Version | Changes |
 |---------|---------|
+| v0.11.29 | Colab 订阅登录「远程回投」：登录接口返回真实 `redirect_uri`，新增 `action=manualcode`（POST JSON）接受粘贴的完整回调 URL 或裸 code，后端用会话内 PKCE verifier + redirect_uri 完成换取并校验 state；前端把失效的手动码区块换成醒目的远程回投面板 |
 | v0.11.28 | `models_without_price` 豁免包月占位模型（内置 `cursor/default` + `*/default`、`*/auto`、`*/unknown`，及 `unpriced_ignore_models` 配置）；价格同步超时 45s→90s、重试改 3 次指数退避、加 gzip；同步成功后 `clearErrorsByCode` 清除残留 `price_sync_failed` |
 | v0.11.5 | Invoice 导出新增隐私保护模式选择（明文 / 脱敏掩码 / 完全隐藏），可脱敏或隐藏账号名等私密条目 |
 | v0.11.4 | 落地 Google Colab 动态阶梯额度条契约（Pro 100/Pro+ 600 基线与 100 步长上浮），消费小票新增 Colab 算力项 |
