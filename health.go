@@ -119,6 +119,22 @@ func recentErrors() []errorLogEntry {
 	return out
 }
 
+// clearErrorsByCode drops every retained entry with the given code. A transient
+// failure (e.g. a single slow price-sync that a later sync recovered from) must
+// not linger in the "recent errors" panel forever, or the health page keeps
+// advertising a fault that no longer exists.
+func clearErrorsByCode(code string) {
+	errorLogMu.Lock()
+	defer errorLogMu.Unlock()
+	kept := errorLog[:0]
+	for _, e := range errorLog {
+		if e.Code != code {
+			kept = append(kept, e)
+		}
+	}
+	errorLog = kept
+}
+
 type summaryCacheEntry struct {
 	response summaryResponse
 	etag     string

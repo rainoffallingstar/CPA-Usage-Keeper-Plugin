@@ -412,11 +412,12 @@ func TestPluginRegistration(t *testing.T) {
 	}
 	// max_in_memory_events was removed with the dead ring buffer.
 	wantFields := map[string]bool{
-		"db_path":             true,
-		"retention_days":      true,
-		"refresh_seconds":     true,
-		"write_batch_size":    true,
-		"write_flush_seconds": true,
+		"db_path":                true,
+		"retention_days":         true,
+		"refresh_seconds":        true,
+		"write_batch_size":       true,
+		"write_flush_seconds":    true,
+		"unpriced_ignore_models": true,
 	}
 	if len(reg.Metadata.ConfigFields) != len(wantFields) {
 		t.Errorf("expected %d config fields, got %d", len(wantFields), len(reg.Metadata.ConfigFields))
@@ -1284,6 +1285,46 @@ refresh_seconds: 30
 	}
 }
 
+// unpriced_ignore_models must flow through the nested plugins.configs path that
+// CPA actually sends, accepting both a YAML list and a comma-separated scalar.
+func TestConfigureUnpricedIgnoreModels(t *testing.T) {
+	activeConfig.Store(defaultConfig())
+	defer activeConfig.Store(defaultConfig())
+
+	nested := `plugins:
+  configs:
+    usage-keeper:
+      db_path: /custom/path.db
+      unpriced_ignore_models:
+        - "Cursor/Default"
+        - "some-provider/auto"
+`
+	req, _ := json.Marshal(map[string]any{"config_yaml": []byte(nested)})
+	if err := configure(req); err != nil {
+		t.Fatalf("configure() error = %v", err)
+	}
+	cfg := currentConfig()
+	if len(cfg.UnpricedIgnoreModels) != 2 {
+		t.Fatalf("UnpricedIgnoreModels = %v, want 2 entries", cfg.UnpricedIgnoreModels)
+	}
+	if !isNonBillableModel("some-provider/auto") {
+		t.Error("config-listed model should be non-billable")
+	}
+
+	scalar := `plugins:
+  configs:
+    usage-keeper:
+      unpriced_ignore_models: "a/default, b/default"
+`
+	req, _ = json.Marshal(map[string]any{"config_yaml": []byte(scalar)})
+	if err := configure(req); err != nil {
+		t.Fatalf("configure() error = %v", err)
+	}
+	if got := currentConfig().UnpricedIgnoreModels; len(got) != 2 {
+		t.Errorf("scalar UnpricedIgnoreModels = %v, want 2 entries", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // method dispatch tests
 // ---------------------------------------------------------------------------
@@ -1316,5 +1357,31 @@ func TestHandleMethodEmptyMethod(t *testing.T) {
 	}
 	if env.OK {
 		t.Fatal("empty method should return error envelope (ok=false)")
+	}
+}
+
+// A price sync that succeeds after an earlier failure must clear the stale
+// price_sync_failed entry, so the health page stops advertising a resolved
+// fault.
+func TestClearErrorsByCodeDropsMatchingEntries(t *testing.T) {
+	errorLogMu.Lock()
+	saved := errorLog
+	errorLog = nil
+	errorLogMu.Unlock()
+	defer func() {
+		errorLogMu.Lock()
+		errorLog = saved
+		errorLogMu.Unlock()
+	}()
+
+	recordError("price_sync_failed", "first failure")
+	recordError("storage_write_error", "unrelated")
+	recordError("price_sync_failed", "second failure")
+
+	clearErrorsByCode("price_sync_failed")
+
+	got := recentErrors()
+	if len(got) != 1 || got[0].Code != "storage_write_error" {
+		t.Fatalf("after clearErrorsByCode, log = %+v, want only the storage_write_error entry", got)
 	}
 }

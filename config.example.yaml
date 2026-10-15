@@ -63,6 +63,17 @@ plugins:
       write_flush_seconds: 10
 
       # -----------------------------------------------------------------------
+      # unpriced_ignore_models — 豁免「未定价」健康告警的模型名（可选）。
+      # 用于包月订阅 / 占位模型名（如 cursor/default）：这类模型按订阅计费、
+      # 没有 token 单价，上游价格源不会有条目，不应计入 models_without_price。
+      # 支持 YAML 列表或逗号分隔字符串。
+      # 内置已豁免：cursor/default，以及任意 */default、*/auto、*/unknown 占位名。
+      # -----------------------------------------------------------------------
+      # unpriced_ignore_models:
+      #   - "cursor/default"
+      #   - "some-provider/default"
+
+      # -----------------------------------------------------------------------
       # ollama_accounts — Ollama Cloud 账号（可选，也可在 Dashboard 中直接添加）。
       # 每个账号通过 session_cookie 抓取 https://ollama.com/settings 页面，
       # 解析 "Cloud usage" 区块中的 Session / Weekly 用量。

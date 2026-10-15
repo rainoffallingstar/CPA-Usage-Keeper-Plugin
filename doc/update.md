@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.11.5** — Invoice 导出新增隐私保护模式选择（明文 / 脱敏掩码 / 完全隐藏），可脱敏或隐藏账号名等私密条目。
+**v0.11.28** — `models_without_price` 豁免包月占位模型（`cursor/default` 等，含 `unpriced_ignore_models` 配置项）；价格同步更抗上游冷启动（超时 90s、3 次指数退避、gzip），成功后清除残留的 `price_sync_failed` 错误。
 
 ## ⚠️ Before Building — Version Checklist
 
@@ -34,6 +34,33 @@ grep 'pluginVersion' types.go
 ## Deployment Flow
 
 CPA cannot cold-start with the plugin present (CGO + `modernc.org/sqlite` SIGSEGV during `db.Query`). Always deploy via hot-reload:
+
+### Linux + systemd (this host)
+
+On Linux the deployment is a flat `~/cliproxyapi` directory driven by the
+`cliproxyapi.service` user unit — **not** the macOS Quotio `upstream/` layout, so
+`scripts/migrate-plugin.sh` does not apply. Deploy with
+`~/server-ops/scripts/install-usage-keeper-plugin.sh usage-keeper` (it builds the
+Gitea mirror, installs `usage-keeper-v<VER>.so` into `plugins/linux/amd64/`, and
+restarts the service). For a manual hot-reload swap:
+
+```bash
+# 1. Build at the version declared in types.go
+cd ~/Github/CPA-Usage-Keeper-Plugin
+make build VERSION=$(grep -oP 'pluginVersion = "\K[^"]+' types.go)
+# 2. Install with a HIGHER versioned filename (CPA picks the highest)
+install -m 0755 dist/usage-keeper.so \
+  ~/cliproxyapi/plugins/linux/amd64/usage-keeper-v0.11.28.so
+# 3. Hot-reload: toggle refresh_seconds in config.yaml (0 → 10 → 0)
+#    or simply restart the unit:
+systemctl --user restart cliproxyapi
+# 4. Verify
+curl -s http://127.0.0.1:8317/v0/resource/plugins/usage-keeper/api/health
+```
+
+Remove the **old** `usage-keeper-v*.so` from `plugins/linux/amd64/` after
+verifying — CPA loads the highest versioned filename, a stale higher one shadows
+the new build.
 
 ### Quick path: use the migration script (recommended)
 
@@ -199,6 +226,7 @@ upstream/
 
 | Version | Changes |
 |---------|---------|
+| v0.11.28 | `models_without_price` 豁免包月占位模型（内置 `cursor/default` + `*/default`、`*/auto`、`*/unknown`，及 `unpriced_ignore_models` 配置）；价格同步超时 45s→90s、重试改 3 次指数退避、加 gzip；同步成功后 `clearErrorsByCode` 清除残留 `price_sync_failed` |
 | v0.11.5 | Invoice 导出新增隐私保护模式选择（明文 / 脱敏掩码 / 完全隐藏），可脱敏或隐藏账号名等私密条目 |
 | v0.11.4 | 落地 Google Colab 动态阶梯额度条契约（Pro 100/Pro+ 600 基线与 100 步长上浮），消费小票新增 Colab 算力项 |
 | v0.11.3 | 新增 Colab 快照历史用量折线图（7/30/90天）+ 消费小票（Invoice）增加 Google Colab 订阅与算力项目 |

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.11.28 (2026-10-15)
+
+### Fixes
+- **`models_without_price` 对包月占位模型误报**: 健康页报「1 model(s) with token usage have no price - their cost shows as $0」，查证为 `cursor/default` —— `cursor` 提供商（包月订阅、不按 token 计费）把请求统一记为占位名，上游价格源里根本没有、也永远不会有它的条目。
+  - 新增**非计费模型豁免**：`isNonBillableModel` 识别内置表 `nonBillableModels`（当前含 `cursor/default`）、占位名后缀（`/default`、`/auto`、`/unknown`）以及新增配置项 `unpriced_ignore_models`；`countUnpricedModels` 跳过这些名字，不再计入未定价统计。成本仍显示 $0（包月无 token 单价，这是正确结果）。
+  - 新增 `unpriced_ignore_models`（字符串/列表，逗号或换行分隔）配置项，日后出现新的包月占位模型无需改代码即可豁免。
+- **价格同步失败后「最近错误」长期残留**: 同步失败会 `recordError("price_sync_failed", …)` 写入错误环，但后续同步成功后**从不清理**，于是昨天的一次瞬时失败在今日同步已成功后仍一直显示。
+  - 新增 `clearErrorsByCode`，`doPriceSync` 成功后清除 `price_sync_failed` 残留条目，健康页「最近错误」不再展示已恢复的故障。
+
+### Improvements
+- **价格同步更抗上游冷启动抖动**: 上游价格源每次请求都冷渲染（`cache-control: no-store` / Vercel MISS），实测稳态 ~3s、**冷启动尖峰达 46.8s**，超过原 45s 客户端超时。
+  - 客户端超时 45s → **90s**（并加 `ResponseHeaderTimeout`），低于前端 120s `AbortController` 兜底；
+  - 重试由「1 次、固定 3s」改为 **3 次、2s/8s 指数退避**；
+  - 请求头显式 `Accept-Encoding: gzip`，549KB 正文压缩传输，降低「等待响应头超时」概率。
+
+### Tests
+- `TestCountUnpricedModelsSkipsNonBillablePlaceholderModels`、`TestIsNonBillableModel`：包月/占位名豁免、真正未定价的计费模型仍计数。
+- `TestClearErrorsByCodeDropsMatchingEntries`：同步成功后仅清除 `price_sync_failed`、保留其它错误。
+
 ## v0.11.27 (2026-10-10)
 
 ### Fixes

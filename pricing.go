@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -499,10 +500,32 @@ type mpEntity struct {
 	} `json:"primary_offering"`
 }
 
-var mpClient = &http.Client{Timeout: 45 * time.Second}
+// mpClient fetches the upstream price feed. The feed is rendered cold on every
+// request (cache-control: no-store / Vercel MISS), so a single response can take
+// far longer than the steady-state ~3s: a cold render was measured at 46.8s,
+// past the old 45s deadline. 90s leaves headroom below the dashboard's 120s
+// AbortController backstop.
+var mpClient = &http.Client{
+	Timeout: 90 * time.Second,
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		ResponseHeaderTimeout: 90 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	},
+}
 
 func syncModelPrices() (int, error) {
-	resp, err := mpClient.Get(modelPriceAPI)
+	req, err := http.NewRequest(http.MethodGet, modelPriceAPI, nil)
+	if err != nil {
+		return 0, fmt.Errorf("build request failed: %w", err)
+	}
+	// The feed is ~549KB uncompressed; ask for gzip so the transfer (a common
+	// source of the header-wait timeout) is a fraction of that.
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "usage-keeper/"+pluginVersion)
+
+	resp, err := mpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("HTTP request failed: %w", err)
 	}
@@ -511,7 +534,19 @@ func syncModelPrices() (int, error) {
 		return 0, fmt.Errorf("modelprice API returned HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
+	// Go only auto-decompresses when the transport added the header itself; we
+	// set Accept-Encoding explicitly, so decode a gzip response here.
+	bodyReader := io.Reader(resp.Body)
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		gz, gzErr := gzip.NewReader(resp.Body)
+		if gzErr != nil {
+			return 0, fmt.Errorf("gzip reader failed: %w", gzErr)
+		}
+		defer gz.Close()
+		bodyReader = gz
+	}
+
+	body, err := io.ReadAll(io.LimitReader(bodyReader, 50<<20))
 	if err != nil {
 		return 0, fmt.Errorf("read body failed: %w", err)
 	}
@@ -611,22 +646,30 @@ func doPriceSync() (int, error) {
 	priceSyncMu.Unlock()
 	if err != nil {
 		recordError("price_sync_failed", err.Error())
+	} else {
+		// A successful sync supersedes any earlier failure; drop the stale entry
+		// so the health page stops reporting an error that has since resolved.
+		clearErrorsByCode("price_sync_failed")
 	}
 	return count, err
 }
 
-// syncModelPricesWithRetry gives the upstream one retry: it occasionally fails
-// to send response headers within the client timeout.
+// syncModelPricesWithRetry retries the upstream feed with exponential backoff.
+// A single cold render can blow past the client timeout, and the previous
+// one-shot retry (fixed 3s gap) could land squarely in the same slow window.
+// Three attempts with 2s/8s backoff ride out a slow cold start.
 func syncModelPricesWithRetry() (int, error) {
+	const attempts = 3
 	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; attempt < attempts; attempt++ {
 		count, err := syncModelPrices()
 		if err == nil {
 			return count, nil
 		}
 		lastErr = err
-		if attempt == 0 {
-			time.Sleep(3 * time.Second)
+		if attempt < attempts-1 {
+			backoff := time.Duration(2*(1<<attempt)) * time.Second // 2s, 8s
+			time.Sleep(backoff)
 		}
 	}
 	return 0, lastErr
@@ -639,6 +682,49 @@ func getPriceSyncStatus() string {
 		return "pending"
 	}
 	return priceLastSync
+}
+
+// nonBillableModels lists model names that are usage-tracked but cannot carry a
+// per-token price, so they must not count towards the "no price" alert. These
+// are subscription-flat providers (Cursor, etc.) whose plugin records a
+// placeholder name because the real model is never disclosed and the plan is
+// billed monthly rather than per token. Seeding a $0 price for them would be
+// wrong (it looks like a real, free price in the pricing table); exempting them
+// from the alert is the accurate statement: they cost $0 because they are not
+// token-billed, not because a price is missing.
+var nonBillableModels = map[string]bool{
+	"cursor/default": true,
+}
+
+// placeholderModelSuffixes are the tail segments used by provider plugins for a
+// subscription model whose real identity is hidden. A "provider/placeholder"
+// name (e.g. cursor/default) is never a token-billable model, so it is exempt
+// from the unpriced alert even when the exact name is not in the table above.
+var placeholderModelSuffixes = []string{"/default", "/auto", "/unknown"}
+
+// isNonBillableModel reports whether a usage model name is a known non-token-
+// billable entry (subscription-flat provider or placeholder name) that must be
+// excluded from the "models without price" alert. It consults both the built-in
+// table and the operator's `unpriced_ignore_models` config list.
+func isNonBillableModel(model string) bool {
+	name := strings.ToLower(strings.TrimSpace(model))
+	if name == "" {
+		return false
+	}
+	if nonBillableModels[name] {
+		return true
+	}
+	for _, ignored := range currentConfig().UnpricedIgnoreModels {
+		if name == strings.ToLower(strings.TrimSpace(ignored)) {
+			return true
+		}
+	}
+	for _, suffix := range placeholderModelSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // countUnpricedModels reports how many distinct models seen in usage have no
@@ -666,6 +752,11 @@ func countUnpricedModels() int64 {
 	for rows.Next() {
 		var model string
 		if rows.Scan(&model) != nil {
+			continue
+		}
+		if isNonBillableModel(model) {
+			// Subscription-flat / placeholder names cost $0 by design; a missing
+			// price here is expected, not a fault.
 			continue
 		}
 		if _, ok := matchPrice(model); !ok {

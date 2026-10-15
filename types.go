@@ -38,7 +38,7 @@ const (
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
 )
 
-var pluginVersion = "0.11.27"
+var pluginVersion = "0.11.28"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -51,6 +51,12 @@ type pluginConfig struct {
 	GlmCodingAccounts  []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
 	DeepSeekAccounts   []deepseekAcctCfg   `yaml:"deepseek_accounts"`
 	OllamaAccounts     []ollamaAcctCfg     `yaml:"ollama_accounts"`
+
+	// UnpricedIgnoreModels lists extra model names to exempt from the
+	// "models_without_price" health alert. It exists for subscription-flat /
+	// placeholder providers discovered after a release, so a new non-token-
+	// billable name does not require a code change to silence the alert.
+	UnpricedIgnoreModels []string `yaml:"unpriced_ignore_models"`
 }
 
 func defaultConfig() pluginConfig {

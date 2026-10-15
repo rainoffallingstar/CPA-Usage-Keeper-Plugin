@@ -210,6 +210,9 @@ func configure(raw []byte) error {
 		if v, ok := stringConfig(values, "api_key_hash_salt"); ok {
 			decoded.APIKeyHashSalt = v
 		}
+		if v, ok := stringSliceConfig(values, "unpriced_ignore_models"); ok {
+			decoded.UnpricedIgnoreModels = v
+		}
 		cfg = mergeConfig(cfg, decoded)
 	}
 	activeConfig.Store(normalizeConfig(cfg))
@@ -315,6 +318,40 @@ func stringConfig(values map[string]interface{}, key string) (string, bool) {
 	return strings.TrimSpace(fmt.Sprint(val)), true
 }
 
+// stringSliceConfig accepts either a YAML list or a delimited scalar and
+// returns the lowercased, trimmed items.
+func stringSliceConfig(values map[string]interface{}, key string) ([]string, bool) {
+	val, ok := values[key]
+	if !ok {
+		return nil, false
+	}
+	var out []string
+	appendOne := func(raw string) {
+		for _, part := range strings.FieldsFunc(raw, func(r rune) bool {
+			return r == ',' || r == '\n' || r == ';'
+		}) {
+			if s := strings.ToLower(strings.TrimSpace(part)); s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	switch v := val.(type) {
+	case []interface{}:
+		for _, item := range v {
+			appendOne(fmt.Sprint(item))
+		}
+	case []string:
+		for _, item := range v {
+			appendOne(item)
+		}
+	case string:
+		appendOne(v)
+	default:
+		return nil, false
+	}
+	return out, true
+}
+
 func mergeConfig(base, override pluginConfig) pluginConfig {
 	if strings.TrimSpace(override.DBPath) != "" {
 		base.DBPath = override.DBPath
@@ -339,6 +376,9 @@ func mergeConfig(base, override pluginConfig) pluginConfig {
 	}
 	if len(override.DeepSeekAccounts) > 0 {
 		base.DeepSeekAccounts = override.DeepSeekAccounts
+	}
+	if len(override.UnpricedIgnoreModels) > 0 {
+		base.UnpricedIgnoreModels = override.UnpricedIgnoreModels
 	}
 	return base
 }
@@ -415,6 +455,11 @@ func pluginRegistration() registration {
 					Name:        "write_flush_seconds",
 					Type:        pluginapi.ConfigFieldTypeInteger,
 					Description: "Maximum seconds an idle usage event waits before its batch is persisted. Default 10; max 300.",
+				},
+				{
+					Name:        "unpriced_ignore_models",
+					Type:        pluginapi.ConfigFieldTypeString,
+					Description: "Comma-separated model names exempt from the models_without_price alert (subscription-flat / placeholder providers).",
 				},
 			},
 		},

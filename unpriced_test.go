@@ -65,3 +65,47 @@ func TestCountUnpricedModelsIgnoresZeroTokenModels(t *testing.T) {
 		t.Errorf("countUnpricedModels() = %d, want 1 (only mystery-model consumed tokens without a price)", got)
 	}
 }
+
+// Subscription-flat providers (Cursor, etc.) record a placeholder model name
+// and are billed monthly, not per token, so they cost $0 by design and must not
+// raise the "no price" alert even though they consumed tokens.
+func TestCountUnpricedModelsSkipsNonBillablePlaceholderModels(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	setTestPrices(map[string]modelPrice{"priced-model": {Prompt: 1, Completion: 2, Cache: 0.1}})
+	defer setTestPrices(nil)
+
+	now := time.Now().Format(time.RFC3339)
+	// cursor/default consumed real tokens but is a subscription-flat placeholder.
+	insertTestEvent(t, d, "cursor", "cursor/default", 70000, 259, 70259, false, now)
+	// Same shape from a provider we have never seen: any "x/default" placeholder
+	// must be exempt too.
+	insertTestEvent(t, d, "someclient", "someclient/auto", 900, 100, 1000, false, now)
+	// A genuinely unpriced, token-billable model must still count.
+	insertTestEvent(t, d, "p", "mystery-model", 900, 100, 1000, false, now)
+
+	if got := countUnpricedModels(); got != 1 {
+		t.Errorf("countUnpricedModels() = %d, want 1 (only mystery-model is token-billable and unpriced)", got)
+	}
+}
+
+func TestIsNonBillableModel(t *testing.T) {
+	cases := []struct {
+		model string
+		want  bool
+	}{
+		{"cursor/default", true},
+		{"Cursor/Default", true},
+		{"cursor/auto", true},
+		{"claude/unknown", true},
+		{"claude-opus-4-6", false},
+		{"deepseek-v4-flash", false},
+		{"", false},
+		{"cursor", false},
+	}
+	for _, tc := range cases {
+		if got := isNonBillableModel(tc.model); got != tc.want {
+			t.Errorf("isNonBillableModel(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}
