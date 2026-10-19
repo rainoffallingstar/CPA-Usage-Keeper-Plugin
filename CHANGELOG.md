@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.11.34 (2026-10-19)
+
+### Fixes
+- **模型用量页显示"当前时间段暂无模型用量记录"，实际是查询失败**：生产库的 `idx_usage_events_model` 索引损坏（`PRAGMA quick_check` 报 `wrong # of entries in index idx_usage_events_model`），凡是查询计划命中该索引的语句都返回 `database disk image is malformed`。`handleModels` 把 SQL 错误静默吞掉后返回 `200 []`，于是前端把"查询失败"渲染成了"这段时间没有请求"，而总览/时间序列（走 `idx_usage_events_dt_id`）一切正常，极具误导性。
+  - `handleModels` 现在检查 `rows.Err()`，失败时返回 **500 + 具体错误**，并写入 `models_query_failed` 错误环形缓冲；
+  - 前端 `renderModels()` 在请求失败时渲染「模型用量查询失败」+ 重试按钮，**不再回落到空状态**。
+- **损坏索引自动修复**：`runSQLiteMaintenance` 每小时新增 `PRAGMA quick_check`，发现结构异常时逐个 `REINDEX` 四个索引并复检；修复成功即清除告警。索引损坏时表数据完好，`REINDEX` 不触碰任何行。
+- **健康页暴露完整性状态**：`storage.integrity_ok` / `storage.integrity_error`，异常时同时产生 `db_integrity` 错误级告警，健康页「存储与落盘性能」卡片新增「数据库完整性」徽标。
+
+### Verified
+- 现场库执行 `REINDEX idx_usage_events_model` 后 `quick_check: ok`；`/api/models?range=30d` 由 `[]` 恢复为 14 个模型（`deepseek-v4.1-flash` 36377 次 / 76.6 亿 tokens 等），1h/24h/7d/30d 四个区间均正常。
+- 修复前已把数据库备份到 `.deploy-bak/usage-keeper.db.before-reindex`。
+
+### Tests
+- `TestHandleModelsReportsQueryFailureInsteadOfEmptyList`（关闭句柄 → 断言 500 + error 字段 + 错误环形缓冲有记录）。
+- `TestCheckAndRepairIndexesLeavesHealthyDatabaseAlone`、`TestHealthExposesIntegrityFlag`。
+- `dashboard/init_smoke.test.js` 新增「查询失败必须渲染错误态、不得渲染空状态」断言。
+
 ## v0.11.33 (2026-10-19)
 
 ### Fixes

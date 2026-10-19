@@ -11,3 +11,6 @@ cpa-plugin-usage-keeper
 *.bak
 # Export temp dir
 usage-keeper-exports/
+
+# Local deployment backups (may contain DB snapshots)
+.deploy-bak/

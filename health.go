@@ -48,6 +48,11 @@ type storageHealthStatus struct {
 	DBFileSize  int64  `json:"db_file_size"`
 	WALFileSize int64  `json:"wal_file_size"`
 	Status      string `json:"status"`
+	// IntegrityOK is false when the last structural check found corruption
+	// (e.g. a damaged index). Index-only damage leaves the table readable, so
+	// without this flag the only symptom was an empty model list.
+	IntegrityOK bool   `json:"integrity_ok"`
+	Integrity   string `json:"integrity_error,omitempty"`
 	LastError   string `json:"last_error,omitempty"`
 }
 
@@ -204,6 +209,18 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 	if unpriced > 0 {
 		alerts = append(alerts, healthAlert{Severity: "warn", Code: "models_without_price", Message: fmt.Sprintf("%d model(s) with token usage have no price - their cost shows as $0", unpriced)})
 	}
+	integrityOK, integrityErr := dbIntegrityStatus()
+	if !integrityOK {
+		alerts = append(alerts, healthAlert{Severity: "error", Code: "db_integrity",
+			Message: "Usage database integrity check failed (indexes are rebuilt automatically): " + integrityErr})
+	}
+	for _, e := range recentErrors() {
+		if e.Code == "models_query_failed" {
+			alerts = append(alerts, healthAlert{Severity: "error", Code: "models_query_failed",
+				Message: "Model usage query failed: " + e.Message})
+			break
+		}
+	}
 
 	status := "ok"
 	for _, a := range alerts {
@@ -244,6 +261,8 @@ func handleHealthCheck() pluginapi.ManagementResponse {
 			DBFileSize:  fileSize(dbPath),
 			WALFileSize: fileSize(dbPath + "-wal"),
 			Status:      storageStatus,
+			IntegrityOK: integrityOK,
+			Integrity:   integrityErr,
 			LastError:   dbErr,
 		},
 	})
@@ -287,6 +306,17 @@ func checkETag(headers map[string][]string, etag string) bool {
 	}
 	if vals, ok := headers["If-None-Match"]; ok && len(vals) > 0 {
 		return vals[0] == etag
+	}
+	return false
+}
+
+// hasRecentError reports whether the error ring currently holds a code. Used by
+// tests and by callers that only need a yes/no answer.
+func hasRecentError(code string) bool {
+	for _, e := range recentErrors() {
+		if e.Code == code {
+			return true
+		}
 	}
 	return false
 }

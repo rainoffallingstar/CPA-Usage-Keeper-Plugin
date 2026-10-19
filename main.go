@@ -956,6 +956,72 @@ func runSQLiteMaintenance() {
 	// which is harmless because they run again on the next tick.
 	_, _ = d.Exec("PRAGMA optimize")
 	_, _ = d.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	checkAndRepairIndexes(d)
+}
+
+// checkAndRepairIndexes runs SQLite's structural check and rebuilds every index
+// when it reports corruption. A corrupted index (observed in production as
+// "wrong # of entries in index idx_usage_events_model") makes any query whose
+// plan uses that index fail with "database disk image is malformed" while the
+// table itself is intact, so REINDEX restores service without touching rows.
+func checkAndRepairIndexes(d *sql.DB) {
+	var problems []string
+	rows, err := d.Query("PRAGMA quick_check")
+	if err != nil {
+		recordError("db_integrity_check_failed", err.Error())
+		return
+	}
+	for rows.Next() {
+		var line string
+		if rows.Scan(&line) == nil && !strings.EqualFold(strings.TrimSpace(line), "ok") {
+			problems = append(problems, line)
+		}
+	}
+	_ = rows.Close()
+	if len(problems) == 0 {
+		clearErrorsByCode("db_integrity")
+		clearErrorsByCode("db_integrity_check_failed")
+		return
+	}
+
+	recordError("db_integrity", strings.Join(problems, "; "))
+	for _, idx := range []string{
+		"idx_usage_events_model",
+		"idx_usage_events_provider",
+		"idx_usage_events_failed",
+		"idx_usage_events_dt_id",
+	} {
+		// Rebuild one index at a time so a single failure does not abort the
+		// rest; REINDEX on a healthy index is a no-op-level cost.
+		if _, errExec := d.Exec("REINDEX " + idx); errExec != nil {
+			recordError("db_reindex_failed", idx+": "+errExec.Error())
+		}
+	}
+	var after []string
+	if rows2, err2 := d.Query("PRAGMA quick_check"); err2 == nil {
+		for rows2.Next() {
+			var line string
+			if rows2.Scan(&line) == nil && !strings.EqualFold(strings.TrimSpace(line), "ok") {
+				after = append(after, line)
+			}
+		}
+		_ = rows2.Close()
+	}
+	if len(after) == 0 {
+		clearErrorsByCode("db_integrity")
+		clearErrorsByCode("db_reindex_failed")
+	}
+}
+
+// dbIntegrityStatus reports the last known integrity problems for the health
+// page. It is cheap: it reads the error ring instead of re-running quick_check.
+func dbIntegrityStatus() (bool, string) {
+	for _, e := range recentErrors() {
+		if e.Code == "db_integrity" || e.Code == "db_integrity_check_failed" || e.Code == "db_reindex_failed" {
+			return false, e.Message
+		}
+	}
+	return true, ""
 }
 
 // ---------------------------------------------------------------------------
@@ -1381,7 +1447,20 @@ func handleModels(query map[string][]string) pluginapi.ManagementResponse {
 					models = append(models, m)
 				}
 			}
+			// A step failure (e.g. a corrupted index) surfaces as rows.Next()
+			// returning false, which would otherwise look like "no usage in this
+			// range" and silently blank the model table.
+			if errRows := rows.Err(); errRows != nil {
+				err = errRows
+			}
 		}
+		if err != nil {
+			recordError("models_query_failed", err.Error())
+			return jsonResponse(http.StatusInternalServerError, map[string]string{
+				"error": "model usage query failed: " + err.Error(),
+			})
+		}
+		clearErrorsByCode("models_query_failed")
 	}
 
 	return jsonResponse(http.StatusOK, models)

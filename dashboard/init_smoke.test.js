@@ -107,7 +107,7 @@ const RESPONSES = {
       unpriced_models: 0,
       recent_errors: [{ time: '2026-10-04T04:00:00Z', code: 'price_sync_failed', message: 'timeout' }],
     },
-    storage: { status: 'connected', db_path: '/tmp/usage-keeper.db', db_file_size: 123456 },
+    storage: { status: 'connected', db_path: '/tmp/usage-keeper.db', db_file_size: 123456, integrity_ok: true },
   },
 };
 // Quota endpoints all return {accounts: [...]}; the account shape is wide, so
@@ -292,6 +292,25 @@ RESPONSES['/newapi-quota?action=keys'] = {
     { id: 3, name: 'retired-key', status: '已禁用', used_usd: 0, remaining_usd: 0, total_usd: 0, window: { used: 0, remaining: 0, total: 0, unit: 'USD', status_text: '已用 $0.00 · 余 $0.00' } },
   ],
 };
+
+test('models tab shows a real error instead of an empty state on query failure', async () => {
+  // A failed backend query must not be rendered as "no usage records" — that
+  // ambiguity hid a corrupted SQLite index in production.
+  const originalFetch = sandbox.fetch;
+  sandbox.fetch = async (url) => {
+    if (String(url).includes('/models')) throw new Error('HTTP 500');
+    return originalFetch(url);
+  };
+  sandbox.lastModelsData = null;
+  writes.length = 0;
+  await sandbox.renderModels();
+  sandbox.fetch = originalFetch;
+  sandbox.lastModelsData = null;
+
+  const html = writes.map((w) => w.html).join('\n');
+  assert.ok(html.includes('模型用量查询失败'), 'failure state missing');
+  assert.ok(!html.includes('当前时间段暂无模型用量记录'), 'failure rendered as an empty range');
+});
 
 test('newapi key list modal renders names and usage without secrets', async () => {
   sandbox.openNewAPIKeys('dddai-main');
