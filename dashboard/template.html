@@ -946,6 +946,7 @@ tr:hover .filter-link{opacity:1}
             <button class="btn btn-secondary quota-prov-btn" data-prov="glm" onclick="setQuotaProvider('glm')">GLM Coding</button>
             <button class="btn btn-secondary quota-prov-btn" data-prov="deepseek" onclick="setQuotaProvider('deepseek')">DeepSeek</button>
             <button class="btn btn-secondary quota-prov-btn" data-prov="ollama" onclick="setQuotaProvider('ollama')">Ollama Cloud</button>
+            <button class="btn btn-secondary quota-prov-btn" data-prov="newapi" onclick="setQuotaProvider('newapi')">NewAPI</button>
             <button class="btn btn-secondary quota-prov-btn" data-prov="colab" onclick="setQuotaProvider('colab')">Google Colab</button>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
@@ -1176,7 +1177,8 @@ function icon(name){
 		waves:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg>',
 		leaf:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>',
 		flame:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>',
-		heart:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>'
+		heart:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
+		edit:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>'
 	};
 	return m[name]||'';
 }
@@ -1421,6 +1423,7 @@ var lastTimeseriesData=null;
 var lastPricesData=null;
 var lastHealthData=null;
 var quotaDataCache={};
+var quotaEditingName=null;
 var currentEventsList=[];
 
 /* ─── API Fetch with ETag ─────────────────────────────────────────────────── */
@@ -1445,6 +1448,19 @@ async function fetchJSON(path,extra,rangeOverride){
 
 async function fetchQ(path){
 	var r=await fetch(API_BASE+path);
+	if(!r.ok)throw new Error("HTTP "+r.status);
+	return r;
+}
+
+// Credentials must not ride in the URL (browser history, proxy logs, Referer).
+// CPA's resource router only wires GET for plugin routes (POST returns 404 for
+// every provider), so mutations send the action in the query and the secret in
+// request headers.
+async function quotaAction(path,params,secretHeaders){
+	var qs=Object.keys(params).map(function(k){
+		return encodeURIComponent(k)+"="+encodeURIComponent(params[k]||"");
+	}).join("&");
+	var r=await fetch(API_BASE+path+(qs?"?"+qs:""),{headers:secretHeaders||{}});
 	if(!r.ok)throw new Error("HTTP "+r.status);
 	return r;
 }
@@ -2415,7 +2431,9 @@ function installDrawerDrag(){
 
 document.addEventListener("keydown",function(e){
 	if(e.key==="Escape"){
-		if(document.getElementById("pricing-modal-overlay").classList.contains("active"))closePricingModal();
+		var keysOv=document.getElementById("newapi-keys-overlay");
+		if(keysOv&&keysOv.classList.contains("active"))closeNewAPIKeys();
+		else if(document.getElementById("pricing-modal-overlay").classList.contains("active"))closePricingModal();
 		else closeDrawer();
 	}
 });
@@ -2426,6 +2444,7 @@ function toggleAddQuotaForm(){
 	if(!card)return;
 	var isHidden=card.style.display==="none";
 	card.style.display=isHidden?"block":"none";
+	if(!isHidden)quotaEditingName=null;
 	if(isHidden){
 		document.getElementById("quotaFields").innerHTML=buildQuotaFields(currentQuotaProvider);
 		var input=document.getElementById("qa-name");
@@ -2448,11 +2467,11 @@ function setQuotaProvider(pid){
 
 function buildQuotaFields(provider){
 	var f="";
-	var provLabels={opencode:"OpenCode Go",glm:"GLM Coding",deepseek:"DeepSeek",ollama:"Ollama Cloud",colab:"Google Colab"};
+	var provLabels={opencode:"OpenCode Go",glm:"GLM Coding",deepseek:"DeepSeek",ollama:"Ollama Cloud",newapi:"NewAPI",colab:"Google Colab"};
 	var pName=provLabels[provider]||provider;
 
 	var titleEl=document.getElementById("quota-add-title");
-	if(titleEl)titleEl.textContent="添加 "+pName+" 账号凭据";
+	if(titleEl)titleEl.textContent=(quotaEditingName?"更新 ":"添加 ")+pName+" 账号凭据";
 
 	if(provider==="opencode"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识 (Account Name)</label><input class="text-input" id="qa-name" placeholder="e.g. personal"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Auth Cookie</label><input class="text-input" id="qa-cookie" placeholder="session cookie"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
@@ -2460,6 +2479,14 @@ function buildQuotaFields(provider){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. glm-dev"></div><div class="form-group" style="flex:2;min-width:240px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">Base URL</label><input class="text-input" id="qa-base" value="https://open.bigmodel.cn"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="ollama"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. ollama-pro"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Session Cookie</label><input class="text-input" id="qa-cookie" placeholder="aid=...; __Secure-session=..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+	}else if(provider==="newapi"){
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">';
+		f+='<div class="form-group" style="flex:1;min-width:150px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. dddai-main" '+(quotaEditingName?'disabled':'')+' value="'+(quotaEditingName?esc(quotaEditingName):'')+'"></div>';
+		f+='<div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">面板访问令牌 (Access Token)</label><input class="text-input" id="qa-key" placeholder="nap_..." autocomplete="off"></div>';
+		f+='<div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">面板地址 (Base URL)</label><input class="text-input" id="qa-base" value="https://dddai.dev"></div>';
+		f+='<button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon(quotaEditingName?"check":"plus")+' '+(quotaEditingName?"更新凭据":"保存账号")+'</button></div>';
+		if(quotaEditingName)f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">正在更新已有账号 <b>'+esc(quotaEditingName)+'</b> 的访问令牌与面板地址（Base URL）；账号标识不可修改。令牌与地址至少填写一项。</div>';
+		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">此处填写的是面板「访问令牌」（<code>nap_...</code>，在 <b>设置 → 安全设置</b> 中创建），不是 <code>sk-</code> 模型密钥。令牌需具备 <code>profile:read</code> / <code>wallet:read</code> / <code>usage:read</code> 三项只读权限。插件只调用官方 new-api 通用接口（<code>/api/user/self</code>、<code>/api/subscription/self</code>、<code>/api/subscription/plans</code>、<code>/api/log/self/stat</code>），不依赖任何面板私有接口；同一用户有多个订阅时按分组逐条展示。</div>';
 	}else if(provider==="colab"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. colab-main"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doColabLogin()">'+icon("google")+' 登录 Google Colab</button></div>';
 		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">点击登录后浏览器会打开 Google 授权页。授权完成后 Google 会跳转到本机回调地址 <code>http://127.0.0.1:&lt;端口&gt;</code>：若你的浏览器与本插件在同一台机器上，页面会显示「授权成功」并自动完成；若你从远程/另一台设备访问本面板，该回跳地址在此设备上打不开，请用下方「远程回投」。</div>';
@@ -2492,6 +2519,7 @@ async function renderQuota(){
 		var glmData=await fetchJSON("/glmcoding-quota");quotaDataCache["glm"]=(glmData.accounts)||[];
 		var dsData=await fetchJSON("/deepseek-quota");quotaDataCache["deepseek"]=(dsData.accounts)||[];
 		var olData=await fetchJSON("/ollama-quota");quotaDataCache["ollama"]=(olData.accounts)||[];
+		var naData=await fetchJSON("/newapi-quota");quotaDataCache["newapi"]=(naData.accounts)||[];
 		var cbData=await fetchJSON("/colab-quota");quotaDataCache["colab"]=(cbData.accounts)||[];
 
 		renderQuotaCards();
@@ -2518,22 +2546,43 @@ function renderQuotaCards(){
 			var pct=0;
 			if(win.total>0){
 				pct=Math.min(100,Math.round((win.used/win.total)*100));
-			}else if(win.remaining!==undefined && win.remaining>0){
+			}else if(win.remaining!==undefined && win.remaining>0 && acc.type!=="newapi"){
 				pct=Math.min(100,Math.round(100-win.remaining));
 			}
 			var barColor="var(--accent)";
 			if(pct>=90)barColor="var(--danger)";
 			else if(pct>=70)barColor="var(--warn)";
 
-			var resetText=win.reset_in_sec>0?("重置倒计时: "+formatReset(win.reset_in_sec)):(win.remaining!==undefined&&win.total>0?("可用余额: $"+win.remaining.toFixed(2)+" "+(win.unit||"USD")):"");
+			// NewAPI bundles expiry/burn-rate into status_text; a "remaining" line
+			// would duplicate the value already shown in the header row.
+			var resetText=acc.type==="newapi"?"":(win.reset_in_sec>0?("重置倒计时: "+formatReset(win.reset_in_sec)):(win.remaining!==undefined&&win.total>0?("可用余额: $"+win.remaining.toFixed(2)+" "+(win.unit||"USD")):""));
 			var statusText=win.status_text||(pct>=90?"配额告急":(pct>=70?"使用较高":"正常"));
+			// The NewAPI estimate window has no numeric total/remaining; its
+			// status_text already carries the whole message, so avoid printing
+			// the same sentence twice (value row + status row).
+			if(acc.type==="newapi"){
+				if(win.display==="text")statusText="—";
+				else if(win.unit==="USD/天")statusText="按近期消耗估算";
+			}
 
 			var warnHtml="";
 			if(pct>=90)warnHtml='<div class="quota-alert danger">'+icon("alertCircle")+' 配额即将耗尽 (>90%%)</div>';
 			else if(pct>=70)warnHtml='<div class="quota-alert warning">'+icon("alertCircle")+' 使用率较高 (>70%%)</div>';
 
 			var valDisplay="";
-			if(acc.type==="colab"){
+			if(acc.type==="newapi"){
+				// Backend marks text-only windows (unlimited plans, burn-rate
+				// estimate) because they have no meaningful used/total pair.
+				if(win.display==="text"){
+					valDisplay=win.status_text?esc(win.status_text):"";
+				}else if(win.total>0){
+					valDisplay='$'+Number(win.used||0).toFixed(2)+' / $'+Number(win.total||0).toFixed(2);
+				}else if(win.remaining!==undefined&&win.unit!=="USD/天"){
+					valDisplay='$'+Number(win.remaining||0).toFixed(2);
+				}else{
+					valDisplay=win.status_text?esc(win.status_text):"";
+				}
+			}else if(acc.type==="colab"){
 				if(win.total>0){
 					valDisplay=Number(win.used||0).toFixed(1)+' / '+Number(win.total||0).toFixed(0)+' '+esc(win.unit||"")+' (余 '+Number(win.remaining||0).toFixed(1)+')';
 				}else if(win.remaining!==undefined){
@@ -2568,13 +2617,25 @@ function renderQuotaCards(){
 			historyHtml='<div class="colab-history" id="colab-history-'+esc(acc.name)+'" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--fg)">用量历史</span><span style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" data-history-days="7" onclick="loadColabHistory(\''+esc(acc.name)+'\',7)">7天</button><button class="btn btn-primary btn-xs" data-history-days="30" onclick="loadColabHistory(\''+esc(acc.name)+'\',30)">30天</button><button class="btn btn-ghost btn-xs" data-history-days="90" onclick="loadColabHistory(\''+esc(acc.name)+'\',90)">90天</button></span></div><div style="font-size:11px;color:var(--meta)">正在加载…</div></div>';
 		}
 
-		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto"><button class="btn btn-secondary btn-sm" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("refresh")+' 刷新配额</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
+		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+(acc.base_url?esc(acc.base_url)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto">'+(acc.type==="newapi"?'<button class="btn btn-secondary btn-sm" onclick="openNewAPIKeys(\''+esc(acc.name)+'\')">'+icon("key")+' API Keys</button><button class="btn btn-secondary btn-sm" onclick="openNewAPIEdit(\''+esc(acc.name)+'\',\''+esc(acc.base_url||"")+'\')">'+icon("edit")+' 编辑凭据</button>':'')+'<button class="btn btn-secondary btn-sm" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("refresh")+' 刷新配额</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
 	}).join("");
 
 	// Auto-load history charts for Colab accounts.
 	setTimeout(function(){
 		accounts.forEach(function(acc){
-			if(acc.type==="colab"){
+			if(acc.type==="newapi"){
+				// Backend marks text-only windows (unlimited plans, burn-rate
+				// estimate) because they have no meaningful used/total pair.
+				if(win.display==="text"){
+					valDisplay=win.status_text?esc(win.status_text):"";
+				}else if(win.total>0){
+					valDisplay='$'+Number(win.used||0).toFixed(2)+' / $'+Number(win.total||0).toFixed(2);
+				}else if(win.remaining!==undefined&&win.unit!=="USD/天"){
+					valDisplay='$'+Number(win.remaining||0).toFixed(2);
+				}else{
+					valDisplay=win.status_text?esc(win.status_text):"";
+				}
+			}else if(acc.type==="colab"){
 				loadColabHistory(acc.name,30);
 			}
 		});
@@ -2724,6 +2785,93 @@ function renderColabHistoryChart(container,points,days){
 	chartBox.innerHTML=svgHtml+legend;
 }
 
+/* ─── NewAPI API Key list (names + usage only) ───────────────────────────── */
+function openNewAPIKeys(name){
+	var ov=document.getElementById("newapi-keys-overlay");
+	var body=document.getElementById("newapi-keys-body");
+	var sub=document.getElementById("newapi-keys-subtitle");
+	if(sub)sub.textContent=name+" · 仅展示名称与用量，密钥明文永不读取";
+	if(body)body.innerHTML='<div style="font-size:12px;color:var(--meta)">正在加载…</div>';
+	ov.classList.add("active");
+	ov.setAttribute("aria-hidden","false");
+	quotaAction("/newapi-quota",{action:"keys",account:name}).then(function(r){
+		return r.json();
+	}).then(function(d){
+		var payload=(d&&d.result)?d.result:d;
+		if(!body)return;
+		if(payload.error&&(!payload.keys||!payload.keys.length)){
+			body.innerHTML='<div class="error-detail-box">'+esc(payload.error)+'</div>';
+			return;
+		}
+		var keys=payload.keys||[];
+		if(!keys.length){
+			body.innerHTML='<div style="font-size:12px;color:var(--meta)">该账号下没有 API Key</div>';
+			return;
+		}
+		var totalUsed=0,totalRemain=0,unlimited=false;
+		keys.forEach(function(k){
+			totalUsed+=Number(k.used_usd||0);
+			if(k.unlimited)unlimited=true; else totalRemain+=Number(k.remaining_usd||0);
+		});
+		var head='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px 12px;background:var(--surface-warm);border-radius:var(--radius-md)">'+
+			'<span>共 <b style="color:var(--fg)">'+keys.length+'</b> 个</span>'+
+			'<span>已用合计 <b style="color:var(--fg)">$'+totalUsed.toFixed(2)+'</b></span>'+
+			'<span>余额合计 <b style="color:var(--fg)">'+(unlimited?'含不限量':'$'+totalRemain.toFixed(2))+'</b></span>'+
+			'<span style="margin-left:auto">🔒 不读取 key 明文</span></div>';
+		var rows=keys.map(function(k){
+			var pct=0;
+			if(!k.unlimited&&k.total_usd>0)pct=Math.min(100,Math.round((k.used_usd/k.total_usd)*100));
+			var color=pct>=90?"var(--danger)":(pct>=70?"var(--warn)":"var(--accent)");
+			var bar=k.unlimited?'':'<div class="progress-bar-bg" style="margin-top:4px"><div class="progress-bar-fill" style="width:'+pct+'%%;background:'+color+'"></div></div>';
+			var panelNote=k.panel_used?' ('+esc(k.panel_used)+')':'';
+			var usage=k.unlimited?'<span style="font-family:var(--font-mono);font-size:12px">已用 $'+Number(k.used_usd||0).toFixed(2)+panelNote+' · 不限量</span>'
+				:'<span style="font-family:var(--font-mono);font-size:12px">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+			var meta=[];
+			if(k.group)meta.push("分组 "+k.group);
+			if(k.accessed_at)meta.push("最近使用 "+k.accessed_at.slice(0,10));
+			if(k.expires_at)meta.push("到期 "+k.expires_at.slice(0,10));
+			return '<div style="padding:10px 0;border-bottom:1px solid var(--border-soft)">'+
+				'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
+				'<span style="font-size:13px;font-weight:600;color:var(--fg)">'+esc(k.name||("Key #"+k.id))+'</span>'+
+				'<span style="display:flex;align-items:center;gap:8px">'+
+				'<span class="badge '+(k.status==="启用"?'badge-success':(k.status==="已过期"||k.status==="额度耗尽"?'badge-danger':'badge-neutral'))+'">'+esc(k.status||"未知")+'</span>'+
+				'<span style="font-size:11px;color:var(--meta)">#'+esc(String(k.id))+'</span></span></div>'+
+				'<div style="display:flex;justify-content:space-between;margin-top:4px;gap:10px">'+
+				'<span style="font-size:11px;color:var(--meta)">'+esc(meta.join(" · ")||"—")+'</span>'+usage+'</div>'+
+				bar+'</div>';
+		}).join("");
+		body.innerHTML=head+rows;
+	}).catch(function(e){
+		if(body)body.innerHTML='<div class="error-detail-box">加载失败：'+esc(e.message||"未知错误")+'</div>';
+	});
+}
+function closeNewAPIKeys(){
+	var ov=document.getElementById("newapi-keys-overlay");
+	if(!ov)return;
+	ov.classList.remove("active");
+	ov.setAttribute("aria-hidden","true");
+}
+
+// openNewAPIEdit puts the add-credentials panel into edit mode for an existing
+// NewAPI account, so a rotated token or a corrected base URL does not require
+// removing and re-adding the account.
+function openNewAPIEdit(name,baseURL){
+	quotaEditingName=name;
+	currentQuotaProvider="newapi";
+	document.querySelectorAll(".quota-prov-btn").forEach(function(b){
+		var prov=b.getAttribute("data-prov");
+		b.className=(prov==="newapi")?"btn btn-primary quota-prov-btn":"btn btn-secondary quota-prov-btn";
+	});
+	var card=document.getElementById("quota-add-card");
+	card.style.display="block";
+	document.getElementById("quotaFields").innerHTML=buildQuotaFields("newapi");
+	var base=document.getElementById("qa-base");
+	if(base)base.value=baseURL||"https://dddai.dev";
+	var key=document.getElementById("qa-key");
+	if(key)setTimeout(function(){key.focus()},100);
+	renderQuotaCards();
+}
+
 function doAddQuotaAccount(){
 	var n=(document.getElementById("qa-name")||{}).value||"";
 	n=n.trim();
@@ -2751,6 +2899,20 @@ function doAddQuotaAccount(){
 			renderQuota();
 			showToast("已添加 Ollama 账号: "+n,"success");
 		}).catch(function(){showToast("添加失败","danger")});
+	}else if(p==="newapi"){
+		var nk=(document.getElementById("qa-key")||{}).value||"";
+		var nb=(document.getElementById("qa-base")||{}).value||"";
+		var editing=quotaEditingName;
+		if(!nk.trim()&&!editing){showToast("请输入面板访问令牌 (nap_...)","danger");return;}
+		var action=editing?"settoken":"addaccount";
+		var account=editing||n;
+		var hdrs={"X-NewAPI-Token":nk.trim(),"X-NewAPI-Base-URL":nb.trim()};
+		quotaAction("/newapi-quota",{action:action,account:account},hdrs).then(function(){
+			quotaEditingName=null;
+			toggleAddQuotaForm();
+			renderQuota();
+			showToast((editing?"已更新 ":"已添加 ")+"NewAPI 账号: "+account,"success");
+		}).catch(function(){showToast((editing?"更新":"添加")+"失败：请检查令牌与面板地址","danger")});
 	}else if(p==="colab"){
 		doColabLogin();
 	}else{
@@ -2901,6 +3063,7 @@ function quotaPath(provider){
 	if(provider==="glm")return"/glmcoding-quota";
 	if(provider==="ollama")return"/ollama-quota";
 	if(provider==="colab")return"/colab-quota";
+	if(provider==="newapi")return"/newapi-quota";
 	return"/deepseek-quota";
 }
 function refreshQuota(provider,name){
@@ -3497,5 +3660,18 @@ if(refreshIntervalMs>0){
 	refreshTimer=setInterval(refreshAll,refreshIntervalMs);
 }
 </script>
+  <!-- API Key list (names + usage only; secrets are never returned by the backend) -->
+  <div class="modal-overlay" id="newapi-keys-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="newapi-keys-title">
+    <div class="modal-card" style="width:720px;max-height:80vh;overflow:auto">
+      <div class="modal-header">
+        <div>
+          <h3 class="card-title" id="newapi-keys-title" style="font-size:17px">API Keys</h3>
+          <p class="card-subtitle" id="newapi-keys-subtitle">仅展示名称与用量，密钥明文永不读取</p>
+        </div>
+        <button class="btn btn-ghost btn-icon-only" onclick="closeNewAPIKeys()" aria-label="关闭">X</button>
+      </div>
+      <div id="newapi-keys-body" style="margin-top:4px"><div style="font-size:12px;color:var(--meta)">正在加载…</div></div>
+    </div>
+  </div>
 </body>
 </html>

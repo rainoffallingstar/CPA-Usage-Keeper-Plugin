@@ -36,9 +36,10 @@ const (
 	resourceAPIGlmCodingQuota = "/v0/resource/plugins/usage-keeper/api/glmcoding-quota"
 	resourceAPIDeepSeekQuota  = "/v0/resource/plugins/usage-keeper/api/deepseek-quota"
 	resourceAPIOllamaQuota    = "/v0/resource/plugins/usage-keeper/api/ollama-quota"
+	resourceAPINewAPIQuota    = "/v0/resource/plugins/usage-keeper/api/newapi-quota"
 )
 
-var pluginVersion = "0.11.29"
+var pluginVersion = "0.11.33"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -51,6 +52,7 @@ type pluginConfig struct {
 	GlmCodingAccounts  []glmCodingAcctCfg  `yaml:"glm_coding_accounts"`
 	DeepSeekAccounts   []deepseekAcctCfg   `yaml:"deepseek_accounts"`
 	OllamaAccounts     []ollamaAcctCfg     `yaml:"ollama_accounts"`
+	NewAPIAccounts     []newAPIAccountCfg  `yaml:"newapi_accounts"`
 
 	// UnpricedIgnoreModels lists extra model names to exempt from the
 	// "models_without_price" health alert. It exists for subscription-flat /
@@ -207,21 +209,33 @@ type ollamaAcctCfg struct {
 	ShowWeekly    bool   `yaml:"show_weekly"`
 }
 
+// newAPIAccountCfg configures a NewAPI-compatible panel account (e.g. dddai).
+// Token is the panel access token ("nap_..."), not an "sk-" model API key.
+type newAPIAccountCfg struct {
+	Name    string `yaml:"name"`
+	BaseURL string `yaml:"base_url"`
+	Token   string `yaml:"token"`
+}
+
 type workspaceEntry struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
 type quotaWindow struct {
-	Label      string             `json:"label"`
-	Used       float64            `json:"used"`
-	Remaining  float64            `json:"remaining"`
-	Total      float64            `json:"total"`
-	Unit       string             `json:"unit"`
-	ResetInSec int                `json:"reset_in_sec"`
-	ResetAt    string             `json:"reset_at,omitempty"`
-	StatusText string             `json:"status_text,omitempty"`
-	Models     []ollamaModelUsage `json:"models,omitempty"`
+	Label      string  `json:"label"`
+	Used       float64 `json:"used"`
+	Remaining  float64 `json:"remaining"`
+	Total      float64 `json:"total"`
+	Unit       string  `json:"unit"`
+	ResetInSec int     `json:"reset_in_sec"`
+	ResetAt    string  `json:"reset_at,omitempty"`
+	StatusText string  `json:"status_text,omitempty"`
+	// Display optionally overrides the value rendering: "text" shows
+	// status_text instead of a numeric used/total pair (unlimited plans,
+	// burn-rate-only windows).
+	Display string             `json:"display,omitempty"`
+	Models  []ollamaModelUsage `json:"models,omitempty"`
 }
 
 type glmModelUsage struct {
@@ -239,6 +253,7 @@ type quotaAccount struct {
 	Type        string           `json:"type"`
 	Name        string           `json:"name"`
 	WorkspaceID string           `json:"workspace_id"`
+	BaseURL     string           `json:"base_url,omitempty"`
 	Workspaces  []workspaceEntry `json:"workspaces,omitempty"`
 	Success     bool             `json:"success"`
 	UpdatedAt   string           `json:"updated_at"`

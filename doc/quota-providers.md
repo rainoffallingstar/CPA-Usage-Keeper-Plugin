@@ -1,6 +1,6 @@
 # Quota Monitoring Providers — Calculation Methods & Pitfalls
 
-Last updated: 2026-07-07 (v0.10.9)
+Last updated: 2026-10-19 (v0.11.30)
 
 ---
 
@@ -395,3 +395,119 @@ func computeColabCeiling(tier string, balance float64) (total float64, used floa
    integer and treat value as milli-CCUs.
 4. The OAuth client is the public Colab VS Code extension client;
    it is not private — treat refresh tokens as sensitive.
+
+
+---
+
+## 9. NewAPI-compatible panels — Wallet + Subscriptions
+
+### Scope: stock new-api only
+
+Verified against `QuantumNous/new-api` `main` (HEAD `058c823`, 2026-10-18) and
+release `v1.0.0-rc.45`. This provider deliberately uses **only routes that
+upstream ships**:
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `GET /api/status` | public | `quota_per_unit`, `quota_display_type`, `usd_exchange_rate` |
+| `GET /api/user/self` | `profile:read` | `quota`, `used_quota`, `request_count`, `group` |
+| `GET /api/subscription/self` | `wallet:read` | active subscriptions (`amount_total` / `amount_used` / `end_time`) |
+| `GET /api/subscription/plans` | `wallet:read` | `plan_id` → `title` |
+| `GET /api/log/self/stat` | `usage:read` | quota consumed in `start_timestamp`…`end_timestamp` |
+
+Not used (dddai extensions, absent upstream — see §9.1 below):
+
+- `GET /api/billing/summary`
+- `GET /api/user/self/pricing`
+- `GET /api/user/messages`
+
+### Credential and base URL
+
+- Credential: panel **access token** (`nap_...`, `model.AccessTokenPrefix`),
+  sent as `Authorization: Bearer <token>`. Model keys (`sk-...`) are rejected by
+  `/api/*`, and `X-Api-Key` is rejected too.
+- Base URL is per-account and editable in the dashboard (`面板地址`). Bare hosts,
+  trailing slashes, and accidental `/api` / `/v1` suffixes are normalized.
+- Tokens are obfuscated at rest in `newapi_accounts.token`.
+
+### Multiple simultaneous subscriptions
+
+A NewAPI user can hold several active subscriptions at once, and each one is
+scoped to its own group (`upgrade_group`, e.g. `sub-openai` vs
+`sub-claude-kiro`). Their quota pools are **not** interchangeable, so:
+
+- Each active subscription renders as its **own progress bar**, labelled with
+  its plan title (`订阅 #id` when the title cannot be resolved).
+- Duplicate plan titles are disambiguated with the group name, then the
+  subscription id.
+- Subscriptions are ordered by soonest `end_time`.
+- Expired/cancelled subscriptions are ignored.
+- `amount_total == 0` means unlimited (upstream semantics) and renders as text,
+  not a `$0 / $0` bar.
+- The burn-rate window reports a **pooled** remaining figure, but appends
+  `各订阅额度不互通` whenever more than one subscription is present; when any
+  subscription is unlimited no day estimate is claimed.
+
+### Field mapping
+
+| Source | Card | Conversion |
+|--------|------|------------|
+| `quota_per_unit` | — | divide all quota values → USD |
+| `amount_used` (per subscription) | window `used` | ÷ unit |
+| `amount_total` | window `total` | ÷ unit |
+| `amount_total - amount_used` | window `remaining` | ÷ unit |
+| `end_time - now` | `status_text` 「N 天后到期」 | days |
+| `next_reset_time` | `status_text` 「N 天后重置」 | days |
+| `user.quota` | wallet `remaining` | ÷ unit |
+| `user.used_quota` | wallet `status_text` | ÷ unit |
+| 7-day `log/self/stat` quota ÷ 7 | 日均 | ÷ unit |
+| wallet + finite subscriptions | 合计剩余 / 预计天数 | ÷ unit |
+| `plan_title` (from `/plans`) | window label + account plan | — |
+| `quota_display_type` + `usd_exchange_rate` | `面板显示 ¥…` | CNY = quota/unit×rate |
+
+### Pitfalls
+
+1. **`/api/billing/summary` is not portable** — it is dddai-only. Using the
+   stock routes keeps the provider working on every NewAPI deployment.
+2. **Unit conversion is mandatory.** Without `quota_per_unit` the card shows
+   `475000000 / 950` style numbers.
+3. **Wallet `total` is lifetime cumulative**, not a budget; the wallet is
+   rendered as a text balance and `used` moves into `status_text`.
+4. **`UserSubscription` has no plan title.** Upstream returns `plan_id` only, so
+   titles need `/api/subscription/plans`.
+5. **Do not sum subscription quotas into one bar.** Groups are isolated; only
+   the estimate hint may report a pooled figure, with a caveat.
+6. **Scope mapping** — `profile:read` (wallet), `wallet:read` (subscriptions),
+   `usage:read` (logs). A missing scope degrades to a warning instead of
+   blanking the whole card, and the panel's message (`ACCESS_TOKEN_SCOPE_DENIED`)
+   is shown verbatim.
+7. **Legacy tokens are retired** — HTTP 401 `ACCESS_TOKEN_LEGACY_RETIRED`.
+8. **Log range cap** — `/api/log/self/stat` enforces `log_setting.max_range_days`
+   (default 365); the 7-day query is far inside it.
+
+### 9.1 dddai extensions (for reference, not relied upon)
+
+| Endpoint | Content |
+|----------|---------|
+| `/api/billing/summary` | wallet + subscription + 7-day estimate in one call |
+| `/api/user/self/pricing` | pricing tier (`pricing_tier`, factor) |
+| `/api/user/messages` | in-site messages |
+
+They were useful for validating the numbers during development, but the
+provider no longer calls them.
+
+### Route & registration
+
+| Provider | Resource Path |
+|----------|--------------|
+| NewAPI | `/v0/resource/plugins/usage-keeper/api/newapi-quota` |
+
+Actions (GET query or POST JSON): `addaccount`, `removeaccount`,
+`settoken` (alias `setkey`), `refresh`. `settoken` also accepts a new
+`base_url`, which backs the dashboard's 「编辑凭据」 action.
+
+### DB persistence
+
+| Provider | Table | Columns |
+|----------|-------|---------|
+| NewAPI | `newapi_accounts` | `name`, `base_url`, `token` (obfuscated) |

@@ -87,3 +87,25 @@ plugins:
       #     session_cookie: "aid=YOUR_AID; __Secure-session=YOUR_SESSION_VALUE"
       #     show_session: true
       #     show_weekly: true
+
+      # -----------------------------------------------------------------------
+      # newapi_accounts — NewAPI 兼容面板（如 dddai.dev）的钱包 + 订阅额度（可选，
+      # 也可在 Dashboard 的「NewAPI / dddai」页签中直接添加）。
+      # 使用面板「访问令牌」(nap_...)，不是 sk- 模型密钥。
+      # 只调用官方 new-api 通用自助接口：
+      #   /api/status（公开）+ /api/user/self（profile:read）
+      #   + /api/subscription/self、/api/subscription/plans（wallet:read）
+      #   + /api/log/self/stat（usage:read）
+      # 因此令牌需要 profile:read / wallet:read / usage:read 三项只读权限。
+      # 若要查看 API Key 列表（仅名称与用量），还需 api_key:read。
+      # 插件绝不读取/展示 Key 明文，也不调用任何 reveal 接口。
+      # 同一用户存在多个订阅时，每个订阅按所属分组独立展示（额度不互通）。
+      #   name     — 展示名称
+      #   base_url — 面板根地址（默认 https://dddai.dev；会自动去掉 /api、/v1 后缀）
+      #   token    — 面板访问令牌；需具备钱包/订阅/用量读取权限
+      # 令牌落库时做轻量混淆（与 Colab refresh token 相同），不会明文存储。
+      # -----------------------------------------------------------------------
+      # newapi_accounts:
+      #   - name: "dddai 自用"
+      #     base_url: "https://dddai.dev"
+      #     token: "nap_..."

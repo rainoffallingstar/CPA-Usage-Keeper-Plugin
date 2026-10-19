@@ -1,5 +1,64 @@
 # Changelog
 
+## v0.11.33 (2026-10-19)
+
+### Fixes
+- **不限量 Key 显示负余额**：上游对 `unlimited_quota=true` 的令牌把 `remain_quota` 记为负数（它是记账计数器，不是余额）。实测 `oui`/`oui2`/`akile` 均为负值，此前直接换算会把「余 $-…」显示出来。现在不限量 Key 的剩余额度统一归零、只展示「已用 + 不限量」，且对任何负值做兜底钳制。
+- **Key 列表排序**：改为按已用金额降序（同额时按 id 降序），最耗用的 Key 排在最前，符合用量视图直觉。
+- **面板货币补充**：Key 行在 USD 之后追加面板本地货币（如 `(¥260.58)`），与订阅卡片口径一致。
+
+### Verified
+- dddai 令牌补齐 `api_key:read` 后实测：`GET /api/token/` 返回 5 个 Key，插件输出全部字段正确，无负余额；原始响应中的 `key` 字段（18 字符）未进入解码结构体，响应 JSON 与前端渲染均不含 `sk-`/明文。
+
+## v0.11.32 (2026-10-19)
+
+### Features
+- **NewAPI：API Key 列表（仅名称与用量）**：配额卡片新增「API Keys」按钮，列出该面板账号下的全部 Key，显示名称、启用/禁用/过期/耗尽状态、分组、最近使用、到期时间、已用/剩余/总额（USD + 面板本地货币）与使用率进度条，并给出"共 N 个 / 已用合计 / 余额合计"汇总。
+
+### Security
+- **完全不解码 key 明文**：`GET /api/token/` 的上游响应含 `key` 字段（上游已做掩码，但我们不做任何依赖），插件结构体 `newAPITokenItem` **不声明 `key` 字段**，JSON 解码时直接丢弃；既不写入内存缓存、不落 SQLite，也不进入 API 响应与 Dashboard。不调用任何 reveal 接口（`POST /api/token/:id/key`）。
+- 令牌仍只从请求头读取（`X-NewAPI-Token`），避免 CPA 访问日志泄露。
+- 单页 100 条自动翻页（上限 100 页），复用 `/api/status` 的 `quota_per_unit` 与显示货币设置做换算。
+
+### Notes
+- 读取 Key 列表需要令牌具备 `api_key:read` 权限；缺失时弹窗显示面板原文 `ACCESS_TOKEN_SCOPE_DENIED … api_key:read`，不影响配额卡片本身。
+- 当前 dddai 令牌未授予该权限，实测返回 403，属预期；在面板「设置 → 安全设置」给令牌勾选 API 密钥读取权限后即可看到列表。
+
+### Tests
+- `TestFetchNewAPITokensPaginatesAndNeverKeepsPlaintext`（250 条 / 3 页；断言解码后的结构体 JSON 不含 `sk-`/`SECRET`）。
+- `TestBuildNewAPIKeysNeverExposesSecret`（正常/不限量/过期/禁用状态，USD 换算，响应不含 `key`/`sk-`/`secret`）。
+- `TestHandleNewAPIKeysErrorShape`（缺 `api_key:read` 时返回空列表 + 面板原文提示）。
+- `dashboard/init_smoke.test.js` 新增 Key 列表弹窗渲染断言（名称、用量、不限量、隐私提示，且不出现 `sk-`）。
+
+## v0.11.31 (2026-10-19)
+
+### Fixes
+- **资源路由 POST 在 CPA 宿主机上返回 404**：宿主的 resource 路由只注册了 GET（其余 Provider 的 POST 同样 404），此前前端用 POST JSON 保存账号实际无法生效。
+  - 新增账号 / 更新凭据改为 `GET ?action=…` + **请求头**传参（`X-NewAPI-Token`、`X-NewAPI-Base-URL`）。CPA 会把完整请求 URI 写入访问日志，若把令牌放在查询串会明文泄露到日志、浏览器历史与代理日志，因此凭据只走请求头。
+  - 后端同时兼容查询参数（供 curl 调试）与大小写不敏感的请求头；POST JSON 入口保留，供管理 API 使用。
+
+## v0.11.30 (2026-10-19)
+
+### Features
+- **订阅配额新增「NewAPI」Provider**：接入 NewAPI 兼容中转面板（dddai 等）的钱包与订阅额度。使用**面板访问令牌**（`nap_...`）而非 `sk-` 模型密钥，面板地址可在 Dashboard 中逐账号配置。
+  - **只依赖官方通用接口**：`/api/status`、`/api/user/self`、`/api/subscription/self`、`/api/subscription/plans`、`/api/log/self/stat`。不调用任何 dddai 专有扩展，因此对任意 new-api 部署可用。
+  - 一次刷新展示：每个活跃订阅的已用/总额/剩余（套餐名、到期天数、可选重置天数）、钱包余额（含累计已用）、近 7 天日均消耗与合计预计可用天数。
+  - 面板内部额度单位按 `/api/status` 的 `quota_per_unit` 换算为 USD；同时按 `quota_display_type` / `usd_exchange_rate` 在状态行附带面板本地货币等值（如 `面板显示 ¥4845.38`）。
+  - **支持多订阅并存**：每个订阅对应独立分组、额度不可互通，因此逐条渲染独立进度条并按最近到期排序；同套餐重名时自动追加分组或订阅 ID 区分；`amount_total == 0` 按上游语义视为不限量并以文本呈现。预估窗口只汇总"合计剩余"，且在多订阅时明确标注「各订阅额度不互通」。
+  - 支持添加 / 移除 / 更新令牌与面板地址（「编辑凭据」）/ 立即刷新；账号落库 `newapi_accounts`（令牌与 Colab refresh token 一样做轻量混淆），并支持 `newapi_accounts` YAML 预配置。
+  - 部分权限缺失（如无 `profile:read`）时不再整卡失败：已取到的窗口照常渲染，缺失项与面板原始错误（`ACCESS_TOKEN_SCOPE_DENIED` 等）列在错误区。
+  - 新增资源端点 `/api/newapi-quota`（GET/POST）与管理端点 `/v0/management/usage-keeper/newapi-quota`。
+
+### Compatibility notes
+- 核对 `QuantumNous/new-api` `main`（`058c823`）与 `v1.0.0-rc.45`：**`/api/billing/summary` 不存在于官方仓库**，属 dddai 聚合扩展；`/api/user/self/pricing`、`/api/user/messages` 同为 dddai 自研。早期实现曾依赖该聚合接口，现已完全移除。
+- 官方 `UserSubscription` 不返回套餐名，仅有 `plan_id`，因此 `plan_title` 由 `/api/subscription/plans` 补齐。
+- 已用 dddai 真实令牌实测官方接口链路，与聚合接口输出一致（$712.56 剩余 / $12.07 日均 / 59.1 天）。
+
+### Tests
+- `TestFetchNewAPISnapshotUsesOnlyStockRoutes`（stock 服务器，断言绝不调用 `/api/billing/summary`；过期订阅被过滤、按到期排序、套餐名补齐、7 天日均与合并剩余）。
+- `TestBuildNewAPIQuotaAccountRendersEachSubscription`（两条订阅各自成条 + 钱包 + 预估、多订阅不互通提示）、`TestBuildNewAPIQuotaAccountDisambiguatesDuplicatePlanTitles`、`TestBuildNewAPIQuotaAccountSingleAndUnlimited`、`TestBuildNewAPIQuotaAccountShowsPanelCurrency`、`TestFetchNewAPISnapshotPartialFailureKeepsWorkingWindows`、`TestFetchNewAPISnapshotAllSourcesFail`、`TestNormalizeNewAPIBaseURL`、`TestNewAPIAccountAddRemoveLifecycle`。
+- `dashboard/init_smoke.test.js` 覆盖多订阅卡片（两条订阅进度条、面板货币、base URL、编辑凭据入口、多订阅提示）。
+
 ## v0.11.29 (2026-10-15)
 
 ### Fixes

@@ -65,6 +65,7 @@
 - **智谱 GLM Coding**：追踪每日调用额度上限、剩余百分比、重置倒计时与模型使用拆分。
 - **DeepSeek 官方账户**：实时查询预付费账户余额（USD）与使用率。
 - **Ollama Cloud**：精准解析 `ollama.com` 会话限额（Session / 5h 窗口）与每周限额（Weekly），模型调用次数精准归属于各自窗口下方。
+- **NewAPI 兼容面板（dddai 等）**：面板地址可在前端逐账号配置；使用面板**访问令牌**（`nap_...`，非 `sk-` 模型密钥）调用**官方通用接口**（`/api/status`、`/api/user/self`、`/api/subscription/self`、`/api/subscription/plans`、`/api/log/self/stat`），读取钱包余额、订阅额度（套餐名、到期天数、重置时间）与近 7 天日均消耗/预计可用天数；额度单位按 `quota_per_unit` 自动换算 USD，并按面板 `quota_display_type` 附带 CNY 等本地货币等值。**支持同一用户并存多个订阅**：每个订阅按所属分组独立成条（额度不可互通，不做合并进度条），同套餐重名时自动加分组/ID 区分。卡片上的「API Keys」按钮可列出该账号全部 Key 的**名称与用量/余额**（状态、分组、最近使用、到期、使用率）；**密钥明文从结构体层面就不解码**，不会进入内存、数据库、API 响应或前端，也从不调用 reveal 接口。
 
 ---
 
@@ -175,6 +176,13 @@ plugins:
           session_cookie: "aid=...; __Secure-session=..."
           show_session: true
           show_weekly: true
+
+      # 可选：预配置 NewAPI 兼容面板（dddai）账号
+      # token 为面板「访问令牌」(nap_...)，不是 sk- 模型密钥
+      newapi_accounts:
+        - name: "dddai 自用"
+          base_url: "https://dddai.dev"
+          token: "nap_..."
 ```
 
 ---
@@ -198,6 +206,7 @@ plugins:
 | `/api/glmcoding-quota`| `GET/POST` | 智谱 GLM Coding 账号配额获取与管理 |
 | `/api/deepseek-quota` | `GET/POST` | DeepSeek 官方余额获取与管理 |
 | `/api/ollama-quota`   | `GET/POST` | Ollama Cloud 会话与周度限额获取 |
+| `/api/newapi-quota`   | `GET/POST` | NewAPI 兼容面板（dddai）配额管理；`?action=keys` 返回 Key 名称与用量（不含明文） |
 | `/api/usage`          | `GET` | Quotio 格式兼容的聚合用量端点 |
 
 > 以下端点为**管理 API**（需 CPA management key，供脚本/运维使用，Dashboard 未接入 UI）：

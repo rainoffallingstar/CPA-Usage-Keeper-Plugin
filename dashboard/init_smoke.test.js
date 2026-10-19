@@ -116,6 +116,26 @@ const QUOTA_ACCOUNT = { key: 'acct-1', name: 'Account 1', email: 'a@b.c', status
 ['/opencode-quota', '/glmcoding-quota', '/deepseek-quota', '/ollama-quota', '/colab-quota'].forEach(
   (p) => (RESPONSES[p] = { accounts: [QUOTA_ACCOUNT] })
 );
+// NewAPI/dddai uses a different window shape: a subscription progress bar, a
+// wallet balance without a usable total, and a text-only burn-rate estimate.
+RESPONSES['/newapi-quota'] = {
+  accounts: [
+    {
+      type: 'newapi',
+      name: 'dddai-main',
+      plan: '增强月卡',
+      success: true,
+      updated_at: iso(0),
+      base_url: 'https://dddai.dev',
+      windows: [
+        { label: '增强月卡 · sub-openai', used: 235.97, total: 950, remaining: 714.03, unit: 'USD', status_text: '剩余 $714.03 · 11 天后到期 · 面板显示 ¥4855.20' },
+        { label: 'Claude Kiro 周卡 · sub-claude-kiro', used: 200, total: 720, remaining: 520, unit: 'USD', status_text: '剩余 $520.00 · 3 天后到期' },
+        { label: '钱包余额', used: 0, total: 0, remaining: 0.6, unit: 'USD', status_text: '累计已用 $1136.59（历史累计）' },
+        { label: '用量预估', used: 0, total: 0, remaining: 0, unit: 'USD/天', display: 'text', status_text: '近 7 天日均 $11.85 · 合计剩余 $1234.63 ≈ 104.2 天（各订阅额度不互通）' },
+      ],
+    },
+  ],
+};
 
 // ── Minimal DOM stub ────────────────────────────────────────────────────────
 // Records every non-empty innerHTML write so a render can be checked without
@@ -234,7 +254,10 @@ const sandbox = {
   requestAnimationFrame: () => 0, cancelAnimationFrame() {},
   fetch: async (url) => {
     const path0 = String(url);
-    const key = Object.keys(RESPONSES).find((k) => path0.includes(k));
+    // Prefer the most specific match: "/x?action=keys" must win over "/x".
+    const key = Object.keys(RESPONSES)
+      .filter((k) => path0.includes(k))
+      .sort((a, b) => b.length - a.length)[0];
     if (!key) throw new Error('smoke-stub: unexpected request ' + path0);
     const data = RESPONSES[key];
     return {
@@ -258,6 +281,52 @@ vm.createContext(sandbox);
 // ── Tests ───────────────────────────────────────────────────────────────────
 test('dashboard script initialises without throwing', () => {
   assert.doesNotThrow(() => vm.runInContext(source, sandbox, { filename: 'dashboard-script.js' }));
+});
+
+RESPONSES['/newapi-quota?action=keys'] = {
+  account: 'dddai-main',
+  total: 3,
+  keys: [
+    { id: 1, name: 'prod-key', status: '启用', group: 'sub-openai', used_usd: 5, remaining_usd: 15, total_usd: 20, window: { used: 5, remaining: 15, total: 20, unit: 'USD', status_text: '已用 $5.00 · 余 $15.00' } },
+    { id: 2, name: 'unlimited-key', status: '启用', unlimited: true, used_usd: 2, remaining_usd: 0, total_usd: 0, window: { used: 2, remaining: 0, total: 0, unit: 'USD', unlimited: true, status_text: '不限量' } },
+    { id: 3, name: 'retired-key', status: '已禁用', used_usd: 0, remaining_usd: 0, total_usd: 0, window: { used: 0, remaining: 0, total: 0, unit: 'USD', status_text: '已用 $0.00 · 余 $0.00' } },
+  ],
+};
+
+test('newapi key list modal renders names and usage without secrets', async () => {
+  sandbox.openNewAPIKeys('dddai-main');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The stubbed fetch resolves on a microtask; flush it.
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const html = writes.map((w) => w.html).join('\n');
+  assert.ok(html.includes('prod-key'), 'key name missing');
+  assert.ok(html.includes('$5.00 / $20.00'), 'usage missing');
+  assert.ok(html.includes('unlimited-key'), 'unlimited key missing');
+  assert.ok(html.includes('retired-key'), 'disabled key missing');
+  assert.ok(html.includes('不读取 key 明文'), 'privacy note missing');
+  assert.ok(!/sk-/.test(html), 'rendered a secret-looking value');
+});
+
+test('newapi quota card renders subscription, wallet and estimate windows', async () => {
+  sandbox.currentQuotaProvider = 'newapi';
+  writes.length = 0;
+  await assert.doesNotReject(() => sandbox.renderQuota(), 'renderQuota() threw for newapi');
+
+  const html = writes.map((w) => w.html).join('\n');
+  assert.ok(html.includes('dddai-main'), 'account name missing');
+  assert.ok(html.includes('增强月卡'), 'plan title missing');
+  assert.ok(html.includes('$235.97 / $950.00'), 'subscription used/total missing');
+  assert.ok(html.includes('$200.00 / $720.00'), 'second subscription bar missing');
+  assert.ok(html.includes('Claude Kiro 周卡'), 'second plan label missing');
+  assert.ok(html.includes('$0.60'), 'wallet balance missing');
+  assert.ok(html.includes('104.2 天'), 'burn-rate estimate missing');
+  assert.ok(html.includes('各订阅额度不互通'), 'multi-subscription caveat missing');
+  assert.ok(html.includes('https://dddai.dev'), 'base url missing from card');
+  assert.ok(html.includes('编辑凭据'), 'edit-credentials action missing');
+  assert.ok(!/undefined/.test(html), 'newapi card rendered "undefined"');
+  assert.ok(!/NaN/.test(html), 'newapi card rendered "NaN"');
+  sandbox.currentQuotaProvider = 'opencode';
 });
 
 test('every tab renders content with no template artefacts', async () => {
