@@ -2841,7 +2841,7 @@ function openNewAPIKeys(name){
 			var barUsed=k.cycle_active?Number(k.cycle_used_usd||0):Number(k.used_usd||0);
 			if(!k.unlimited&&barTotal>0)pct=Math.min(100,Math.round((barUsed/barTotal)*100));
 			var color=pct>=90?"var(--danger)":(pct>=70?"var(--warn)":"var(--accent)");
-			var bar=k.unlimited?'':'<div class="progress-bar-bg" style="margin-top:4px"><div class="progress-bar-fill" style="width:'+pct+'%%;background:'+color+'"></div></div>';
+			var bar=k.unlimited?'':'<div class="progress-bar-bg" style="margin-top:6px"><div class="progress-bar-fill" style="width:'+pct+'%%;background:'+color+'"></div></div>';
 			// The parenthesised amount annotates the *balance*, so it must be the
 			// panel-currency value of the remaining quota. It previously used
 			// panel_used, which is the lifetime spend in CNY and therefore
@@ -2881,6 +2881,9 @@ function openNewAPIKeys(name){
 			// only quota-limited keys get one.
 			var actionsHtml=k.unlimited?'':'<button class="btn btn-secondary btn-xs" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+','+Number(k.remaining_quota||0)+')" title="为这个 Key 设置新的剩余额度">'+icon("refresh")+' 重置额度</button>';
 
+			// Two text lines straddle the bar: meta above it and the numeric
+			// stats below it. Both are left-aligned so every key starts at the
+			// same x and the eye can scan a single column.
 			return '<div style="padding:12px 0;border-bottom:1px solid var(--border-soft)">'+
 				'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">'+
 				'<div style="display:flex;align-items:baseline;gap:8px;min-width:0">'+
@@ -2888,9 +2891,10 @@ function openNewAPIKeys(name){
 				'<span class="badge '+(k.status==="启用"?'badge-success':(k.status==="已过期"||k.status==="额度耗尽"?'badge-danger':'badge-neutral'))+'">'+esc(k.status||"未知")+'</span>'+
 				'<span style="font-size:11px;color:var(--meta);white-space:nowrap">#'+esc(String(k.id))+'</span></div>'+
 				'<div style="flex:none">'+actionsHtml+'</div></div>'+
-				'<div style="margin-top:5px;font-size:11px;color:var(--meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(meta.join(" · "))+'">'+esc(meta.join(" · ")||"—")+'</div>'+
-				'<div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:7px">'+statsHtml+'</div>'+
-				bar+'</div>';
+				'<div style="margin-top:6px;font-size:11px;color:var(--meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left" title="'+esc(meta.join(" · "))+'">'+esc(meta.join(" · ")||"—")+'</div>'+
+				bar+
+				'<div style="display:flex;flex-wrap:wrap;justify-content:flex-start;gap:20px;margin-top:6px;text-align:left">'+statsHtml+'</div>'+
+				'</div>';
 		}).join("");
 		body.innerHTML=head+rows;
 	}).catch(function(e){

@@ -411,6 +411,15 @@ test('newapi key list modal renders names and usage without secrets', async () =
   const html = writes.map((w) => w.html).join('\n');
   assert.ok(html.includes('prod-key'), 'key name missing');
   // Stats render as label/value pairs: 本轮已用 $5.00 / $20.00.
+  // Layout contract: meta above the bar, numeric stats below it, both left.
+  const bodyIdx = html.indexOf('prod-key');
+  const barIdx = html.indexOf('progress-bar-bg', bodyIdx);
+  const statsIdx = html.indexOf('本轮已用', bodyIdx);
+  assert.ok(bodyIdx >= 0 && barIdx > bodyIdx, 'bar should follow the meta line');
+  assert.ok(statsIdx > barIdx, 'stats must sit below the bar');
+  const statsRow = html.slice(html.lastIndexOf('<div', statsIdx), statsIdx + 200);
+  assert.ok(statsRow.includes('justify-content:flex-start'), 'stats row is not left-aligned');
+
   assert.ok(html.includes('本轮已用'), 'cycle usage label missing');
   assert.ok(html.includes('$5.00 / $20.00'), 'cycle usage values missing');
   assert.ok(html.includes('unlimited-key'), 'unlimited key missing');
