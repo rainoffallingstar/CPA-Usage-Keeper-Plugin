@@ -327,6 +327,10 @@ test('newapi key rows offer one-click reset only for limited keys', async () => 
   assert.ok(actions.every((a) => a.includes("'prod-key'") || a.includes("'retired-key'")), actions.join(','));
   assert.ok(!actions.some((a) => a.includes("'unlimited-key'")), 'unlimited key must not offer reset');
   assert.ok(html.includes('重置额度'), 'reset label missing');
+  // The action must sit in its own right-aligned row rather than inline next
+  // to the status badge, so it is unambiguous which key it belongs to.
+  const row = html.split('justify-content:flex-end;margin-top:8px')[1] || '';
+  assert.ok(row.includes('重置额度'), 'reset action is not in a dedicated row');
 });
 
 test('newapi reset dialog asks for confirmation and blocks invalid input', async () => {
@@ -334,7 +338,7 @@ test('newapi reset dialog asks for confirmation and blocks invalid input', async
   sandbox.openNewAPIResetKey('dddai-main', 1, 'prod-key', 5, 15);
   const body = sandbox.document.getElementById('newapi-reset-body');
   assert.ok(body.innerHTML.includes('prod-key'), 'dialog does not name the key');
-  assert.ok(body.innerHTML.includes('重置会写回线上配置'), 'dialog omits the write warning');
+  assert.ok(body.innerHTML.includes('只修改「剩余配额」这一个字段'), 'dialog omits the single-field promise');
   assert.ok(body.innerHTML.includes('name="' ) === false);
 
   // Zero/negative values must not issue a request.

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.11.36 (2026-10-21)
+
+### UI refinement
+- NewAPI Key 列表：把「重置额度」按钮从标题行移到**该 Key 独立的动作行**（右对齐），避免与状态徽标并排造成归属歧义；不限量 Key 依然不显示该按钮。
+- 确认弹窗措辞与面板审计口径对齐：明确写出「只修改『剩余配额』这一个字段」，并提示审计日志中应只出现该变更。
+
+### Notes
+- 与网页端手动重置的审计记录一致：面板网页端显示 `修改字段：剩余配额`，本插件的等值重置在审计中为 `changed_fields: []`（写入值与已有值相同），说明确实只触碰了余额字段。
+
 ## v0.11.35 (2026-10-21)
 
 ### Features
@@ -10,8 +19,11 @@
   - 金额以 USD 输入并按 `quota_per_unit` 换算，前端不接触内部额度单位；重置值需 > 0。
   - 权限：除 `api_key:read` 外还需 `api_key:write`；缺权限时把面板原文（`ACCESS_TOKEN_SCOPE_DENIED … api_key:write`）原样展示。
 
+### UI refinement
+- 重置按钮从 Key 标题行移到**该 Key 自己的动作行**（右对齐、独立一行），避免与状态徽标挤在一起导致归属歧义；不限量 Key 仍不显示任何动作。
+
 ### Verified
-- 端到端实测：对 `team`（`sub-openai`，模型限制 `gpt-6.1-sol,gpt-6-sol,gpt-5.6-luna,gpt-6-luna,gpt-6-astra`）执行等值重置，写回后 `name` / `group` / `model_limits` / `model_limits_enabled` / `expired_time` / `allow_ips` 全部保持不变，`used_quota` 未变，余额与请求值一致。
+- 对 `team`（`sub-openai`，模型限制 `gpt-6.1-sol,gpt-6-sol,gpt-5.6-luna,gpt-6-luna,gpt-6-astra`）执行等值重置，写回后 `name` / `group` / `model_limits` / `model_limits_enabled` / `expired_time` / `allow_ips` 全部保持不变，`used_quota` 未变，余额与请求值一致。
 - 开发期曾用 `{"id":9876}` 探测写权限，触发了上游的覆盖式写入（`name`/`model_limits`/`group`/`expired_time` 被清零），已立即按原值恢复并复核。该事故正是本次改为全量读改写的原因。
 
 ### Tests
