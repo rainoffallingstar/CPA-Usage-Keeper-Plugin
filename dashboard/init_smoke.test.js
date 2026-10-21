@@ -332,10 +332,11 @@ test('newapi key rows offer one-click reset only for limited keys', async () => 
   assert.ok(actions.every((a) => a.includes("'prod-key'") || a.includes("'retired-key'")), actions.join(','));
   assert.ok(!actions.some((a) => a.includes("'unlimited-key'")), 'unlimited key must not offer reset');
   assert.ok(html.includes('重置额度'), 'reset label missing');
-  // The action must sit in its own right-aligned row rather than inline next
-  // to the status badge, so it is unambiguous which key it belongs to.
-  const row = html.split('justify-content:flex-end;margin-top:8px')[1] || '';
-  assert.ok(row.includes('重置额度'), 'reset action is not in a dedicated row');
+  // The action belongs to the key's header row, right-aligned, so every entry
+  // starts at the same x and the button cannot be mistaken for another key's.
+  const header = html.split('align-items:center;gap:12px')[1] || '';
+  assert.ok(header.includes('重置额度'), 'reset action is not in the header row');
+  assert.ok(!html.includes('justify-content:flex-end;margin-top:8px'), 'action still on a stray row');
 });
 
 test('newapi reset dialog asks for confirmation and blocks invalid input', async () => {
@@ -409,12 +410,16 @@ test('newapi key list modal renders names and usage without secrets', async () =
 
   const html = writes.map((w) => w.html).join('\n');
   assert.ok(html.includes('prod-key'), 'key name missing');
-  assert.ok(html.includes('本轮 $5.00 / $20.00'), 'cycle usage missing');
+  // Stats render as label/value pairs: 本轮已用 $5.00 / $20.00.
+  assert.ok(html.includes('本轮已用'), 'cycle usage label missing');
+  assert.ok(html.includes('$5.00 / $20.00'), 'cycle usage values missing');
   assert.ok(html.includes('unlimited-key'), 'unlimited key missing');
   assert.ok(html.includes('retired-key'), 'disabled key missing');
   assert.ok(html.includes('不读取 key 明文'), 'privacy note missing');
-  // A reset must restart the bar but never hide lifetime spend.
-  assert.ok(html.includes('累计已用 $65.00'), 'lifetime usage hidden after reset');
+  // A reset must restart the bar but never hide lifetime spend. Stats render as
+  // separate label/value spans, so match them individually.
+  assert.ok(html.includes('累计已用'), 'lifetime usage label hidden after reset');
+  assert.ok(html.includes('$65.00'), 'lifetime usage value hidden after reset');
   assert.ok(html.includes('本轮起算 2026-10-21'), 'reset date missing');
   // 5 of the 20 granted this cycle, not 65 of 80 lifetime.
   assert.ok(html.includes('width:25%%') || html.includes('width:25%'), 'bar does not use cycle numbers');

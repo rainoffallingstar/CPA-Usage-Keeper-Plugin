@@ -2847,41 +2847,50 @@ function openNewAPIKeys(name){
 			// panel_used, which is the lifetime spend in CNY and therefore
 			// disagreed with the adjacent "余 $X" (e.g. ¥692.04 next to
 			// $105.00, while ¥692.04 is 101.77 x 6.8).
-			var panelNote=k.panel_remaining?' ('+esc(k.panel_remaining)+')':'';
-			var usageStyle='font-family:var(--font-mono);font-size:12px;white-space:nowrap';
-			var usage;
+			// A compact left-aligned stat row. Previously the numbers were
+			// pushed to the far right of the row, leaving a wide empty gap and a
+			// reset button stranded on its own line; each figure now reads as a
+			// label/value pair, and the action sits in the header row.
+			var stats=[];
 			if(k.unlimited){
 				var unlimitedNote=k.panel_used?' ('+esc(k.panel_used)+')':'';
-				usage='<span style="'+usageStyle+'">已用 $'+Number(k.used_usd||0).toFixed(2)+unlimitedNote+' · 不限量</span>';
+				stats.push(["累计已用","$"+Number(k.used_usd||0).toFixed(2)+unlimitedNote]);
+				stats.push(["额度","不限量"]);
 			}else if(k.cycle_active){
-				// The bar reflects this cycle; lifetime usage stays in the meta
-				// line so a reset never hides historical spend.
-				usage='<span style="'+usageStyle+'">本轮 $'+Number(k.cycle_used_usd||0).toFixed(2)+' / $'+Number(k.cycle_total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+				stats.push(["本轮已用","$"+Number(k.cycle_used_usd||0).toFixed(2)+" / $"+Number(k.cycle_total_usd||0).toFixed(2)]);
+				stats.push(["剩余","$"+Number(k.remaining_usd||0).toFixed(2)+(k.panel_remaining?" ("+esc(k.panel_remaining)+")":"")]);
+				// A reset must never hide historical spend.
+				stats.push(["累计已用","$"+Number(k.used_usd||0).toFixed(2)]);
 			}else{
-				usage='<span style="'+usageStyle+'">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+				stats.push(["已用","$"+Number(k.used_usd||0).toFixed(2)+" / $"+Number(k.total_usd||0).toFixed(2)]);
+				stats.push(["剩余","$"+Number(k.remaining_usd||0).toFixed(2)+(k.panel_remaining?" ("+esc(k.panel_remaining)+")":"")]);
 			}
+			var statsHtml=stats.map(function(pair){
+				return '<span style="display:inline-flex;align-items:baseline;gap:6px">'+
+					'<span style="font-size:11px;color:var(--meta)">'+esc(pair[0])+'</span>'+
+					'<span style="font-family:var(--font-mono);font-size:12px;color:var(--fg);white-space:nowrap">'+pair[1]+'</span></span>';
+			}).join("");
+
 			var meta=[];
 			if(k.group)meta.push("分组 "+k.group);
 			if(k.accessed_at)meta.push("最近使用 "+k.accessed_at.slice(0,10));
 			if(k.expires_at)meta.push("到期 "+k.expires_at.slice(0,10));
-			meta.push("累计已用 $"+Number(k.used_usd||0).toFixed(2));
 			if(k.cycle_active)meta.push("本轮起算 "+(k.cycle_reset_at||"").slice(0,10));
-			// A dedicated action row for quota-limited keys only. Unlimited keys
-			// have no balance to reset, so they get no action at all.
-			var actionsHtml=k.unlimited?'':'<div style="display:flex;justify-content:flex-end;margin-top:8px">'+
-				'<button class="btn btn-secondary btn-sm" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+','+Number(k.remaining_quota||0)+')" title="为这个 Key 设置新的剩余额度">'+icon("refresh")+' 重置额度</button></div>';
+
+			// Actions stay in the header so every row starts at the same x, and
+			// only quota-limited keys get one.
+			var actionsHtml=k.unlimited?'':'<button class="btn btn-secondary btn-xs" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+','+Number(k.remaining_quota||0)+')" title="为这个 Key 设置新的剩余额度">'+icon("refresh")+' 重置额度</button>';
+
 			return '<div style="padding:12px 0;border-bottom:1px solid var(--border-soft)">'+
-				'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
-				'<span style="font-size:13px;font-weight:600;color:var(--fg)">'+esc(k.name||("Key #"+k.id))+'</span>'+
-				'<span style="display:flex;align-items:center;gap:8px">'+
+				'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px">'+
+				'<div style="display:flex;align-items:baseline;gap:8px;min-width:0">'+
+				'<span style="font-size:13px;font-weight:600;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(k.name||("Key #"+k.id))+'</span>'+
 				'<span class="badge '+(k.status==="启用"?'badge-success':(k.status==="已过期"||k.status==="额度耗尽"?'badge-danger':'badge-neutral'))+'">'+esc(k.status||"未知")+'</span>'+
-				'<span style="font-size:11px;color:var(--meta)">#'+esc(String(k.id))+'</span></span></div>'+
-				// Meta and the numeric usage line are separate rows. Sharing one
-				// flex row made the (longer) usage string wrap onto two lines as
-				// soon as the panel-currency suffix was present.
-				'<div style="margin-top:4px;font-size:11px;color:var(--meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(meta.join(" · "))+'">'+esc(meta.join(" · ")||"—")+'</div>'+
-				'<div style="display:flex;justify-content:flex-end;margin-top:3px">'+usage+'</div>'+
-				bar+actionsHtml+'</div>';
+				'<span style="font-size:11px;color:var(--meta);white-space:nowrap">#'+esc(String(k.id))+'</span></div>'+
+				'<div style="flex:none">'+actionsHtml+'</div></div>'+
+				'<div style="margin-top:5px;font-size:11px;color:var(--meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(meta.join(" · "))+'">'+esc(meta.join(" · ")||"—")+'</div>'+
+				'<div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:7px">'+statsHtml+'</div>'+
+				bar+'</div>';
 		}).join("");
 		body.innerHTML=head+rows;
 	}).catch(function(e){
