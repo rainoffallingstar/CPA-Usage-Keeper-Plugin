@@ -2438,8 +2438,10 @@ function installDrawerDrag(){
 
 document.addEventListener("keydown",function(e){
 	if(e.key==="Escape"){
+		var resetOv=document.getElementById("newapi-reset-overlay");
 		var keysOv=document.getElementById("newapi-keys-overlay");
-		if(keysOv&&keysOv.classList.contains("active"))closeNewAPIKeys();
+		if(resetOv&&resetOv.classList.contains("active"))closeNewAPIReset();
+		else if(keysOv&&keysOv.classList.contains("active"))closeNewAPIKeys();
 		else if(document.getElementById("pricing-modal-overlay").classList.contains("active"))closePricingModal();
 		else closeDrawer();
 	}
@@ -2837,12 +2839,13 @@ function openNewAPIKeys(name){
 			if(k.group)meta.push("分组 "+k.group);
 			if(k.accessed_at)meta.push("最近使用 "+k.accessed_at.slice(0,10));
 			if(k.expires_at)meta.push("到期 "+k.expires_at.slice(0,10));
+			var resetBtn=k.unlimited?'':'<button class="btn btn-ghost btn-xs" style="margin-left:4px" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+')" title="重置该 Key 的剩余额度">'+icon("refresh")+' 重置额度</button>';
 			return '<div style="padding:10px 0;border-bottom:1px solid var(--border-soft)">'+
 				'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
 				'<span style="font-size:13px;font-weight:600;color:var(--fg)">'+esc(k.name||("Key #"+k.id))+'</span>'+
 				'<span style="display:flex;align-items:center;gap:8px">'+
 				'<span class="badge '+(k.status==="启用"?'badge-success':(k.status==="已过期"||k.status==="额度耗尽"?'badge-danger':'badge-neutral'))+'">'+esc(k.status||"未知")+'</span>'+
-				'<span style="font-size:11px;color:var(--meta)">#'+esc(String(k.id))+'</span></span></div>'+
+				'<span style="font-size:11px;color:var(--meta)">#'+esc(String(k.id))+'</span>'+resetBtn+'</span></div>'+
 				'<div style="display:flex;justify-content:space-between;margin-top:4px;gap:10px">'+
 				'<span style="font-size:11px;color:var(--meta)">'+esc(meta.join(" · ")||"—")+'</span>'+usage+'</div>'+
 				bar+'</div>';
@@ -2857,6 +2860,79 @@ function closeNewAPIKeys(){
 	if(!ov)return;
 	ov.classList.remove("active");
 	ov.setAttribute("aria-hidden","true");
+}
+
+/* ─── One-click quota reset for a single NewAPI key ─────────────────────────
+   The panel has no reset endpoint: PUT /api/token/ overwrites every assignable
+   field, so the backend re-reads the key, changes only remain_quota and writes
+   the rest back verbatim. This dialog exists because that is still a write to
+   live production configuration. */
+var newAPIResetCtx=null;
+
+function openNewAPIResetKey(account,keyId,keyName,usedUSD,remainUSD){
+	newAPIResetCtx={account:account,keyId:keyId,keyName:keyName};
+	var ov=document.getElementById("newapi-reset-overlay");
+	var body=document.getElementById("newapi-reset-body");
+	if(!ov||!body)return;
+	body.innerHTML=
+		'<div style="font-size:13px;color:var(--muted);line-height:1.7">'+
+			'将为 <b style="color:var(--fg)">'+esc(keyName)+'</b>（#'+esc(String(keyId))+'）设置新的剩余额度。'+
+		'</div>'+
+		'<div style="display:flex;gap:16px;margin:12px 0;padding:10px 12px;background:var(--surface-warm);border-radius:var(--radius-md);font-size:12px">'+
+			'<span>当前已用 <b style="color:var(--fg)">$'+Number(usedUSD||0).toFixed(2)+'</b></span>'+
+			'<span>当前剩余 <b style="color:var(--fg)">$'+Number(remainUSD||0).toFixed(2)+'</b></span>'+
+		'</div>'+
+		'<div class="form-group"><label class="form-label">重置为剩余额度 (USD)</label>'+
+			'<input class="text-input" id="newapi-reset-amount" type="number" min="0.01" step="0.01" value="'+(Number(remainUSD||0)>0?Number(remainUSD).toFixed(2):"50.00")+'"></div>'+
+		'<div style="font-size:11px;color:var(--warn);margin-top:10px;line-height:1.6">'+
+			'注意：额度重置会写回线上配置。插件会先读取该 Key 的当前设置（名称、分组、模型限制、过期时间、IP 白名单等）再原样写回，只改余额；'+
+			'已用累计值不受影响。'+
+		'</div>'+
+		'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">'+
+			'<button class="btn btn-secondary" onclick="closeNewAPIReset()">取消</button>'+
+			'<button class="btn btn-primary" id="newapi-reset-confirm" onclick="doNewAPIResetKey()">确认重置</button>'+
+		'</div>';
+	ov.classList.add("active");
+	ov.setAttribute("aria-hidden","false");
+	var input=document.getElementById("newapi-reset-amount");
+	if(input)setTimeout(function(){input.focus();input.select()},100);
+}
+
+function closeNewAPIReset(){
+	var ov=document.getElementById("newapi-reset-overlay");
+	if(!ov)return;
+	ov.classList.remove("active");
+	ov.setAttribute("aria-hidden","true");
+	newAPIResetCtx=null;
+}
+
+function doNewAPIResetKey(){
+	if(!newAPIResetCtx)return;
+	var ctx=newAPIResetCtx;
+	var input=document.getElementById("newapi-reset-amount");
+	var amount=input?String(input.value||"").trim():"";
+	var n=Number(amount);
+	if(!amount||!isFinite(n)||n<=0){showToast("请输入大于 0 的额度","danger");return;}
+	var btn=document.getElementById("newapi-reset-confirm");
+	if(btn)setBtnLoading(btn,true);
+	quotaAction("/newapi-quota",{action:"resetkey",account:ctx.account,key_id:ctx.keyId},
+		{"X-NewAPI-Quota-USD":amount}).then(function(r){
+		return r.json();
+	}).then(function(d){
+		if(btn)setBtnLoading(btn,false);
+		var payload=(d&&d.result)?d.result:d;
+		if(payload.ok===false){
+			showToast(payload.error||"重置失败","danger");
+			// Stay open so the user can read the panel's message.
+			return;
+		}
+		closeNewAPIReset();
+		showToast("已重置 "+ctx.keyName+" 的额度","success");
+		openNewAPIKeys(ctx.account);
+	}).catch(function(e){
+		if(btn)setBtnLoading(btn,false);
+		showToast("重置失败："+(e.message||"未知错误"),"danger");
+	});
 }
 
 // openNewAPIEdit puts the add-credentials panel into edit mode for an existing
@@ -3667,6 +3743,16 @@ if(refreshIntervalMs>0){
 	refreshTimer=setInterval(refreshAll,refreshIntervalMs);
 }
 </script>
+  <!-- One-click quota reset confirmation -->
+  <div class="modal-overlay" id="newapi-reset-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="newapi-reset-title">
+    <div class="modal-card" style="width:480px">
+      <div class="modal-header">
+        <h3 class="card-title" id="newapi-reset-title" style="font-size:17px">重置 Key 额度</h3>
+        <button class="btn btn-ghost btn-icon-only" onclick="closeNewAPIReset()" aria-label="关闭">X</button>
+      </div>
+      <div id="newapi-reset-body"></div>
+    </div>
+  </div>
   <!-- API Key list (names + usage only; secrets are never returned by the backend) -->
   <div class="modal-overlay" id="newapi-keys-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="newapi-keys-title">
     <div class="modal-card" style="width:720px;max-height:80vh;overflow:auto">

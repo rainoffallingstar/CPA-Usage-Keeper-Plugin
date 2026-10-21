@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.11.35 (2026-10-21)
+
+### Features
+- **NewAPI：单个 API Key 一键额度重置**：Key 列表为**有额度上限**的 Key 增加「重置额度」按钮（不限量 Key 不显示）。弹窗展示当前已用/剩余并预填当前余额，确认后写回线上配置。
+  - 上游没有独立的重置端点，只能 `PUT /api/token/`，而该接口会**用请求体覆盖全部可编辑字段**（名称、状态、过期时间、余额、不限量、模型限制、IP 白名单、分组、跨组重试）。因此实现为严格读-改-写：先 `GET /api/token/:id` 取全量 → 只改 `remain_quota` → 其余字段原样回传 → 复读校验余额与未改动字段。
+  - 额度耗尽（`status=4`）的 Key 会在余额写入成功后再发一次 `?status_only=1` 恢复启用：上游拒绝在余额仍 `<=0` 时启用令牌，顺序不能颠倒。
+  - `used_quota` 是只读列（不在上游更新列清单内），重置不会清零累计用量。
+  - 金额以 USD 输入并按 `quota_per_unit` 换算，前端不接触内部额度单位；重置值需 > 0。
+  - 权限：除 `api_key:read` 外还需 `api_key:write`；缺权限时把面板原文（`ACCESS_TOKEN_SCOPE_DENIED … api_key:write`）原样展示。
+
+### Verified
+- 端到端实测：对 `team`（`sub-openai`，模型限制 `gpt-6.1-sol,gpt-6-sol,gpt-5.6-luna,gpt-6-luna,gpt-6-astra`）执行等值重置，写回后 `name` / `group` / `model_limits` / `model_limits_enabled` / `expired_time` / `allow_ips` 全部保持不变，`used_quota` 未变，余额与请求值一致。
+- 开发期曾用 `{"id":9876}` 探测写权限，触发了上游的覆盖式写入（`name`/`model_limits`/`group`/`expired_time` 被清零），已立即按原值恢复并复核。该事故正是本次改为全量读改写的原因。
+
+### Tests
+- `TestResetNewAPIKeyQuotaPreservesEveryOtherField`（模拟上游覆盖式写入，断言名称/分组/模型限制/过期时间/IP 白名单/累计用量均未被破坏）。
+- `TestResetNewAPIKeyQuotaRevivesExhaustedKey`（余额写入必须早于启用请求）。
+- `TestResetNewAPIKeyQuotaRejectsUnlimitedAndBadInput`、`TestResetNewAPIKeyQuotaSurfacesScopeDenied`（失败写入不得改变状态）、`TestHandleNewAPIResetKeyValidatesInput`。
+- `dashboard/init_smoke.test.js`：重置按钮只出现在有额度上限的 Key 上；确认弹窗含写入警示；非法金额不得发起请求。
+
 ## v0.11.34 (2026-10-19)
 
 ### Fixes

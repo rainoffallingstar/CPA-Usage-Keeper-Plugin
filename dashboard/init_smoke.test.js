@@ -283,6 +283,7 @@ test('dashboard script initialises without throwing', () => {
   assert.doesNotThrow(() => vm.runInContext(source, sandbox, { filename: 'dashboard-script.js' }));
 });
 
+RESPONSES['/newapi-quota?action=resetkey'] = { ok: true, key_id: 1 };
 RESPONSES['/newapi-quota?action=keys'] = {
   account: 'dddai-main',
   total: 3,
@@ -310,6 +311,45 @@ test('models tab shows a real error instead of an empty state on query failure',
   const html = writes.map((w) => w.html).join('\n');
   assert.ok(html.includes('模型用量查询失败'), 'failure state missing');
   assert.ok(!html.includes('当前时间段暂无模型用量记录'), 'failure rendered as an empty range');
+});
+
+test('newapi key rows offer one-click reset only for limited keys', async () => {
+  writes.length = 0;
+  sandbox.openNewAPIKeys('dddai-main');
+  await new Promise((resolve) => setImmediate(resolve));
+  const html = writes.map((w) => w.html).join('\n');
+
+  // Exactly one reset action, bound to the limited key's id. Splitting on the
+  // key name is unreliable because the same name also appears inside the
+  // generated onclick attribute.
+  const actions = html.match(/openNewAPIResetKey\(([^)]*)\)/g) || [];
+  assert.strictEqual(actions.length, 2, 'expected reset actions only for non-unlimited keys: ' + JSON.stringify(actions));
+  assert.ok(actions.every((a) => a.includes("'prod-key'") || a.includes("'retired-key'")), actions.join(','));
+  assert.ok(!actions.some((a) => a.includes("'unlimited-key'")), 'unlimited key must not offer reset');
+  assert.ok(html.includes('重置额度'), 'reset label missing');
+});
+
+test('newapi reset dialog asks for confirmation and blocks invalid input', async () => {
+  writes.length = 0;
+  sandbox.openNewAPIResetKey('dddai-main', 1, 'prod-key', 5, 15);
+  const body = sandbox.document.getElementById('newapi-reset-body');
+  assert.ok(body.innerHTML.includes('prod-key'), 'dialog does not name the key');
+  assert.ok(body.innerHTML.includes('重置会写回线上配置'), 'dialog omits the write warning');
+  assert.ok(body.innerHTML.includes('name="' ) === false);
+
+  // Zero/negative values must not issue a request.
+  const amount = sandbox.document.getElementById('newapi-reset-amount');
+  const calls = [];
+  const originalFetch = sandbox.fetch;
+  sandbox.fetch = async (url) => { calls.push(String(url)); return originalFetch(url); };
+  amount.value = '0';
+  sandbox.doNewAPIResetKey();
+  amount.value = '-3';
+  sandbox.doNewAPIResetKey();
+  sandbox.fetch = originalFetch;
+  assert.strictEqual(calls.length, 0, 'invalid amounts must not hit the API');
+
+  sandbox.closeNewAPIReset();
 });
 
 test('newapi key list modal renders names and usage without secrets', async () => {

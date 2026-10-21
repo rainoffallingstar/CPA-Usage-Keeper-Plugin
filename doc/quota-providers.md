@@ -506,6 +506,41 @@ Actions (GET query or POST JSON): `addaccount`, `removeaccount`,
 `settoken` (alias `setkey`), `refresh`. `settoken` also accepts a new
 `base_url`, which backs the dashboard's 「编辑凭据」 action.
 
+### One-click quota reset (single key)
+
+```
+GET /api/newapi-quota?action=resetkey&account=<acct>&key_id=<id>
+X-NewAPI-Token: <panel access token>     # or use the stored account token
+X-NewAPI-Quota-USD: <new remaining amount>
+```
+
+Upstream has **no dedicated reset endpoint**. The only way is `PUT /api/token/`,
+whose handler copies request fields onto the stored row **unconditionally**
+(`model.Token.Update()` selects `name, status, expired_time, remain_quota,
+unlimited_quota, model_limits_enabled, model_limits, allow_ips, group,
+cross_group_retry, auto_groups`). Anything omitted from the body is written as a
+zero value — an early probe with `{"id":9876}` blanked `name`, `model_limits`,
+`group` and `expired_time` on a live key (restored immediately afterwards).
+
+Therefore the plugin never sends a partial body. `resetNewAPIKeyQuota`:
+
+1. `GET /api/token/:id` — read the full current state;
+2. reject `unlimited_quota` keys (no meaningful balance to reset);
+3. `PUT /api/token/` — change **only** `remain_quota`, echoing every other
+   assignable field verbatim (an empty `allow_ips` is sent as `""`, not `null`);
+4. if the key was exhausted (`status == 4`), `PUT /api/token/?status_only=1`
+   with `status: 1` — upstream refuses to enable a token whose stored balance is
+   still `<= 0`, so this must come **after** the balance write;
+5. re-read and verify: the stored balance matches what was requested **and**
+   name/group/model limits/expiry are unchanged; a mismatch is reported instead
+   of silently accepted.
+
+`used_quota` is read-only (not in the update column list), so the lifetime usage
+counter is untouched by a reset.
+
+Requires `api_key:write`. The amount is expressed in USD and converted with
+`quota_per_unit`, so the UI never handles internal units.
+
 ### DB persistence
 
 | Provider | Table | Columns |

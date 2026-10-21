@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -179,6 +180,180 @@ func newAPIGetJSON(url, token string, out any) error {
 		return fmt.Errorf("invalid JSON response")
 	}
 	return nil
+}
+
+// newAPIPutJSON performs a PUT with a JSON body, mirroring newAPIGetJSON's
+// error extraction so panel messages (e.g. ACCESS_TOKEN_SCOPE_DENIED) survive.
+func newAPIPutJSON(url, token string, payload any, out any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := newAPIHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, apiErrorMessage(raw, resp.StatusCode))
+	}
+	var env struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &env); err == nil && !env.Success {
+		msg := strings.TrimSpace(env.Message)
+		if msg == "" {
+			msg = "panel rejected the update"
+		}
+		return fmt.Errorf("%s", msg)
+	}
+	if out != nil {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return fmt.Errorf("invalid JSON response")
+		}
+	}
+	return nil
+}
+
+// newAPITokenDetail is the read-modify-write view of a token. The upstream
+// update handler copies request fields onto the stored row unconditionally, so
+// every assignable field must be read here and sent back unchanged; omitting
+// one silently zeroes it (name, model limits, group, expiry, IP allow-list).
+// "key" is intentionally absent: it is never needed for an update and must
+// never be decoded.
+type newAPITokenDetail struct {
+	ID                 int64   `json:"id"`
+	Name               string  `json:"name"`
+	Status             int     `json:"status"`
+	ExpiredTime        int64   `json:"expired_time"`
+	RemainQuota        float64 `json:"remain_quota"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits"`
+	AllowIPs           *string `json:"allow_ips"`
+	Group              string  `json:"group"`
+	CrossGroupRetry    bool    `json:"cross_group_retry"`
+	// UsedQuota is read-only: upstream's update statement never writes it, so
+	// it is displayed but not sent back.
+	UsedQuota float64 `json:"used_quota"`
+}
+
+func fetchNewAPITokenDetail(base, token string, id int64) (*newAPITokenDetail, error) {
+	var r struct {
+		Data newAPITokenDetail `json:"data"`
+	}
+	if err := newAPIGetJSON(fmt.Sprintf("%s/api/token/%d", base, id), token, &r); err != nil {
+		return nil, err
+	}
+	if r.Data.ID == 0 {
+		return nil, fmt.Errorf("token #%d not found", id)
+	}
+	return &r.Data, nil
+}
+
+// newAPITokenQuotaRequest is the exact body the upstream update handler reads.
+// Fields are pointers where a zero value would be ambiguous, so "keep as read"
+// is always explicit.
+type newAPITokenQuotaRequest struct {
+	ID                 int64   `json:"id"`
+	Name               string  `json:"name"`
+	Status             int     `json:"status"`
+	ExpiredTime        int64   `json:"expired_time"`
+	RemainQuota        float64 `json:"remain_quota"`
+	UnlimitedQuota     bool    `json:"unlimited_quota"`
+	ModelLimitsEnabled bool    `json:"model_limits_enabled"`
+	ModelLimits        string  `json:"model_limits"`
+	AllowIPs           *string `json:"allow_ips"`
+	Group              string  `json:"group"`
+	CrossGroupRetry    bool    `json:"cross_group_retry"`
+}
+
+// resetNewAPIKeyQuota sets one key's remaining quota to quotaUSD worth of panel
+// units. It performs a guarded read-modify-write:
+//  1. re-read the token so concurrent panel edits are not clobbered,
+//  2. change only remain_quota,
+//  3. send every assignable field back verbatim,
+//  4. re-read and verify the new balance.
+//
+// An exhausted key is re-enabled in a second status-only call because upstream
+// refuses to enable a token while its stored balance is still <= 0.
+func resetNewAPIKeyQuota(base, token string, keyID int64, quotaUSD float64, units float64) (*newAPITokenDetail, error) {
+	if keyID <= 0 {
+		return nil, fmt.Errorf("key id is required")
+	}
+	if quotaUSD <= 0 {
+		return nil, fmt.Errorf("reset amount must be greater than 0")
+	}
+	if units <= 0 {
+		units = newAPIDefaultQuotaUnit
+	}
+	before, err := fetchNewAPITokenDetail(base, token, keyID)
+	if err != nil {
+		return nil, err
+	}
+	if before.UnlimitedQuota {
+		return nil, fmt.Errorf("该 Key 为不限量，无需重置额度")
+	}
+
+	target := quotaUSD * units
+	body := newAPITokenQuotaRequest{
+		ID:                 before.ID,
+		Name:               before.Name,
+		Status:             before.Status,
+		ExpiredTime:        before.ExpiredTime,
+		RemainQuota:        target,
+		UnlimitedQuota:     false,
+		ModelLimitsEnabled: before.ModelLimitsEnabled,
+		ModelLimits:        before.ModelLimits,
+		AllowIPs:           before.AllowIPs,
+		Group:              before.Group,
+		CrossGroupRetry:    before.CrossGroupRetry,
+	}
+	if err := newAPIPutJSON(base+"/api/token/", token, body, nil); err != nil {
+		return nil, err
+	}
+
+	// Upstream ignores Status in the normal update path and rejects enabling an
+	// exhausted token whose stored balance is still <= 0. Now that the balance
+	// is positive, a status-only pass can revive it.
+	if before.Status == 4 {
+		if err := newAPIPutJSON(base+"/api/token/?status_only=1", token,
+			map[string]any{"id": keyID, "status": 1}, nil); err != nil {
+			// The quota is already written; report the revival failure but keep
+			// the successful balance change.
+			return nil, fmt.Errorf("额度已重置，但恢复启用状态失败：%v", err)
+		}
+	}
+
+	after, err := fetchNewAPITokenDetail(base, token, keyID)
+	if err != nil {
+		return before, nil // the write succeeded; verification is best-effort
+	}
+	if diff := after.RemainQuota - target; diff > units*0.01 || diff < -units*0.01 {
+		return after, fmt.Errorf("写入后余额校验不一致：期望 %.2f，实际 %.2f", quotaUSD, after.RemainQuota/units)
+	}
+	// Guard against a partial clobber: the fields we did not intend to touch
+	// must still match what we read.
+	if after.Name != before.Name || after.Group != before.Group ||
+		after.ModelLimits != before.ModelLimits ||
+		after.ModelLimitsEnabled != before.ModelLimitsEnabled ||
+		after.ExpiredTime != before.ExpiredTime {
+		return after, fmt.Errorf("写入后字段发生变化（名称/分组/模型限制/过期时间），请检查面板")
+	}
+	return after, nil
 }
 
 // apiErrorMessage extracts the panel's own error text so scope/token problems
@@ -929,6 +1104,14 @@ func handleNewAPIQuotaGet(query map[string][]string, headers map[string][]string
 		if strings.EqualFold(strings.TrimSpace(action), "keys") {
 			return handleNewAPIKeys(name)
 		}
+		if strings.EqualFold(strings.TrimSpace(action), "resetkey") {
+			keyID := int64(parseIntVal(newAPIQueryOrHeader(query, headers, "key_id")))
+			amount := newAPIQueryOrHeader(query, headers, "quota_usd")
+			if amount == "" {
+				amount = newAPIQueryOrHeader(query, headers, "amount_usd")
+			}
+			return handleNewAPIResetKey(name, keyID, amount)
+		}
 		// Credentials are read from headers first: CPA logs the full request
 		// URI, so a token in the query string would leak into the access log
 		// (and browser history / proxy logs). The resource router only wires
@@ -961,6 +1144,109 @@ func handleNewAPIQuotaGet(query map[string][]string, headers map[string][]string
 	}
 	newAPIAcctMu.RUnlock()
 	return jsonResponse(http.StatusOK, quotaResponse{Accounts: accounts})
+}
+
+// newAPIQueryOrHeader resolves a parameter from headers first (mutating calls
+// keep values out of the access log), then the query string (curl debugging).
+func newAPIQueryOrHeader(query, headers map[string][]string, name string) string {
+	if v := newAPIHeaderValue(headers, "X-NewAPI-"+strings.ReplaceAll(name, "_", "-")); v != "" {
+		return v
+	}
+	if v, ok := getQueryParam(query, name); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
+// handleNewAPIResetKey resets one key's remaining quota. The amount is
+// expressed in the panel's display currency (USD by default) and converted with
+// quota_per_unit, so the UI never has to know about internal quota units.
+func handleNewAPIResetKey(name string, keyID int64, amount string) pluginapi.ManagementResponse {
+	target := findNewAPIAccount(strings.TrimSpace(name))
+	if target == nil {
+		return jsonResponse(http.StatusNotFound, map[string]string{"error": "account not found"})
+	}
+	base, token := target.credentials()
+	if token == "" {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no access token"})
+	}
+	if keyID <= 0 {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "key_id is required"})
+	}
+	quotaUSD, err := strconv.ParseFloat(strings.TrimSpace(amount), 64)
+	if err != nil || quotaUSD <= 0 {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "quota_usd must be a positive number"})
+	}
+	panel := fetchNewAPIPanelInfo(base)
+	key, err := resetNewAPIKeyQuota(base, token, keyID, quotaUSD, panel.QuotaPerUnit)
+	if err != nil {
+		recordError("newapi_key_reset_failed", fmt.Sprintf("key #%d: %v", keyID, err))
+		// A partial write (quota stored, status revival failed) still reports the
+		// new balance so the UI is not left guessing.
+		if key != nil {
+			return jsonResponse(http.StatusOK, map[string]any{
+				"ok":     false,
+				"error":  err.Error(),
+				"key_id": keyID,
+				"key":    newAPIKeyFromDetail(key, panel),
+			})
+		}
+		return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
+	}
+	clearErrorsByCode("newapi_key_reset_failed")
+	return jsonResponse(http.StatusOK, map[string]any{
+		"ok":     true,
+		"key_id": keyID,
+		"key":    newAPIKeyFromDetail(key, panel),
+	})
+}
+
+// newAPIKeyFromDetail projects a token detail into the display shape. Kept
+// separate from buildNewAPIKeys so a single-key refresh does not need to page
+// the whole list.
+func newAPIKeyFromDetail(d *newAPITokenDetail, panel newAPIPanelInfo) newAPIKey {
+	units := panel.QuotaPerUnit
+	if units <= 0 {
+		units = newAPIDefaultQuotaUnit
+	}
+	used := d.UsedQuota
+	remaining := d.RemainQuota
+	if d.UnlimitedQuota || remaining < 0 {
+		remaining = 0
+	}
+	k := newAPIKey{
+		ID:           d.ID,
+		Name:         d.Name,
+		Status:       newAPITokenStatusText(d.Status),
+		Group:        strings.TrimSpace(d.Group),
+		Unlimited:    d.UnlimitedQuota,
+		UsedUSD:      used / units,
+		RemainingUSD: remaining / units,
+	}
+	if d.ExpiredTime > 0 {
+		k.ExpiresAt = time.Unix(d.ExpiredTime, 0).UTC().Format(time.RFC3339)
+		if d.ExpiredTime <= time.Now().Unix() {
+			k.Status = "已过期"
+		}
+	}
+	if d.UnlimitedQuota {
+		k.StatusText = "不限量"
+	} else {
+		k.TotalUSD = k.UsedUSD + k.RemainingUSD
+		k.StatusText = fmt.Sprintf("余 $%.2f", k.RemainingUSD)
+		if rem, ok := panel.quotaToDisplay(remaining, units); ok {
+			k.PanelRemaining = rem
+		}
+	}
+	k.Window = &newAPIKeyWindow{
+		Used:       k.UsedUSD,
+		Remaining:  k.RemainingUSD,
+		Total:      k.TotalUSD,
+		Unit:       "USD",
+		Unlimited:  d.UnlimitedQuota,
+		StatusText: k.StatusText,
+	}
+	return k
 }
 
 // handleNewAPIKeys returns the account's key list: names, status and usage.

@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestNormalizeNewAPIBaseURL(t *testing.T) {
@@ -32,6 +34,10 @@ func TestNormalizeNewAPIBaseURL(t *testing.T) {
 // absent so a regression back to the dddai extension fails loudly.
 func newAPIStockServer(t *testing.T, calls *int32) *httptest.Server {
 	t.Helper()
+	// Relative timestamps: absolute ones silently change the computed day count
+	// as the calendar moves (this test broke one day after it was written).
+	soon := time.Now().Add(3 * 24 * time.Hour).Unix()
+	later := time.Now().Add(11 * 24 * time.Hour).Unix()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/billing/summary", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("provider must not call dddai-only /api/billing/summary")
@@ -47,13 +53,13 @@ func newAPIStockServer(t *testing.T, calls *int32) *httptest.Server {
 	})
 	mux.HandleFunc("/api/subscription/self", func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(calls, 1)
-		w.Write([]byte(`{"success":true,"data":{"billing_preference":"subscription_first","subscriptions":[
+		w.Write([]byte(fmt.Sprintf(`{"success":true,"data":{"billing_preference":"subscription_first","subscriptions":[
 			{"subscription":{"id":1249,"plan_id":19,"status":"active","amount_total":475000000,
-			"amount_used":117983493,"end_time":1793333544}},
+			"amount_used":117983493,"end_time":%d}},
 			{"subscription":{"id":1250,"plan_id":20,"status":"active","amount_total":360000000,
-			"amount_used":100000000,"end_time":1792000000}},
+			"amount_used":100000000,"end_time":%d}},
 			{"subscription":{"id":1200,"plan_id":19,"status":"expired","amount_total":1,
-			"amount_used":1,"end_time":1}}]}}`))
+			"amount_used":1,"end_time":1}}]}}`, later, soon)))
 	})
 	mux.HandleFunc("/api/subscription/plans", func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(calls, 1)
@@ -98,7 +104,7 @@ func TestFetchNewAPISnapshotUsesOnlyStockRoutes(t *testing.T) {
 	if len(snap.Subscriptions) != 2 {
 		t.Fatalf("subscriptions = %d, want 2 active", len(snap.Subscriptions))
 	}
-	// Sorted by soonest expiry: id 1250 (end 1792000000) first.
+	// Sorted by soonest expiry: id 1250 (ends in 3 days) first.
 	if snap.Subscriptions[0].ID != 1250 || snap.Subscriptions[1].ID != 1249 {
 		t.Errorf("order = %d,%d", snap.Subscriptions[0].ID, snap.Subscriptions[1].ID)
 	}
@@ -236,7 +242,7 @@ func TestFetchNewAPISnapshotPartialFailureKeepsWorkingWindows(t *testing.T) {
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte(`{"success":false,"code":"ACCESS_TOKEN_SCOPE_DENIED","message":"The access token lacks the required permission: profile:read"}`))
 		case "/api/subscription/self":
-			w.Write([]byte(`{"success":true,"data":{"subscriptions":[{"subscription":{"id":1,"plan_id":19,"status":"active","amount_total":100000000,"amount_used":25000000,"end_time":1793333544}}]}}`))
+			w.Write([]byte(fmt.Sprintf(`{"success":true,"data":{"subscriptions":[{"subscription":{"id":1,"plan_id":19,"status":"active","amount_total":100000000,"amount_used":25000000,"end_time":%d}}]}}`, time.Now().Add(11*24*time.Hour).Unix())))
 		case "/api/subscription/plans":
 			w.Write([]byte(`{"success":true,"data":[{"plan":{"id":19,"title":"增强月卡"}}]}`))
 		case "/api/log/self/stat":

@@ -97,7 +97,8 @@ plugins:
       #   + /api/subscription/self、/api/subscription/plans（wallet:read）
       #   + /api/log/self/stat（usage:read）
       # 因此令牌需要 profile:read / wallet:read / usage:read 三项只读权限。
-      # 若要查看 API Key 列表（仅名称与用量），还需 api_key:read。
+      # 若要查看 API Key 列表（仅名称与用量）并支持一键重置额度，还需
+      # api_key:read（读取）与 api_key:write（写入；重置走 PUT /api/token/）。
       # 插件绝不读取/展示 Key 明文，也不调用任何 reveal 接口。
       # 同一用户存在多个订阅时，每个订阅按所属分组独立展示（额度不互通）。
       #   name     — 展示名称
