@@ -573,3 +573,26 @@ func TestHandleNewAPIKeysErrorShape(t *testing.T) {
 		t.Errorf("error = %q, want scope hint", body.Error)
 	}
 }
+
+// TestBuildNewAPIKeysPanelAnnotationMatchesBalance makes sure the CNY
+// annotation describes the remaining quota. It used to be panel_used, which is
+// lifetime spend and produced figures like ¥692.04 next to a $105.00 balance.
+func TestBuildNewAPIKeysPanelAnnotationMatchesBalance(t *testing.T) {
+	items := []newAPITokenItem{{
+		ID: 1, Name: "team", Status: 1,
+		UsedQuota:   50885000, // $101.77 lifetime
+		RemainQuota: 52500000, // $105.00 remaining
+	}}
+	snap := &newAPISnapshot{
+		QuotaPerUnit: 500000,
+		Panel:        newAPIPanelInfo{QuotaPerUnit: 500000, DisplayType: "CNY", USDExchangeRate: 6.8},
+	}
+	k := buildNewAPIKeys(items, snap)[0]
+
+	if k.PanelRemaining != "¥714.00" {
+		t.Errorf("panel remaining = %q, want ¥714.00 (105 x 6.8)", k.PanelRemaining)
+	}
+	if k.PanelUsed != "¥692.04" {
+		t.Errorf("panel used = %q, want ¥692.04", k.PanelUsed)
+	}
+}

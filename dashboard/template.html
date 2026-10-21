@@ -2842,16 +2842,23 @@ function openNewAPIKeys(name){
 			if(!k.unlimited&&barTotal>0)pct=Math.min(100,Math.round((barUsed/barTotal)*100));
 			var color=pct>=90?"var(--danger)":(pct>=70?"var(--warn)":"var(--accent)");
 			var bar=k.unlimited?'':'<div class="progress-bar-bg" style="margin-top:4px"><div class="progress-bar-fill" style="width:'+pct+'%%;background:'+color+'"></div></div>';
-			var panelNote=k.panel_used?' ('+esc(k.panel_used)+')':'';
+			// The parenthesised amount annotates the *balance*, so it must be the
+			// panel-currency value of the remaining quota. It previously used
+			// panel_used, which is the lifetime spend in CNY and therefore
+			// disagreed with the adjacent "余 $X" (e.g. ¥692.04 next to
+			// $105.00, while ¥692.04 is 101.77 x 6.8).
+			var panelNote=k.panel_remaining?' ('+esc(k.panel_remaining)+')':'';
+			var usageStyle='font-family:var(--font-mono);font-size:12px;white-space:nowrap';
 			var usage;
 			if(k.unlimited){
-				usage='<span style="font-family:var(--font-mono);font-size:12px">已用 $'+Number(k.used_usd||0).toFixed(2)+panelNote+' · 不限量</span>';
+				var unlimitedNote=k.panel_used?' ('+esc(k.panel_used)+')':'';
+				usage='<span style="'+usageStyle+'">已用 $'+Number(k.used_usd||0).toFixed(2)+unlimitedNote+' · 不限量</span>';
 			}else if(k.cycle_active){
 				// The bar reflects this cycle; lifetime usage stays in the meta
 				// line so a reset never hides historical spend.
-				usage='<span style="font-family:var(--font-mono);font-size:12px">本轮 $'+Number(k.cycle_used_usd||0).toFixed(2)+' / $'+Number(k.cycle_total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+				usage='<span style="'+usageStyle+'">本轮 $'+Number(k.cycle_used_usd||0).toFixed(2)+' / $'+Number(k.cycle_total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
 			}else{
-				usage='<span style="font-family:var(--font-mono);font-size:12px">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+				usage='<span style="'+usageStyle+'">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
 			}
 			var meta=[];
 			if(k.group)meta.push("分组 "+k.group);
@@ -2869,8 +2876,11 @@ function openNewAPIKeys(name){
 				'<span style="display:flex;align-items:center;gap:8px">'+
 				'<span class="badge '+(k.status==="启用"?'badge-success':(k.status==="已过期"||k.status==="额度耗尽"?'badge-danger':'badge-neutral'))+'">'+esc(k.status||"未知")+'</span>'+
 				'<span style="font-size:11px;color:var(--meta)">#'+esc(String(k.id))+'</span></span></div>'+
-				'<div style="display:flex;justify-content:space-between;margin-top:4px;gap:10px">'+
-				'<span style="font-size:11px;color:var(--meta)">'+esc(meta.join(" · ")||"—")+'</span>'+usage+'</div>'+
+				// Meta and the numeric usage line are separate rows. Sharing one
+				// flex row made the (longer) usage string wrap onto two lines as
+				// soon as the panel-currency suffix was present.
+				'<div style="margin-top:4px;font-size:11px;color:var(--meta);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(meta.join(" · "))+'">'+esc(meta.join(" · ")||"—")+'</div>'+
+				'<div style="display:flex;justify-content:flex-end;margin-top:3px">'+usage+'</div>'+
 				bar+actionsHtml+'</div>';
 		}).join("");
 		body.innerHTML=head+rows;
