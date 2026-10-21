@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -308,7 +309,12 @@ func resetNewAPIKeyQuota(base, token string, keyID int64, quotaUSD float64, unit
 		return nil, fmt.Errorf("该 Key 为不限量，无需重置额度")
 	}
 
-	target := quotaUSD * units
+	// Compute in whole units: a float multiply can yield 50549999.99999999 for
+	// inputs that should be exact, and truncation would lose a unit.
+	target := math.Round(quotaUSD * units)
+	if target <= 0 {
+		return nil, fmt.Errorf("reset amount is too small for this panel's unit")
+	}
 	body := newAPITokenQuotaRequest{
 		ID:                 before.ID,
 		Name:               before.Name,
@@ -784,17 +790,21 @@ type newAPIKeyWindow struct {
 
 // newAPIKey is the safe, display-only projection of a panel token.
 type newAPIKey struct {
-	ID             int64            `json:"id"`
-	Name           string           `json:"name"`
-	Status         string           `json:"status"`
-	Group          string           `json:"group,omitempty"`
-	Unlimited      bool             `json:"unlimited"`
-	CreatedAt      string           `json:"created_at,omitempty"`
-	AccessedAt     string           `json:"accessed_at,omitempty"`
-	ExpiresAt      string           `json:"expires_at,omitempty"`
-	UsedUSD        float64          `json:"used_usd"`
-	RemainingUSD   float64          `json:"remaining_usd"`
-	TotalUSD       float64          `json:"total_usd"`
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	Status       string  `json:"status"`
+	Group        string  `json:"group,omitempty"`
+	Unlimited    bool    `json:"unlimited"`
+	CreatedAt    string  `json:"created_at,omitempty"`
+	AccessedAt   string  `json:"accessed_at,omitempty"`
+	ExpiresAt    string  `json:"expires_at,omitempty"`
+	UsedUSD      float64 `json:"used_usd"`
+	RemainingUSD float64 `json:"remaining_usd"`
+	TotalUSD     float64 `json:"total_usd"`
+	// RemainingQuota is the panel's raw internal counter. The reset dialog
+	// prefills from it so an idempotent reset reproduces the exact stored value
+	// instead of a 2-decimal rounding of it.
+	RemainingQuota float64          `json:"remaining_quota"`
 	PanelUsed      string           `json:"panel_used,omitempty"`
 	PanelRemaining string           `json:"panel_remaining,omitempty"`
 	StatusText     string           `json:"status_text,omitempty"`
@@ -859,13 +869,14 @@ func buildNewAPIKeys(items []newAPITokenItem, snap *newAPISnapshot) []newAPIKey 
 			remaining = 0
 		}
 		k := newAPIKey{
-			ID:           it.ID,
-			Name:         it.Name,
-			Status:       newAPITokenStatusText(it.Status),
-			Group:        strings.TrimSpace(it.Group),
-			Unlimited:    it.UnlimitedQuota,
-			UsedUSD:      it.UsedQuota / units,
-			RemainingUSD: remaining / units,
+			ID:             it.ID,
+			Name:           it.Name,
+			Status:         newAPITokenStatusText(it.Status),
+			Group:          strings.TrimSpace(it.Group),
+			Unlimited:      it.UnlimitedQuota,
+			UsedUSD:        it.UsedQuota / units,
+			RemainingUSD:   remaining / units,
+			RemainingQuota: remaining,
 		}
 		if it.CreatedTime > 0 {
 			k.CreatedAt = time.Unix(it.CreatedTime, 0).UTC().Format(time.RFC3339)
@@ -1177,6 +1188,9 @@ func handleNewAPIResetKey(name string, keyID int64, amount string) pluginapi.Man
 	if err != nil || quotaUSD <= 0 {
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "quota_usd must be a positive number"})
 	}
+	if quotaUSD > 1000000 {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "quota_usd is unreasonably large"})
+	}
 	panel := fetchNewAPIPanelInfo(base)
 	key, err := resetNewAPIKeyQuota(base, token, keyID, quotaUSD, panel.QuotaPerUnit)
 	if err != nil {
@@ -1215,13 +1229,14 @@ func newAPIKeyFromDetail(d *newAPITokenDetail, panel newAPIPanelInfo) newAPIKey 
 		remaining = 0
 	}
 	k := newAPIKey{
-		ID:           d.ID,
-		Name:         d.Name,
-		Status:       newAPITokenStatusText(d.Status),
-		Group:        strings.TrimSpace(d.Group),
-		Unlimited:    d.UnlimitedQuota,
-		UsedUSD:      used / units,
-		RemainingUSD: remaining / units,
+		ID:             d.ID,
+		Name:           d.Name,
+		Status:         newAPITokenStatusText(d.Status),
+		Group:          strings.TrimSpace(d.Group),
+		Unlimited:      d.UnlimitedQuota,
+		UsedUSD:        used / units,
+		RemainingUSD:   remaining / units,
+		RemainingQuota: remaining,
 	}
 	if d.ExpiredTime > 0 {
 		k.ExpiresAt = time.Unix(d.ExpiredTime, 0).UTC().Format(time.RFC3339)
@@ -1274,10 +1289,13 @@ func handleNewAPIKeys(name string) pluginapi.ManagementResponse {
 	snap := &newAPISnapshot{QuotaPerUnit: panel.QuotaPerUnit, Panel: panel}
 	keys := buildNewAPIKeys(items, snap)
 	return jsonResponse(http.StatusOK, map[string]any{
-		"account":  target.Name,
-		"base_url": base,
-		"keys":     keys,
-		"total":    len(keys),
+		"account":        target.Name,
+		"base_url":       base,
+		"keys":           keys,
+		"total":          len(keys),
+		"quota_per_unit": panel.QuotaPerUnit,
+		"display_type":   panel.DisplayType,
+		"exchange_rate":  panel.USDExchangeRate,
 	})
 }
 

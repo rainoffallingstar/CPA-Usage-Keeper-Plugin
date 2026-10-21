@@ -218,3 +218,30 @@ func TestHandleNewAPIResetKeyValidatesInput(t *testing.T) {
 		t.Errorf("unknown account status = %d", resp.StatusCode)
 	}
 }
+
+// TestResetNewAPIKeyQuotaExactUnits guards the unit conversion: a float multiply
+// can produce 50549999.99999999 and truncation would silently drop a unit.
+func TestResetNewAPIKeyQuotaExactUnits(t *testing.T) {
+	cases := []struct {
+		usd  float64
+		want float64
+	}{
+		{101.103528, 50551764},
+		{101.10, 50550000},
+		{0.000002, 1},
+		{33.33, 16665000},
+		{1, 500000},
+	}
+	for _, c := range cases {
+		panel := newFakePanel()
+		srv := panel.server(t)
+		after, err := resetNewAPIKeyQuota(srv.URL, "nap_x", 9876, c.usd, 500000)
+		srv.Close()
+		if err != nil {
+			t.Fatalf("usd=%v: %v", c.usd, err)
+		}
+		if after.RemainQuota != c.want {
+			t.Errorf("usd=%v: remain = %v, want %v", c.usd, after.RemainQuota, c.want)
+		}
+	}
+}

@@ -2813,6 +2813,11 @@ function openNewAPIKeys(name){
 			return;
 		}
 		var keys=payload.keys||[];
+		newAPIPanelFactors={
+			unit:Number(payload.quota_per_unit||0),
+			displayType:String(payload.display_type||""),
+			rate:Number(payload.exchange_rate||0)
+		};
 		if(!keys.length){
 			body.innerHTML='<div style="font-size:12px;color:var(--meta)">该账号下没有 API Key</div>';
 			return;
@@ -2842,7 +2847,7 @@ function openNewAPIKeys(name){
 			// A dedicated action row for quota-limited keys only. Unlimited keys
 			// have no balance to reset, so they get no action at all.
 			var actionsHtml=k.unlimited?'':'<div style="display:flex;justify-content:flex-end;margin-top:8px">'+
-				'<button class="btn btn-secondary btn-sm" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+')" title="为这个 Key 设置新的剩余额度">'+icon("refresh")+' 重置额度</button></div>';
+				'<button class="btn btn-secondary btn-sm" onclick="openNewAPIResetKey(\''+esc(name)+'\','+Number(k.id)+',\''+esc(k.name||("Key #"+k.id)).replace(/'/g,"")+'\','+Number(k.used_usd||0)+','+Number(k.remaining_usd||0)+','+Number(k.remaining_quota||0)+')" title="为这个 Key 设置新的剩余额度">'+icon("refresh")+' 重置额度</button></div>';
 			return '<div style="padding:12px 0;border-bottom:1px solid var(--border-soft)">'+
 				'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">'+
 				'<span style="font-size:13px;font-weight:600;color:var(--fg)">'+esc(k.name||("Key #"+k.id))+'</span>'+
@@ -2872,21 +2877,66 @@ function closeNewAPIKeys(){
    live production configuration. */
 var newAPIResetCtx=null;
 
-function openNewAPIResetKey(account,keyId,keyName,usedUSD,remainUSD){
+var newAPIPanelFactors={unit:0,displayType:"",rate:0};
+
+// fmtExact keeps up to 6 decimals but drops trailing zeros, so an untouched
+// prefill reproduces the stored value exactly instead of rounding it.
+function fmtExact(v){
+	var n=Number(v);
+	if(!isFinite(n))return"0";
+	var s=n.toFixed(6).replace(/0+$/,"").replace(/\.$/,"");
+	return s===""?"0":s;
+}
+
+// convertQuotaPreview mirrors the backend: internal = usd × quota_per_unit,
+// then the panel's own display currency (CNY uses usd_exchange_rate).
+function convertQuotaPreview(usd){
+	var unit=newAPIPanelFactors.unit||500000;
+	var internal=Math.round(Number(usd||0)*unit);
+	var panel="";
+	var t=newAPIPanelFactors.displayType;
+	if(t==="CNY"){
+		panel="¥"+(Number(usd||0)*(newAPIPanelFactors.rate||6.8)).toFixed(2);
+	}else if(t==="TOKENS"){
+		panel=internal+" tokens";
+	}
+	return {internal:internal,panel:panel,unit:unit};
+}
+
+function updateNewAPIResetPreview(){
+	var input=document.getElementById("newapi-reset-amount");
+	var out=document.getElementById("newapi-reset-preview");
+	if(!input||!out)return;
+	var usd=Number(input.value||0);
+	if(!isFinite(usd)||usd<=0){out.textContent="请输入大于 0 的金额";return;}
+	var c=convertQuotaPreview(usd);
+	out.innerHTML='写入值 = <b style="color:var(--fg)">'+c.internal.toLocaleString('en-US')+'</b> 额度单位'+
+		'（$'+fmtExact(usd)+' × '+c.unit.toLocaleString('en-US')+'）'+
+		(c.panel?' · 面板显示 <b style="color:var(--fg)">'+esc(c.panel)+'</b>':'');
+}
+
+function openNewAPIResetKey(account,keyId,keyName,usedUSD,remainUSD,remainQuota){
 	newAPIResetCtx={account:account,keyId:keyId,keyName:keyName};
 	var ov=document.getElementById("newapi-reset-overlay");
 	var body=document.getElementById("newapi-reset-body");
 	if(!ov||!body)return;
+	var unit=newAPIPanelFactors.unit||500000;
+	// Prefill from the raw counter when available: 101.103528 USD must round-trip
+	// to exactly 50551764 units, not to the 101.10 that toFixed(2) would give.
+	var prefill=Number(remainQuota||0)>0?fmtExact(Number(remainQuota)/unit):(Number(remainUSD||0)>0?fmtExact(remainUSD):"50");
+	var panelNow=convertQuotaPreview(Number(remainUSD||0)).panel;
 	body.innerHTML=
 		'<div style="font-size:13px;color:var(--muted);line-height:1.7">'+
 			'将为 <b style="color:var(--fg)">'+esc(keyName)+'</b>（#'+esc(String(keyId))+'）设置新的剩余额度。'+
 		'</div>'+
-		'<div style="display:flex;gap:16px;margin:12px 0;padding:10px 12px;background:var(--surface-warm);border-radius:var(--radius-md);font-size:12px">'+
+		'<div style="display:flex;gap:16px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;background:var(--surface-warm);border-radius:var(--radius-md);font-size:12px">'+
 			'<span>当前已用 <b style="color:var(--fg)">$'+Number(usedUSD||0).toFixed(2)+'</b></span>'+
-			'<span>当前剩余 <b style="color:var(--fg)">$'+Number(remainUSD||0).toFixed(2)+'</b></span>'+
+			'<span>当前剩余 <b style="color:var(--fg)">$'+fmtExact(remainUSD||0)+'</b>'+(panelNow?'（'+esc(panelNow)+'）':'')+'</span>'+
+			'<span>额度单位 <b style="color:var(--fg)">'+unit.toLocaleString('en-US')+'</b> / USD</span>'+
 		'</div>'+
 		'<div class="form-group"><label class="form-label">重置为剩余额度 (USD)</label>'+
-			'<input class="text-input" id="newapi-reset-amount" type="number" min="0.01" step="0.01" value="'+(Number(remainUSD||0)>0?Number(remainUSD).toFixed(2):"50.00")+'"></div>'+
+			'<input class="text-input" id="newapi-reset-amount" type="number" min="0.000001" step="any" value="'+prefill+'" oninput="updateNewAPIResetPreview()"></div>'+
+		'<div id="newapi-reset-preview" style="font-size:11px;color:var(--meta);margin-top:6px;font-family:var(--font-mono);line-height:1.6"></div>'+
 		'<div style="font-size:11px;color:var(--warn);margin-top:10px;line-height:1.6">'+
 			'只修改「剩余配额」这一个字段。插件会先读取该 Key 的当前设置（名称、分组、模型限制、过期时间、IP 白名单等）再原样写回，'+
 			'因此面板审计日志中应只出现“修改字段：剩余配额”；已用累计值不受影响。'+
@@ -2897,6 +2947,7 @@ function openNewAPIResetKey(account,keyId,keyName,usedUSD,remainUSD){
 		'</div>';
 	ov.classList.add("active");
 	ov.setAttribute("aria-hidden","false");
+	updateNewAPIResetPreview();
 	var input=document.getElementById("newapi-reset-amount");
 	if(input)setTimeout(function(){input.focus();input.select()},100);
 }
@@ -2916,6 +2967,8 @@ function doNewAPIResetKey(){
 	var amount=input?String(input.value||"").trim():"";
 	var n=Number(amount);
 	if(!amount||!isFinite(n)||n<=0){showToast("请输入大于 0 的额度","danger");return;}
+	var preview=convertQuotaPreview(n);
+	if(preview.internal<=0){showToast("金额过小，换算后不足 1 个额度单位","danger");return;}
 	var btn=document.getElementById("newapi-reset-confirm");
 	if(btn)setBtnLoading(btn,true);
 	quotaAction("/newapi-quota",{action:"resetkey",account:ctx.account,key_id:ctx.keyId},

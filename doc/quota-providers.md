@@ -538,8 +538,46 @@ Therefore the plugin never sends a partial body. `resetNewAPIKeyQuota`:
 `used_quota` is read-only (not in the update column list), so the lifetime usage
 counter is untouched by a reset.
 
-Requires `api_key:write`. The amount is expressed in USD and converted with
-`quota_per_unit`, so the UI never handles internal units.
+Requires `api_key:write`.
+
+#### How the reset amount is computed
+
+The panel stores a token balance as an integer counter, not USD. Conversion is
+the same one upstream uses in `controller/billing.go`:
+
+```
+internal_units = round(usd_amount × quota_per_unit)
+usd            = internal_units / quota_per_unit
+panel_currency = internal_units / quota_per_unit × usd_exchange_rate   # CNY only
+```
+
+`quota_per_unit` comes from the public `GET /api/status` (dddai: `500000`,
+matching upstream's default `500 * 1000`). `usd_exchange_rate` is used only for
+the CNY display equivalent; the stored counter is always USD-based.
+
+Worked example with real dddai values:
+
+| Input | Stored counter | Panel shows |
+|-------|----------------|-------------|
+| `$50` | `25,000,000` | `¥340.00` |
+| `$101.103528` | `50,551,764` | `¥687.50` |
+| `$101.10` | `50,550,000` | `¥687.48` |
+
+Two precision rules follow from this:
+
+1. **Round, don't truncate.** `101.103528 × 500000` can evaluate to
+   `50551763.99999999` in float; truncation would lose a unit. The backend uses
+   `math.Round`.
+2. **Prefill from the raw counter, not from a 2-decimal USD value.** The dialog
+   receives `remaining_quota` (the integer) and renders `remaining_quota / unit`
+   with up to 6 significant decimals, so confirming an untouched prefill
+   reproduces the stored value exactly and the panel audit records
+   `changed_fields: []`. Showing `$101.10` instead would silently drop 1,764
+   units.
+
+The dialog also prints the live conversion (`写入值 = 50,551,764 额度单位
+（$101.103528 × 500,000） · 面板显示 ¥687.50`) so the number being written is
+never hidden.
 
 ### DB persistence
 

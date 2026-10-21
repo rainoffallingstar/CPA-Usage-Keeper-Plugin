@@ -287,8 +287,11 @@ RESPONSES['/newapi-quota?action=resetkey'] = { ok: true, key_id: 1 };
 RESPONSES['/newapi-quota?action=keys'] = {
   account: 'dddai-main',
   total: 3,
+  quota_per_unit: 500000,
+  display_type: 'CNY',
+  exchange_rate: 6.8,
   keys: [
-    { id: 1, name: 'prod-key', status: '启用', group: 'sub-openai', used_usd: 5, remaining_usd: 15, total_usd: 20, window: { used: 5, remaining: 15, total: 20, unit: 'USD', status_text: '已用 $5.00 · 余 $15.00' } },
+    { id: 1, name: 'prod-key', status: '启用', group: 'sub-openai', used_usd: 5, remaining_usd: 15, remaining_quota: 7500000, total_usd: 20, window: { used: 5, remaining: 15, total: 20, unit: 'USD', status_text: '已用 $5.00 · 余 $15.00' } },
     { id: 2, name: 'unlimited-key', status: '启用', unlimited: true, used_usd: 2, remaining_usd: 0, total_usd: 0, window: { used: 2, remaining: 0, total: 0, unit: 'USD', unlimited: true, status_text: '不限量' } },
     { id: 3, name: 'retired-key', status: '已禁用', used_usd: 0, remaining_usd: 0, total_usd: 0, window: { used: 0, remaining: 0, total: 0, unit: 'USD', status_text: '已用 $0.00 · 余 $0.00' } },
   ],
@@ -335,7 +338,9 @@ test('newapi key rows offer one-click reset only for limited keys', async () => 
 
 test('newapi reset dialog asks for confirmation and blocks invalid input', async () => {
   writes.length = 0;
-  sandbox.openNewAPIResetKey('dddai-main', 1, 'prod-key', 5, 15);
+  // Prime the panel factors the way openNewAPIKeys() does.
+  sandbox.newAPIPanelFactors = { unit: 500000, displayType: 'CNY', rate: 6.8 };
+  sandbox.openNewAPIResetKey('dddai-main', 1, 'prod-key', 5, 15, 7500000);
   const body = sandbox.document.getElementById('newapi-reset-body');
   assert.ok(body.innerHTML.includes('prod-key'), 'dialog does not name the key');
   assert.ok(body.innerHTML.includes('只修改「剩余配额」这一个字段'), 'dialog omits the single-field promise');
@@ -353,6 +358,30 @@ test('newapi reset dialog asks for confirmation and blocks invalid input', async
   sandbox.fetch = originalFetch;
   assert.strictEqual(calls.length, 0, 'invalid amounts must not hit the API');
 
+  sandbox.closeNewAPIReset();
+});
+
+test('reset dialog prefills the exact stored quota and shows the conversion', () => {
+  sandbox.newAPIPanelFactors = { unit: 500000, displayType: 'CNY', rate: 6.8 };
+  // 50551764 units is $101.103528; a 2-decimal prefill would silently reset to
+  // $101.10 and lose 1,764 units.
+  sandbox.openNewAPIResetKey('acct', 9876, 'team', 102.99, 101.103528, 50551764);
+
+  // The DOM stub does not parse innerHTML into child nodes, so assert on the
+  // emitted markup rather than on a re-queried input element.
+  const html = sandbox.document.getElementById('newapi-reset-body').innerHTML;
+  assert.ok(html.includes('value="101.103528"'), 'prefill rounded the stored quota: ' + html.slice(0, 200));
+  assert.ok(html.includes('500,000'), 'dialog omits the quota unit');
+  assert.ok(html.includes('¥687.50'), 'dialog omits the panel currency equivalent');
+
+  // Round-trip: confirming the untouched prefill must reproduce the counter.
+  assert.strictEqual(sandbox.fmtExact(50551764 / 500000), '101.103528');
+  const c = sandbox.convertQuotaPreview(50551764 / 500000);
+  assert.strictEqual(c.internal, 50551764, 'prefill does not round-trip to the stored counter');
+  assert.strictEqual(c.panel, '¥687.50');
+
+  // A rounded prefill demonstrably loses units, which is why we do not use it.
+  assert.strictEqual(sandbox.convertQuotaPreview(101.10).internal, 50550000);
   sandbox.closeNewAPIReset();
 });
 
