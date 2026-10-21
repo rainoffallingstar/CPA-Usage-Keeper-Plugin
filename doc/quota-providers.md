@@ -579,6 +579,45 @@ The dialog also prints the live conversion (`写入值 = 50,551,764 额度单位
 （$101.103528 × 500,000） · 面板显示 ¥687.50`) so the number being written is
 never hidden.
 
+#### Progress semantics after a reset
+
+`remain_quota` is overwritten by a reset, but the panel's `used_quota` is a
+**lifetime** counter that never restarts. Without extra state the bar would keep
+showing "used / (used + remaining)" for all time, so a freshly reset key would
+appear mostly consumed.
+
+The plugin therefore records a **cycle** in `newapi_key_cycles` at reset time:
+
+| Column | Meaning |
+|--------|---------|
+| `baseline_used` | `used_quota` observed immediately **before** the write |
+| `cycle_total` | the amount granted by the reset (internal units) |
+| `reset_at` | when the reset was verified |
+
+The card then renders:
+
+```
+cycle_total     = amount granted at reset        → bar maximum
+cycle_used      = used_quota_now - baseline_used → bar fill
+cycle_remaining = remain_quota                   → authoritative, from the panel
+```
+
+Lifetime usage is still displayed (`累计已用 $X`, plus the reset date in
+`本轮起算`), so a reset restarts the bar **without hiding historical spend**.
+`cycle_used` is clamped to `[0, cycle_total]`.
+
+Two self-healing rules keep this honest:
+
+1. **Panel-side top-up.** If the live balance exceeds the recorded
+   `cycle_total` (quota was added from the web UI or another tool), the cycle is
+   rebased onto the current balance instead of drawing a bar whose remaining
+   exceeds its own total.
+2. **Verified writes only.** A cycle is persisted only after the post-write
+   check passes, so a failed or clobbered reset never claims a new cycle.
+
+Keys without a recorded cycle fall back to the lifetime `used/total` pair, which
+is the correct reading for a key that was never reset here.
+
 ### DB persistence
 
 | Provider | Table | Columns |

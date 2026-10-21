@@ -610,6 +610,18 @@ func createTables() error {
 		base_url TEXT NOT NULL DEFAULT '',
 		token TEXT NOT NULL DEFAULT ''
 	)`)
+	// A reset sets remain_quota to a new value but the panel's used_quota keeps
+	// accumulating for the lifetime of the key. Remembering the used_quota at
+	// reset time lets the dashboard show "this cycle" usage without pretending
+	// the lifetime counter restarted.
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS newapi_key_cycles (
+		account TEXT NOT NULL,
+		key_id INTEGER NOT NULL,
+		baseline_used REAL NOT NULL DEFAULT 0,
+		cycle_total REAL NOT NULL DEFAULT 0,
+		reset_at TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (account, key_id)
+	)`)
 	// Create Google Colab accounts table for persistence
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS colab_quota_accounts (
 		name TEXT PRIMARY KEY,

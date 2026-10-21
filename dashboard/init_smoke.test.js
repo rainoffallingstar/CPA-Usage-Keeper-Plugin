@@ -291,7 +291,9 @@ RESPONSES['/newapi-quota?action=keys'] = {
   display_type: 'CNY',
   exchange_rate: 6.8,
   keys: [
-    { id: 1, name: 'prod-key', status: '启用', group: 'sub-openai', used_usd: 5, remaining_usd: 15, remaining_quota: 7500000, total_usd: 20, window: { used: 5, remaining: 15, total: 20, unit: 'USD', status_text: '已用 $5.00 · 余 $15.00' } },
+    { id: 1, name: 'prod-key', status: '启用', group: 'sub-openai', used_usd: 65, remaining_usd: 15, remaining_quota: 7500000, total_usd: 80,
+      cycle_active: true, cycle_total_usd: 20, cycle_used_usd: 5, cycle_reset_at: '2026-10-21T02:25:00Z',
+      window: { used: 5, remaining: 15, total: 20, unit: 'USD', status_text: '本轮已用 $5.00 / $20.00 · 余 $15.00' } },
     { id: 2, name: 'unlimited-key', status: '启用', unlimited: true, used_usd: 2, remaining_usd: 0, total_usd: 0, window: { used: 2, remaining: 0, total: 0, unit: 'USD', unlimited: true, status_text: '不限量' } },
     { id: 3, name: 'retired-key', status: '已禁用', used_usd: 0, remaining_usd: 0, total_usd: 0, window: { used: 0, remaining: 0, total: 0, unit: 'USD', status_text: '已用 $0.00 · 余 $0.00' } },
   ],
@@ -393,10 +395,15 @@ test('newapi key list modal renders names and usage without secrets', async () =
 
   const html = writes.map((w) => w.html).join('\n');
   assert.ok(html.includes('prod-key'), 'key name missing');
-  assert.ok(html.includes('$5.00 / $20.00'), 'usage missing');
+  assert.ok(html.includes('本轮 $5.00 / $20.00'), 'cycle usage missing');
   assert.ok(html.includes('unlimited-key'), 'unlimited key missing');
   assert.ok(html.includes('retired-key'), 'disabled key missing');
   assert.ok(html.includes('不读取 key 明文'), 'privacy note missing');
+  // A reset must restart the bar but never hide lifetime spend.
+  assert.ok(html.includes('累计已用 $65.00'), 'lifetime usage hidden after reset');
+  assert.ok(html.includes('本轮起算 2026-10-21'), 'reset date missing');
+  // 5 of the 20 granted this cycle, not 65 of 80 lifetime.
+  assert.ok(html.includes('width:25%%') || html.includes('width:25%'), 'bar does not use cycle numbers');
   assert.ok(!/sk-/.test(html), 'rendered a secret-looking value');
 });
 

@@ -2829,21 +2829,33 @@ function openNewAPIKeys(name){
 		});
 		var head='<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:12px;padding:10px 12px;background:var(--surface-warm);border-radius:var(--radius-md)">'+
 			'<span>共 <b style="color:var(--fg)">'+keys.length+'</b> 个</span>'+
-			'<span>已用合计 <b style="color:var(--fg)">$'+totalUsed.toFixed(2)+'</b></span>'+
+			'<span>累计已用 <b style="color:var(--fg)">$'+totalUsed.toFixed(2)+'</b></span>'+
 			'<span>余额合计 <b style="color:var(--fg)">'+(unlimited?'含不限量':'$'+totalRemain.toFixed(2))+'</b></span>'+
 			'<span style="margin-left:auto">🔒 不读取 key 明文</span></div>';
 		var rows=keys.map(function(k){
 			var pct=0;
-			if(!k.unlimited&&k.total_usd>0)pct=Math.min(100,Math.round((k.used_usd/k.total_usd)*100));
+			var barTotal=k.cycle_active?Number(k.cycle_total_usd||0):Number(k.total_usd||0);
+			var barUsed=k.cycle_active?Number(k.cycle_used_usd||0):Number(k.used_usd||0);
+			if(!k.unlimited&&barTotal>0)pct=Math.min(100,Math.round((barUsed/barTotal)*100));
 			var color=pct>=90?"var(--danger)":(pct>=70?"var(--warn)":"var(--accent)");
 			var bar=k.unlimited?'':'<div class="progress-bar-bg" style="margin-top:4px"><div class="progress-bar-fill" style="width:'+pct+'%%;background:'+color+'"></div></div>';
 			var panelNote=k.panel_used?' ('+esc(k.panel_used)+')':'';
-			var usage=k.unlimited?'<span style="font-family:var(--font-mono);font-size:12px">已用 $'+Number(k.used_usd||0).toFixed(2)+panelNote+' · 不限量</span>'
-				:'<span style="font-family:var(--font-mono);font-size:12px">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+			var usage;
+			if(k.unlimited){
+				usage='<span style="font-family:var(--font-mono);font-size:12px">已用 $'+Number(k.used_usd||0).toFixed(2)+panelNote+' · 不限量</span>';
+			}else if(k.cycle_active){
+				// The bar reflects this cycle; lifetime usage stays in the meta
+				// line so a reset never hides historical spend.
+				usage='<span style="font-family:var(--font-mono);font-size:12px">本轮 $'+Number(k.cycle_used_usd||0).toFixed(2)+' / $'+Number(k.cycle_total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+			}else{
+				usage='<span style="font-family:var(--font-mono);font-size:12px">$'+Number(k.used_usd||0).toFixed(2)+' / $'+Number(k.total_usd||0).toFixed(2)+' · 余 $'+Number(k.remaining_usd||0).toFixed(2)+panelNote+'</span>';
+			}
 			var meta=[];
 			if(k.group)meta.push("分组 "+k.group);
 			if(k.accessed_at)meta.push("最近使用 "+k.accessed_at.slice(0,10));
 			if(k.expires_at)meta.push("到期 "+k.expires_at.slice(0,10));
+			meta.push("累计已用 $"+Number(k.used_usd||0).toFixed(2));
+			if(k.cycle_active)meta.push("本轮起算 "+(k.cycle_reset_at||"").slice(0,10));
 			// A dedicated action row for quota-limited keys only. Unlimited keys
 			// have no balance to reset, so they get no action at all.
 			var actionsHtml=k.unlimited?'':'<div style="display:flex;justify-content:flex-end;margin-top:8px">'+

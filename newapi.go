@@ -291,7 +291,7 @@ type newAPITokenQuotaRequest struct {
 //
 // An exhausted key is re-enabled in a second status-only call because upstream
 // refuses to enable a token while its stored balance is still <= 0.
-func resetNewAPIKeyQuota(base, token string, keyID int64, quotaUSD float64, units float64) (*newAPITokenDetail, error) {
+func resetNewAPIKeyQuota(account, base, token string, keyID int64, quotaUSD float64, units float64) (*newAPITokenDetail, error) {
 	if keyID <= 0 {
 		return nil, fmt.Errorf("key id is required")
 	}
@@ -328,6 +328,10 @@ func resetNewAPIKeyQuota(base, token string, keyID int64, quotaUSD float64, unit
 		Group:              before.Group,
 		CrossGroupRetry:    before.CrossGroupRetry,
 	}
+	// Snapshot the lifetime counter before the write: that value is the
+	// baseline "already used" for the new cycle.
+	baselineUsed := before.UsedQuota
+
 	if err := newAPIPutJSON(base+"/api/token/", token, body, nil); err != nil {
 		return nil, err
 	}
@@ -359,6 +363,16 @@ func resetNewAPIKeyQuota(base, token string, keyID int64, quotaUSD float64, unit
 		after.ExpiredTime != before.ExpiredTime {
 		return after, fmt.Errorf("写入后字段发生变化（名称/分组/模型限制/过期时间），请检查面板")
 	}
+
+	// Only a verified write records the cycle, so the bar never claims a reset
+	// that did not stick.
+	persistNewAPIKeyCycle(&newAPIKeyCycle{
+		Account:      account,
+		KeyID:        keyID,
+		BaselineUsed: baselineUsed,
+		CycleTotal:   target,
+		ResetAt:      time.Now().UTC().Format(time.RFC3339),
+	})
 	return after, nil
 }
 
@@ -804,7 +818,14 @@ type newAPIKey struct {
 	// RemainingQuota is the panel's raw internal counter. The reset dialog
 	// prefills from it so an idempotent reset reproduces the exact stored value
 	// instead of a 2-decimal rounding of it.
-	RemainingQuota float64          `json:"remaining_quota"`
+	RemainingQuota float64 `json:"remaining_quota"`
+	// Cycle fields describe usage since the last reset by this plugin. They are
+	// absent for keys that were never reset here, in which case the bar falls
+	// back to the lifetime used/total pair.
+	CycleActive    bool             `json:"cycle_active,omitempty"`
+	CycleTotalUSD  float64          `json:"cycle_total_usd,omitempty"`
+	CycleUsedUSD   float64          `json:"cycle_used_usd,omitempty"`
+	CycleResetAt   string           `json:"cycle_reset_at,omitempty"`
 	PanelUsed      string           `json:"panel_used,omitempty"`
 	PanelRemaining string           `json:"panel_remaining,omitempty"`
 	StatusText     string           `json:"status_text,omitempty"`
@@ -852,6 +873,12 @@ func fetchNewAPITokens(base, token string) ([]newAPITokenItem, error) {
 // buildNewAPIKeys projects tokens to the safe response. All quota values are
 // converted with the same quota_per_unit used by the account card.
 func buildNewAPIKeys(items []newAPITokenItem, snap *newAPISnapshot) []newAPIKey {
+	return buildNewAPIKeysWithCycles(items, snap, nil)
+}
+
+// buildNewAPIKeysWithCycles projects tokens with optional reset-cycle history.
+// A cycle only affects the progress bar; lifetime used_quota is always shown.
+func buildNewAPIKeysWithCycles(items []newAPITokenItem, snap *newAPISnapshot, cycles map[int64]newAPIKeyCycle) []newAPIKey {
 	units := snap.QuotaPerUnit
 	if units <= 0 {
 		units = snap.Panel.QuotaPerUnit
@@ -919,6 +946,45 @@ func buildNewAPIKeys(items []newAPITokenItem, snap *newAPISnapshot) []newAPIKey 
 		} else {
 			w.StatusText = "不限量"
 		}
+
+		// A recorded reset switches the bar to "this cycle": the maximum is what
+		// was granted at reset, and cycle usage is the lifetime counter minus
+		// the value it had at reset. remaining_usd stays authoritative (read
+		// straight from the panel), so drift in either direction is visible.
+		if cyc, ok := cycles[it.ID]; ok && !it.UnlimitedQuota && cyc.CycleTotal > 0 {
+			// Self-heal a stale cycle: if the key now holds more quota than the
+			// cycle ever granted, someone added quota from the panel (web UI or
+			// another tool), so the recorded baseline no longer describes it.
+			// Rebase onto the current balance rather than drawing a bar whose
+			// total is smaller than its own remaining value.
+			if it.RemainQuota > cyc.CycleTotal*1.01 {
+				cyc = newAPIKeyCycle{
+					Account:      cyc.Account,
+					KeyID:        cyc.KeyID,
+					BaselineUsed: it.UsedQuota,
+					CycleTotal:   it.RemainQuota,
+					ResetAt:      time.Now().UTC().Format(time.RFC3339),
+				}
+				persistNewAPIKeyCycle(&cyc)
+				cycles[it.ID] = cyc
+			}
+			cycleUsed := it.UsedQuota - cyc.BaselineUsed
+			if cycleUsed < 0 {
+				cycleUsed = 0
+			}
+			if cycleUsed > cyc.CycleTotal*1.01 {
+				cycleUsed = cyc.CycleTotal
+			}
+			k.CycleActive = true
+			k.CycleTotalUSD = cyc.CycleTotal / units
+			k.CycleUsedUSD = cycleUsed / units
+			k.CycleResetAt = cyc.ResetAt
+			w.Total = k.CycleTotalUSD
+			w.Used = k.CycleUsedUSD
+			w.Remaining = k.RemainingUSD
+			w.StatusText = fmt.Sprintf("本轮已用 $%.2f / $%.2f · 余 $%.2f",
+				k.CycleUsedUSD, k.CycleTotalUSD, k.RemainingUSD)
+		}
 		k.Window = w
 
 		keys = append(keys, k)
@@ -931,6 +997,77 @@ func buildNewAPIKeys(items []newAPITokenItem, snap *newAPISnapshot) []newAPIKey 
 		return keys[i].UsedUSD > keys[j].UsedUSD
 	})
 	return keys
+}
+
+// ---------------------------------------------------------------------------
+// Reset cycles: "this cycle" usage after a quota reset
+//
+// resetNewAPIKeyQuota overwrites remain_quota, but the panel's used_quota is a
+// lifetime counter that keeps growing. To show a meaningful progress bar after
+// a reset we persist the used_quota observed at reset time together with the
+// amount granted, so the card can report:
+//
+//   cycle_total     = amount set at reset (the new bar maximum)
+//   cycle_used      = used_quota_now - baseline_used
+//   cycle_remaining = remain_quota (authoritative, straight from the panel)
+//
+// Lifetime usage stays visible separately; nothing is rewritten or hidden.
+// ---------------------------------------------------------------------------
+
+type newAPIKeyCycle struct {
+	Account      string  `json:"account"`
+	KeyID        int64   `json:"key_id"`
+	BaselineUsed float64 `json:"baseline_used"`
+	CycleTotal   float64 `json:"cycle_total"`
+	ResetAt      string  `json:"reset_at"`
+}
+
+func persistNewAPIKeyCycle(c *newAPIKeyCycle) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	d.Exec(`INSERT INTO newapi_key_cycles (account, key_id, baseline_used, cycle_total, reset_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(account, key_id) DO UPDATE SET
+			baseline_used=excluded.baseline_used,
+			cycle_total=excluded.cycle_total,
+			reset_at=excluded.reset_at`,
+		c.Account, c.KeyID, c.BaselineUsed, c.CycleTotal, c.ResetAt)
+}
+
+func loadNewAPIKeyCycles(account string) map[int64]newAPIKeyCycle {
+	out := make(map[int64]newAPIKeyCycle)
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return out
+	}
+	rows, err := d.Query("SELECT account, key_id, baseline_used, cycle_total, reset_at FROM newapi_key_cycles WHERE account = ?", account)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c newAPIKeyCycle
+		if rows.Scan(&c.Account, &c.KeyID, &c.BaselineUsed, &c.CycleTotal, &c.ResetAt) == nil {
+			out[c.KeyID] = c
+		}
+	}
+	return out
+}
+
+func deleteNewAPIKeyCyclesFromDB(account string) {
+	dbMu.RLock()
+	d := db
+	dbMu.RUnlock()
+	if d == nil {
+		return
+	}
+	d.Exec("DELETE FROM newapi_key_cycles WHERE account = ?", account)
 }
 
 // ---------------------------------------------------------------------------
@@ -1071,6 +1208,7 @@ func applyNewAPIAccountAction(action, name, token, baseURL string) pluginapi.Man
 		}
 		newAPIAcctMu.Unlock()
 		deleteNewAPIAccountFromDB(name)
+		deleteNewAPIKeyCyclesFromDB(name)
 		return jsonResponse(http.StatusOK, map[string]any{"removed": true, "account": name})
 	case "settoken", "setkey":
 		target := findNewAPIAccount(name)
@@ -1192,7 +1330,7 @@ func handleNewAPIResetKey(name string, keyID int64, amount string) pluginapi.Man
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "quota_usd is unreasonably large"})
 	}
 	panel := fetchNewAPIPanelInfo(base)
-	key, err := resetNewAPIKeyQuota(base, token, keyID, quotaUSD, panel.QuotaPerUnit)
+	key, err := resetNewAPIKeyQuota(target.Name, base, token, keyID, quotaUSD, panel.QuotaPerUnit)
 	if err != nil {
 		recordError("newapi_key_reset_failed", fmt.Sprintf("key #%d: %v", keyID, err))
 		// A partial write (quota stored, status revival failed) still reports the
@@ -1287,7 +1425,7 @@ func handleNewAPIKeys(name string) pluginapi.ManagementResponse {
 	// full quota refresh just to open the key list.
 	panel := fetchNewAPIPanelInfo(base)
 	snap := &newAPISnapshot{QuotaPerUnit: panel.QuotaPerUnit, Panel: panel}
-	keys := buildNewAPIKeys(items, snap)
+	keys := buildNewAPIKeysWithCycles(items, snap, loadNewAPIKeyCycles(target.Name))
 	return jsonResponse(http.StatusOK, map[string]any{
 		"account":        target.Name,
 		"base_url":       base,

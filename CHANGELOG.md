@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.11.38 (2026-10-21)
+
+### Features
+- **重置后按“本轮”重新计算进度**：重置只会覆盖面板的 `remain_quota`，而上游的 `used_quota` 是终身累计、永不归零，因此重置后进度条会长期显示“已用 / (已用+剩余)”，看起来几乎耗尽。
+  - 新增 `newapi_key_cycles` 表，在重置校验通过后记录 `baseline_used`（写入前的累计已用）、`cycle_total`（本次授予额度）、`reset_at`。
+  - 卡片进度条改为：总长 = 本轮授予额度，已用 = `used_quota_now - baseline_used`，剩余 = 面板返回的 `remain_quota`（权威值）。
+  - **累计已用依旧展示**：meta 行固定显示 `累计已用 $X`，并额外标注 `本轮起算 YYYY-MM-DD`；列表头部汇总也改称「累计已用」，避免与「本轮」混淆。
+- **面板侧补充额度时自动重定基线**：若当前余额显著超过记录的 `cycle_total`（说明在面板网页端或其他工具加过额度），自动以当前余额为新一轮起点，避免画出「剩余大于总额」的矛盾进度条。
+- 只在校验通过后写 cycle，失败/被覆盖的重置不会留下虚假的本轮记录；Key 未记录 cycle 时回落到终身 `已用/总额`。
+
+### Tests
+- `TestResetRecordsCycleAndReportsCycleUsage`（重置写入 baseline 与 cycle_total；面板继续累加后，本轮已用 10/50、剩余 40，累计已用仍为原值）。
+- `TestBuildNewAPIKeysRebasesStaleCycle`（面板侧加额度后自动重定基线，进度条自洽）。
+- `TestBuildNewAPIKeysWithoutCycleFallsBackToLifetime`。
+- 前端：断言出现「本轮 $5.00 / $20.00」「累计已用 $65.00」「本轮起算 2026-10-21」，且进度条按本轮 25% 而非终身值渲染。
+
 ## v0.11.37 (2026-10-21)
 
 ### Fixes
