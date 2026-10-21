@@ -39,7 +39,7 @@ const (
 	resourceAPINewAPIQuota    = "/v0/resource/plugins/usage-keeper/api/newapi-quota"
 )
 
-var pluginVersion = "0.11.42"
+var pluginVersion = "0.11.43"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`

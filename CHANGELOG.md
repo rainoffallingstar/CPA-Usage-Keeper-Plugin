@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.43 (2026-10-21)
+
+### Fixes
+- **重置后网页看不到变化（三个独立原因）**：
+  1. **页面从未重新加载**：插件日志显示最后一次加载 Dashboard 是 18:32，而两次重置发生在 19:43 / 19:45；`refresh_seconds: 0` 时不自动刷新，切走再切回配额页才会重拉数据。已在 Key 弹窗新增「刷新」按钮，并在重置成功后同时刷新 Key 列表与配额卡片。
+  2. **HTTP 缓存**：所有插件 JSON 响应只有 `Content-Type`，没有缓存控制头，浏览器可对 200 GET 做启发式缓存；`/newapi-quota`、`?action=keys` 都是实时读数。现在统一返回 `Cache-Control: no-store, no-cache, must-revalidate` + `Pragma: no-cache`，前端对配额端点额外使用 `cache:"no-store"` 并附 nonce。
+  3. **`omitempty` 吞掉 0**：重置后 `cycle_used_usd` 正好为 0，`omitempty` 会让该字段整个消失，客户端读到 `undefined`——偏偏在最需要它的时刻。`cycle_active` / `cycle_total_usd` / `cycle_used_usd` 去掉 `omitempty`，消费端以 `cycle_active` 判断是否渲染本轮视图。
+
+### 说明
+- 你 19:43 与 19:45 的两次重置**均已成功**：面板审计记录为 `token.update changed_fields: ["remain_quota"]`，本地 `newapi_key_cycles` 中 `team` 的记录为 `baseline_used=73959135`、`cycle_total=102500000`（$205）、`reset_at=2026-10-21T11:45:13Z`，接口返回 `remaining=$205.00`、`cycle_total=$205`、`本轮已用 $0.00`。
+
+### Tests
+- `TestBuildNewAPIKeysKeepsZeroCycleUsed`：断言 `cycle_used_usd:0` 必须出现在 JSON 中，且 `cycle_active` / `cycle_total_usd` 同时存在。
+
 ## v0.11.42 (2026-10-21)
 
 ### UI

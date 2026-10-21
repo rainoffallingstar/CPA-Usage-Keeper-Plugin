@@ -1449,6 +1449,16 @@ async function fetchJSON(path,extra,rangeOverride){
 	return data;
 }
 
+// fetchJSONFresh is fetchJSON without ETag reuse: quota endpoints are live
+// readings and must never be answered from a cached 200.
+async function fetchJSONFresh(path,extra){
+	var url=API_BASE+path+"?range="+rangeValue();
+	if(extra)Object.keys(extra).forEach(function(k){if(extra[k]!==undefined&&extra[k]!==null)url+="&"+k+"="+encodeURIComponent(extra[k])});
+	var resp=await fetch(url,{cache:"no-store"});
+	if(!resp.ok)throw new Error("HTTP "+resp.status);
+	return resp.json();
+}
+
 async function fetchQ(path){
 	var r=await fetch(API_BASE+path);
 	if(!r.ok)throw new Error("HTTP "+r.status);
@@ -1459,11 +1469,13 @@ async function fetchQ(path){
 // CPA's resource router only wires GET for plugin routes (POST returns 404 for
 // every provider), so mutations send the action in the query and the secret in
 // request headers.
-async function quotaAction(path,params,secretHeaders){
+async function quotaAction(path,params,secretHeaders,fetchOpts){
 	var qs=Object.keys(params).map(function(k){
 		return encodeURIComponent(k)+"="+encodeURIComponent(params[k]||"");
 	}).join("&");
-	var r=await fetch(API_BASE+path+(qs?"?"+qs:""),{headers:secretHeaders||{}});
+	var opts=Object.assign({},fetchOpts||{});
+	opts.headers=Object.assign({},secretHeaders||{},(fetchOpts&&fetchOpts.headers)||{});
+	var r=await fetch(API_BASE+path+(qs?"?"+qs:""),opts);
 	if(!r.ok)throw new Error("HTTP "+r.status);
 	return r;
 }
@@ -2531,7 +2543,7 @@ async function renderQuota(){
 		var glmData=await fetchJSON("/glmcoding-quota");quotaDataCache["glm"]=(glmData.accounts)||[];
 		var dsData=await fetchJSON("/deepseek-quota");quotaDataCache["deepseek"]=(dsData.accounts)||[];
 		var olData=await fetchJSON("/ollama-quota");quotaDataCache["ollama"]=(olData.accounts)||[];
-		var naData=await fetchJSON("/newapi-quota");quotaDataCache["newapi"]=(naData.accounts)||[];
+		var naData=await fetchJSONFresh("/newapi-quota");quotaDataCache["newapi"]=(naData.accounts)||[];
 		var cbData=await fetchJSON("/colab-quota");quotaDataCache["colab"]=(cbData.accounts)||[];
 
 		renderQuotaCards();
@@ -2798,7 +2810,17 @@ function renderColabHistoryChart(container,points,days){
 }
 
 /* ─── NewAPI API Key list (names + usage only) ───────────────────────────── */
+var newAPIKeysAccount=null;
+
+// refreshNewAPIKeys re-reads the list for the account currently on screen (used
+// by the modal's 刷新 button and after a reset, including resets performed in
+// the panel web UI).
+function refreshNewAPIKeys(){
+	if(newAPIKeysAccount)openNewAPIKeys(newAPIKeysAccount);
+}
+
 function openNewAPIKeys(name){
+	newAPIKeysAccount=name;
 	var ov=document.getElementById("newapi-keys-overlay");
 	var body=document.getElementById("newapi-keys-body");
 	var sub=document.getElementById("newapi-keys-subtitle");
@@ -2806,7 +2828,10 @@ function openNewAPIKeys(name){
 	if(body)body.innerHTML='<div style="font-size:12px;color:var(--meta)">正在加载…</div>';
 	ov.classList.add("active");
 	ov.setAttribute("aria-hidden","false");
-	quotaAction("/newapi-quota",{action:"keys",account:name}).then(function(r){
+	// cache:"no-store" plus a nonce: the endpoint is a live read, and browsers
+	// may otherwise reuse a 200 GET after an out-of-band change (e.g. a reset
+	// performed in the panel web UI).
+	quotaAction("/newapi-quota",{action:"keys",account:name,_:Date.now()},{},{"cache":"no-store"}).then(function(r){
 		return r.json();
 	}).then(function(d){
 		var payload=(d&&d.result)?d.result:d;
@@ -3022,7 +3047,10 @@ function doNewAPIResetKey(){
 		}
 		closeNewAPIReset();
 		showToast("已重置 "+ctx.keyName+" 的额度","success");
+		// The key list is where cycle numbers live; the quota card also carries
+		// a refreshed_at stamp, so refresh both.
 		openNewAPIKeys(ctx.account);
+		renderQuota();
 	}).catch(function(e){
 		if(btn)setBtnLoading(btn,false);
 		showToast("重置失败："+(e.message||"未知错误"),"danger");
@@ -3855,7 +3883,10 @@ if(refreshIntervalMs>0){
           <h3 class="card-title" id="newapi-keys-title" style="font-size:17px">API Keys</h3>
           <p class="card-subtitle" id="newapi-keys-subtitle">仅展示名称与用量，密钥明文永不读取</p>
         </div>
-        <button class="btn btn-ghost btn-icon-only" onclick="closeNewAPIKeys()" aria-label="关闭">X</button>
+        <span style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-secondary btn-xs" id="btn-refresh-keys" onclick="refreshNewAPIKeys()">刷新</button>
+          <button class="btn btn-ghost btn-icon-only" onclick="closeNewAPIKeys()" aria-label="关闭">X</button>
+        </span>
       </div>
       <div id="newapi-keys-body" style="margin-top:4px"><div style="font-size:12px;color:var(--meta)">正在加载…</div></div>
     </div>

@@ -1826,8 +1826,15 @@ func jsonResponse(statusCode int, body any) pluginapi.ManagementResponse {
 	}
 	return pluginapi.ManagementResponse{
 		StatusCode: statusCode,
-		Headers:    http.Header{"Content-Type": {contentTypeJSON}},
-		Body:       raw,
+		Headers: http.Header{
+			"Content-Type": {contentTypeJSON},
+			// Plugin JSON never carries an ETag, so without this a browser may
+			// apply heuristic caching to a 200 GET and keep serving a stale
+			// payload after a write (e.g. a quota reset) elsewhere.
+			"Cache-Control": {"no-store, no-cache, must-revalidate"},
+			"Pragma":        {"no-cache"},
+		},
+		Body: raw,
 	}
 }
 

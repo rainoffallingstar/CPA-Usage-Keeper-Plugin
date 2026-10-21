@@ -822,10 +822,13 @@ type newAPIKey struct {
 	// Cycle fields describe usage since the last reset by this plugin. They are
 	// absent for keys that were never reset here, in which case the bar falls
 	// back to the lifetime used/total pair.
-	CycleActive    bool             `json:"cycle_active,omitempty"`
-	CycleTotalUSD  float64          `json:"cycle_total_usd,omitempty"`
-	CycleUsedUSD   float64          `json:"cycle_used_usd,omitempty"`
-	CycleResetAt   string           `json:"cycle_reset_at,omitempty"`
+	CycleActive bool `json:"cycle_active"`
+	// No omitempty: a freshly reset key has cycle_used_usd == 0, and dropping
+	// the field made clients see "undefined" exactly when the value mattered
+	// most. Consumers gate on cycle_active instead.
+	CycleTotalUSD float64 `json:"cycle_total_usd"`
+	CycleUsedUSD  float64 `json:"cycle_used_usd"`
+	CycleResetAt  string  `json:"cycle_reset_at,omitempty"`
 	PanelUsed      string           `json:"panel_used,omitempty"`
 	PanelRemaining string           `json:"panel_remaining,omitempty"`
 	StatusText     string           `json:"status_text,omitempty"`

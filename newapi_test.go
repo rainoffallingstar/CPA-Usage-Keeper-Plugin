@@ -596,3 +596,37 @@ func TestBuildNewAPIKeysPanelAnnotationMatchesBalance(t *testing.T) {
 		t.Errorf("panel used = %q, want ¥692.04", k.PanelUsed)
 	}
 }
+
+// TestBuildNewAPIKeysKeepsZeroCycleUsed guards a JSON-encoding trap: with
+// omitempty, a freshly reset key (cycle_used_usd == 0) dropped the field
+// entirely, so clients reading it saw undefined exactly when the value mattered.
+func TestBuildNewAPIKeysKeepsZeroCycleUsed(t *testing.T) {
+	d, cleanup := setupTestDB(t)
+	defer cleanup()
+	installTestDB(t, d)
+	if _, err := d.Exec(`CREATE TABLE IF NOT EXISTS newapi_key_cycles (
+		account TEXT NOT NULL, key_id INTEGER NOT NULL,
+		baseline_used REAL NOT NULL DEFAULT 0, cycle_total REAL NOT NULL DEFAULT 0,
+		reset_at TEXT NOT NULL DEFAULT '', PRIMARY KEY (account, key_id))`); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	cycles := map[int64]newAPIKeyCycle{1: {
+		Account: "acct", KeyID: 1, BaselineUsed: 70000000, CycleTotal: 102500000,
+		ResetAt: "2026-10-21T11:45:13Z",
+	}}
+	// used_quota equals the baseline: nothing consumed since the reset.
+	items := []newAPITokenItem{{ID: 1, Name: "team", Status: 1, UsedQuota: 70000000, RemainQuota: 102500000}}
+	snap := &newAPISnapshot{QuotaPerUnit: 500000, Panel: newAPIPanelInfo{QuotaPerUnit: 500000}}
+	keys := buildNewAPIKeysWithCycles(items, snap, cycles)
+
+	raw, _ := json.Marshal(keys[0])
+	if !strings.Contains(string(raw), `"cycle_used_usd":0`) {
+		t.Fatalf("zero cycle usage dropped from JSON: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"cycle_active":true`) {
+		t.Fatalf("cycle_active missing: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"cycle_total_usd":205`) {
+		t.Fatalf("cycle total missing: %s", raw)
+	}
+}
