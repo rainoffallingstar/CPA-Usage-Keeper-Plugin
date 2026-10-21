@@ -610,6 +610,9 @@ tr:hover .filter-link{opacity:1}
 @keyframes toastSlideUp{from{opacity:0;transform:translateY(16px) scale(0.94)}to{opacity:1;transform:translateY(0) scale(1)}}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:2500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity var(--motion-base) var(--ease-standard)}
 .modal-overlay.active{opacity:1;pointer-events:auto}
+/* Dialogs opened from inside another dialog must paint above it: equal z-index
+   resolves by DOM order, and the keys list lives after this one. */
+.modal-overlay-stacked{z-index:2600}
 .modal-card{width:440px;max-width:calc(100vw - 32px);background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--elev-floating);padding:24px;transform:scale(0.95);transition:transform var(--motion-base) var(--ease-standard)}
 .modal-overlay.active .modal-card{transform:scale(1)}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px}
@@ -3812,7 +3815,7 @@ if(refreshIntervalMs>0){
 }
 </script>
   <!-- One-click quota reset confirmation -->
-  <div class="modal-overlay" id="newapi-reset-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="newapi-reset-title">
+  <div class="modal-overlay modal-overlay-stacked" id="newapi-reset-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="newapi-reset-title">
     <div class="modal-card" style="width:480px">
       <div class="modal-header">
         <h3 class="card-title" id="newapi-reset-title" style="font-size:17px">重置 Key 额度</h3>

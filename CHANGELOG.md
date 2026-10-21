@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.11.39 (2026-10-21)
+
+### Fixes
+- **点击「重置额度」后没有任何反应**：确认弹窗与 Key 列表弹窗都使用 `.modal-overlay` 的 `z-index:2500`，而 Key 列表在 DOM 中更靠后，同层级按文档顺序绘制，导致确认弹窗被压在下面——按钮点不到，请求根本没有发出（CPA 访问日志中无 `action=resetkey` 记录）。
+  - 新增 `.modal-overlay-stacked { z-index: 2600 }`，重置确认弹窗使用该class，确保叠在被它唤起的 Key 列表之上。
+  - 新增回归断言：`.modal-overlay-stacked` 的 z-index 必须严格大于 `.modal-overlay`。
+
 ## v0.11.38 (2026-10-21)
 
 ### Features

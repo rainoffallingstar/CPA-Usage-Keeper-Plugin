@@ -363,6 +363,20 @@ test('newapi reset dialog asks for confirmation and blocks invalid input', async
   sandbox.closeNewAPIReset();
 });
 
+test('reset dialog stacks above the key list it is opened from', () => {
+  // Both dialogs default to z-index 2500; equal values resolve by DOM order and
+  // the keys list comes later, so the reset confirmation was painted underneath
+  // and its button could not be clicked (no request ever reached the backend).
+  const html = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+  const resetTag = html.split('<div')[html.split('<div').findIndex((t) => t.includes('id="newapi-reset-overlay"'))];
+  assert.ok(resetTag.includes('modal-overlay-stacked'), 'reset overlay is not marked as stacked');
+  const rule = html.match(/\.modal-overlay-stacked\{[^}]*\}/);
+  assert.ok(rule, 'stacked overlay rule missing');
+  const z = Number((rule[0].match(/z-index:(\d+)/) || [])[1]);
+  const base = Number((html.match(/\.modal-overlay\{[^}]*z-index:(\d+)/) || [])[1]);
+  assert.ok(z > base, 'stacked overlay must outrank the base overlay: ' + z + ' vs ' + base);
+});
+
 test('reset dialog prefills the exact stored quota and shows the conversion', () => {
   sandbox.newAPIPanelFactors = { unit: 500000, displayType: 'CNY', rate: 6.8 };
   // 50551764 units is $101.103528; a 2-decimal prefill would silently reset to
