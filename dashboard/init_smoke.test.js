@@ -367,6 +367,40 @@ test('quota refresh button shows progress and polls until the backend finishes',
   assert.ok(!btn.disabled, 'button must be re-enabled after completion');
 });
 
+test('mutating buttons disable themselves and refuse a second submit', async () => {
+  // Adding an account, saving a price rule and deleting an account were all
+  // fire-and-forget: no feedback, no guard, so an impatient double-click
+  // created duplicates or fired concurrent deletes.
+  const calls = [];
+  const originalFetch = sandbox.fetch;
+  sandbox.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ accounts: [], synced: 0 }), text: async () => '{}' };
+  };
+
+  const btn = sandbox.document.createElement('button');
+  btn.innerHTML = '保存账号';
+  const restore = sandbox.withBusy(btn, '保存中…');
+  assert.ok(restore, 'first call should acquire the busy lock');
+  assert.ok(btn.disabled, 'button must be disabled while busy');
+  assert.ok(String(btn.innerHTML).includes('保存中'), 'button must show progress text');
+  assert.strictEqual(sandbox.withBusy(btn, '保存中…'), null, 'second submit must be refused');
+
+  restore('已保存');
+  assert.ok(!btn.disabled, 'button must be re-enabled afterwards');
+
+  sandbox.fetch = originalFetch;
+});
+
+test('removing a quota account asks for confirmation before deleting', async () => {
+  // Deleting an account also drops its stored credentials, so it must never be
+  // a single unguarded click.
+  const html = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+  const fn = html.slice(html.indexOf('function removeQuota('), html.indexOf('function removeQuota(') + 900);
+  assert.ok(fn.includes('window.confirm'), 'removeQuota must confirm first');
+  assert.ok(fn.includes('withBusy'), 'removeQuota must guard against double submits');
+});
+
 test('newapi key rows offer one-click reset only for limited keys', async () => {
   writes.length = 0;
   sandbox.openNewAPIKeys('dddai-main');

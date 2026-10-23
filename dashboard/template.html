@@ -707,7 +707,7 @@ tr:hover .filter-link{opacity:1}
           <option value="300">每 5 分钟</option>
         </select>
         <!-- Manual Refresh Button -->
-        <button id="btn-refresh" class="btn btn-secondary btn-icon-only" title="立即刷新" aria-label="立即刷新" onclick="refreshAll()">
+        <button id="btn-refresh" class="btn btn-secondary btn-icon-only" title="立即刷新" aria-label="立即刷新" onclick="refreshAll(this)">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
         </button>
         <span class="header-divider" aria-hidden="true"></span>
@@ -1053,7 +1053,7 @@ tr:hover .filter-link{opacity:1}
         </div>
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:6px">
           <button class="btn btn-secondary" onclick="closePricingModal()">取消</button>
-          <button class="btn btn-primary" onclick="savePricingModal()">保存规则</button>
+          <button class="btn btn-primary" id="btn-save-price" onclick="savePricingModal(this)">保存规则</button>
         </div>
       </div>
     </div>
@@ -1494,6 +1494,35 @@ function showToast(msg,type){
 		pill.classList.add("exit");
 		setTimeout(function(){pill.remove()},260);
 	},3000);
+}
+
+// withBusy marks a button as busy for the duration of an async action. It
+// returns a restore() callback. Every mutating button uses it so a slow request
+// cannot be double-submitted: the old pattern showed no feedback at all, so
+// users clicked again and created duplicate accounts / duplicate price rules.
+// Returns null when the button is already busy, which callers treat as "ignore".
+function withBusy(btn,busyText){
+	if(!btn)return function(){}; // nothing to disable; callers proceed normally
+	if(!btn.dataset)return function(){};
+	if(btn.dataset.busy==="1")return null;
+	btn.dataset.busy="1";
+	btn.dataset.origHtml=btn.innerHTML;
+	btn.disabled=true;
+	btn.setAttribute("aria-busy","true");
+	if(busyText)btn.innerHTML=btnSpinner()+esc(busyText);
+	else btn.classList.add("is-loading");
+	return function(doneText){
+		delete btn.dataset.busy;
+		btn.disabled=false;
+		btn.removeAttribute("aria-busy");
+		btn.classList.remove("is-loading");
+		if(doneText){
+			btn.innerHTML=icon("check")+" "+esc(doneText);
+			setTimeout(function(){btn.innerHTML=btn.dataset.origHtml||""},1600);
+		}else{
+			btn.innerHTML=btn.dataset.origHtml||"";
+		}
+	};
 }
 
 function btnSpinner(){
@@ -2502,17 +2531,17 @@ function buildQuotaFields(provider){
 	if(titleEl)titleEl.textContent=(quotaEditingName?"更新 ":"添加 ")+pName+" 账号凭据";
 
 	if(provider==="opencode"){
-		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识 (Account Name)</label><input class="text-input" id="qa-name" placeholder="e.g. personal"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Auth Cookie</label><input class="text-input" id="qa-cookie" placeholder="session cookie"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识 (Account Name)</label><input class="text-input" id="qa-name" placeholder="e.g. personal"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Auth Cookie</label><input class="text-input" id="qa-cookie" placeholder="session cookie"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount(this)">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="glm"){
-		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. glm-dev"></div><div class="form-group" style="flex:2;min-width:240px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">Base URL</label><input class="text-input" id="qa-base" value="https://open.bigmodel.cn"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. glm-dev"></div><div class="form-group" style="flex:2;min-width:240px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">Base URL</label><input class="text-input" id="qa-base" value="https://open.bigmodel.cn"></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount(this)">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="ollama"){
-		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. ollama-pro"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Session Cookie</label><input class="text-input" id="qa-cookie" placeholder="aid=...; __Secure-session=..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:160px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. ollama-pro"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">Session Cookie</label><input class="text-input" id="qa-cookie" placeholder="aid=...; __Secure-session=..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount(this)">'+icon("plus")+' 保存账号</button></div>';
 	}else if(provider==="newapi"){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">';
 		f+='<div class="form-group" style="flex:1;min-width:150px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. dddai-main" '+(quotaEditingName?'disabled':'')+' value="'+(quotaEditingName?esc(quotaEditingName):'')+'"></div>';
 		f+='<div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">面板访问令牌 (Access Token)</label><input class="text-input" id="qa-key" placeholder="nap_..." autocomplete="off"></div>';
 		f+='<div class="form-group" style="flex:1;min-width:200px;margin-bottom:0"><label class="form-label">面板地址 (Base URL)</label><input class="text-input" id="qa-base" value="https://dddai.dev"></div>';
-		f+='<button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon(quotaEditingName?"check":"plus")+' '+(quotaEditingName?"更新凭据":"保存账号")+'</button></div>';
+		f+='<button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount(this)">'+icon(quotaEditingName?"check":"plus")+' '+(quotaEditingName?"更新凭据":"保存账号")+'</button></div>';
 		if(quotaEditingName)f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">正在更新已有账号 <b>'+esc(quotaEditingName)+'</b> 的访问令牌与面板地址（Base URL）；账号标识不可修改。令牌与地址至少填写一项。</div>';
 		f+='<div style="margin-top:10px;font-size:12px;color:var(--muted)">此处填写的是面板「访问令牌」（<code>nap_...</code>，在 <b>设置 → 安全设置</b> 中创建），不是 <code>sk-</code> 模型密钥。令牌需具备 <code>profile:read</code> / <code>wallet:read</code> / <code>usage:read</code> 三项只读权限。插件只调用官方 new-api 通用接口（<code>/api/user/self</code>、<code>/api/subscription/self</code>、<code>/api/subscription/plans</code>、<code>/api/log/self/stat</code>），不依赖任何面板私有接口；同一用户有多个订阅时按分组逐条展示。</div>';
 	}else if(provider==="colab"){
@@ -2525,7 +2554,7 @@ function buildQuotaFields(provider){
 		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:3;min-width:260px;margin-bottom:0"><label class="form-label">回调地址 / 授权码</label><input class="text-input" id="qa-code" placeholder="http://127.0.0.1:xxxxx/?code=... 或 直接粘贴 code 值"></div><button class="btn btn-secondary" id="btn-colab-code" style="height:34px;padding:0 16px" onclick="doColabManualCode()">'+icon("key")+' 提交回调</button></div>';
 		f+='</div>';
 	}else{
-		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. deepseek-main"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount()">'+icon("plus")+' 保存账号</button></div>';
+		f+='<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end"><div class="form-group" style="flex:1;min-width:180px;margin-bottom:0"><label class="form-label">账号标识</label><input class="text-input" id="qa-name" placeholder="e.g. deepseek-main"></div><div class="form-group" style="flex:2;min-width:260px;margin-bottom:0"><label class="form-label">API Key</label><input class="text-input" id="qa-key" placeholder="sk-..."></div><button class="btn btn-primary" style="height:34px;padding:0 16px" onclick="doAddQuotaAccount(this)">'+icon("plus")+' 保存账号</button></div>';
 	}
 	return f;
 }
@@ -2643,10 +2672,10 @@ function renderQuotaCards(){
 
 		var historyHtml="";
 		if(acc.type==="colab"){
-			historyHtml='<div class="colab-history" id="colab-history-'+esc(acc.name)+'" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--fg)">用量历史</span><span style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" data-history-days="7" onclick="loadColabHistory(\''+esc(acc.name)+'\',7)">7天</button><button class="btn btn-primary btn-xs" data-history-days="30" onclick="loadColabHistory(\''+esc(acc.name)+'\',30)">30天</button><button class="btn btn-ghost btn-xs" data-history-days="90" onclick="loadColabHistory(\''+esc(acc.name)+'\',90)">90天</button></span></div><div style="font-size:11px;color:var(--meta)">正在加载…</div></div>';
+			historyHtml='<div class="colab-history" id="colab-history-'+esc(acc.name)+'" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--fg)">用量历史</span><span style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" data-history-days="7" onclick="loadColabHistory(\''+esc(acc.name)+'\',7,this)">7天</button><button class="btn btn-primary btn-xs" data-history-days="30" onclick="loadColabHistory(\''+esc(acc.name)+'\',30,this)">30天</button><button class="btn btn-ghost btn-xs" data-history-days="90" onclick="loadColabHistory(\''+esc(acc.name)+'\',90,this)">90天</button></span></div><div style="font-size:11px;color:var(--meta)">正在加载…</div></div>';
 		}
 
-		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+(acc.base_url?esc(acc.base_url)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto">'+(acc.type==="newapi"?'<button class="btn btn-secondary btn-sm" onclick="openNewAPIKeys(\''+esc(acc.name)+'\')">'+icon("key")+' API Keys</button><button class="btn btn-secondary btn-sm" onclick="openNewAPIEdit(\''+esc(acc.name)+'\',\''+esc(acc.base_url||"")+'\')">'+icon("edit")+' 编辑凭据</button>':'')+'<button class="btn btn-secondary btn-sm" id="quota-refresh-'+esc(acc.type)+'-'+esc(acc.name)+'" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\',this)"'+(acc.refreshing?' disabled aria-busy="true"':'')+'>'+(acc.refreshing?btnSpinner()+icon("refresh")+' 同步中…':icon("refresh")+' 刷新配额')+'</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
+		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+(acc.base_url?esc(acc.base_url)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto">'+(acc.type==="newapi"?'<button class="btn btn-secondary btn-sm" onclick="openNewAPIKeys(\''+esc(acc.name)+'\')">'+icon("key")+' API Keys</button><button class="btn btn-secondary btn-sm" onclick="openNewAPIEdit(\''+esc(acc.name)+'\',\''+esc(acc.base_url||"")+'\')">'+icon("edit")+' 编辑凭据</button>':'')+'<button class="btn btn-secondary btn-sm" id="quota-refresh-'+esc(acc.type)+'-'+esc(acc.name)+'" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\',this)"'+(acc.refreshing?' disabled aria-busy="true"':'')+'>'+(acc.refreshing?btnSpinner()+icon("refresh")+' 同步中…':icon("refresh")+' 刷新配额')+'</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\',this)">'+icon("x")+' 移除账号</button></div></div>';
 	}).join("");
 
 	// Auto-load history charts for Colab accounts.
@@ -2671,9 +2700,14 @@ function renderQuotaCards(){
 	},50);
 }
 
-function loadColabHistory(account,days){
+function loadColabHistory(account,days,btn){
 	var container=document.getElementById("colab-history-"+account);
 	if(!container)return;
+	// Disable the whole period switcher while a range loads: clicking 30 then 90
+	// used to race two responses into the same chart.
+	var group=container.querySelectorAll("[data-history-days]");
+	group.forEach(function(b){b.disabled=true;});
+	var reenable=function(){group.forEach(function(b){b.disabled=false;});};
 	// Highlight active period button.
 	container.querySelectorAll("[data-history-days]").forEach(function(b){
 		b.className="btn "+(parseInt(b.getAttribute("data-history-days"),10)===days?"btn-primary":"btn-ghost")+" btn-xs";
@@ -2684,9 +2718,11 @@ function loadColabHistory(account,days){
 		.then(function(d){
 			var points=(d&&d.result?d.result.points:(d&&d.points)||[]);
 			renderColabHistoryChart(container,points,days);
+			reenable();
 		})
 		.catch(function(){
 			container.querySelector("div:last-child").innerHTML='<div style="font-size:11px;color:var(--danger)">历史数据加载失败</div>';
+			reenable();
 		});
 }
 
@@ -2820,12 +2856,17 @@ var newAPIKeysAccount=null;
 // refreshNewAPIKeys re-reads the list for the account currently on screen (used
 // by the modal's 刷新 button and after a reset, including resets performed in
 // the panel web UI).
-function refreshNewAPIKeys(){
-	if(newAPIKeysAccount)openNewAPIKeys(newAPIKeysAccount);
+function refreshNewAPIKeys(btn){
+	btn=btn||document.getElementById("btn-refresh-keys");
+	// openNewAPIKeys reuses this button, so it carries the busy state itself
+	// rather than toggling here and fighting with the reload it triggers.
+	if(newAPIKeysAccount)openNewAPIKeys(newAPIKeysAccount,btn);
 }
 
-function openNewAPIKeys(name){
+function openNewAPIKeys(name,btn){
 	newAPIKeysAccount=name;
+	btn=btn||document.getElementById("btn-refresh-keys");
+	var restore=withBusy(btn,"刷新中…");
 	var ov=document.getElementById("newapi-keys-overlay");
 	var body=document.getElementById("newapi-keys-body");
 	var sub=document.getElementById("newapi-keys-subtitle");
@@ -2843,6 +2884,7 @@ function openNewAPIKeys(name){
 		if(!body)return;
 		if(payload.error&&(!payload.keys||!payload.keys.length)){
 			body.innerHTML='<div class="error-detail-box">'+esc(payload.error)+'</div>';
+			if(restore&&restore!==null)restore();
 			return;
 		}
 		var keys=payload.keys||[];
@@ -2853,6 +2895,7 @@ function openNewAPIKeys(name){
 		};
 		if(!keys.length){
 			body.innerHTML='<div style="font-size:12px;color:var(--meta)">该账号下没有 API Key</div>';
+			if(restore&&restore!==null)restore();
 			return;
 		}
 		var totalUsed=0,totalRemain=0,unlimited=false;
@@ -2927,8 +2970,10 @@ function openNewAPIKeys(name){
 				'</div>';
 		}).join("");
 		body.innerHTML=head+rows;
+		if(restore&&restore!==null)restore();
 	}).catch(function(e){
 		if(body)body.innerHTML='<div class="error-detail-box">加载失败：'+esc(e.message||"未知错误")+'</div>';
+		if(restore&&restore!==null)restore();
 	});
 }
 function closeNewAPIKeys(){
@@ -3082,56 +3127,73 @@ function openNewAPIEdit(name,baseURL){
 	renderQuotaCards();
 }
 
-function doAddQuotaAccount(){
+function doAddQuotaAccount(btn){
 	var n=(document.getElementById("qa-name")||{}).value||"";
 	n=n.trim();
 	if(!n){showToast("请输入账号标识名称","danger");return;}
 	var p=currentQuotaProvider;
+	var editing=quotaEditingName;
+
+	// Validate before touching the button, so a rejected form leaves it usable.
+	if(p==="newapi"){
+		var nk0=(document.getElementById("qa-key")||{}).value||"";
+		if(!nk0.trim()&&!editing){showToast("请输入面板访问令牌 (nap_...)","danger");return;}
+	}
+
+	var restore=withBusy(btn,"保存中…");
+	if(restore===null)return; // already submitting
+
+	var ok=function(msg){
+		restore("已保存");
+		showToast(msg,"success");
+	};
+	var fail=function(msg){
+		restore();
+		showToast(msg,"danger");
+	};
+
+	var onOk=function(msg){
+		toggleAddQuotaForm();
+		renderQuota();
+		ok(msg);
+	};
+
 	if(p==="opencode"){
 		var c=(document.getElementById("qa-cookie")||{}).value||"";
-		fetchQ("/opencode-quota?action=addaccount&account="+encodeURIComponent(n)+"&cookie="+encodeURIComponent(c.trim())).then(function(){
-			toggleAddQuotaForm();
-			renderQuota();
-			showToast("已添加 OpenCode 账号: "+n,"success");
-		}).catch(function(){showToast("添加失败","danger")});
+		fetchQ("/opencode-quota?action=addaccount&account="+encodeURIComponent(n)+"&cookie="+encodeURIComponent(c.trim()))
+			.then(function(){onOk("已添加 OpenCode 账号: "+n)})
+			.catch(function(){fail("添加失败")});
 	}else if(p==="glm"){
 		var k=(document.getElementById("qa-key")||{}).value||"";
 		var b=(document.getElementById("qa-base")||{}).value||"";
-		fetchQ("/glmcoding-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(k.trim())+"&base_url="+encodeURIComponent(b.trim())).then(function(){
-			toggleAddQuotaForm();
-			renderQuota();
-			showToast("已添加 GLM 账号: "+n,"success");
-		}).catch(function(){showToast("添加失败","danger")});
+		fetchQ("/glmcoding-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(k.trim())+"&base_url="+encodeURIComponent(b.trim()))
+			.then(function(){onOk("已添加 GLM 账号: "+n)})
+			.catch(function(){fail("添加失败")});
 	}else if(p==="ollama"){
 		var oc=(document.getElementById("qa-cookie")||{}).value||"";
-		fetchQ("/ollama-quota?action=addaccount&account="+encodeURIComponent(n)+"&cookie="+encodeURIComponent(oc.trim())).then(function(){
-			toggleAddQuotaForm();
-			renderQuota();
-			showToast("已添加 Ollama 账号: "+n,"success");
-		}).catch(function(){showToast("添加失败","danger")});
+		fetchQ("/ollama-quota?action=addaccount&account="+encodeURIComponent(n)+"&cookie="+encodeURIComponent(oc.trim()))
+			.then(function(){onOk("已添加 Ollama 账号: "+n)})
+			.catch(function(){fail("添加失败")});
 	}else if(p==="newapi"){
 		var nk=(document.getElementById("qa-key")||{}).value||"";
 		var nb=(document.getElementById("qa-base")||{}).value||"";
-		var editing=quotaEditingName;
-		if(!nk.trim()&&!editing){showToast("请输入面板访问令牌 (nap_...)","danger");return;}
 		var action=editing?"settoken":"addaccount";
 		var account=editing||n;
 		var hdrs={"X-NewAPI-Token":nk.trim(),"X-NewAPI-Base-URL":nb.trim()};
-		quotaAction("/newapi-quota",{action:action,account:account},hdrs).then(function(){
-			quotaEditingName=null;
-			toggleAddQuotaForm();
-			renderQuota();
-			showToast((editing?"已更新 ":"已添加 ")+"NewAPI 账号: "+account,"success");
-		}).catch(function(){showToast((editing?"更新":"添加")+"失败：请检查令牌与面板地址","danger")});
+		quotaAction("/newapi-quota",{action:action,account:account},hdrs)
+			.then(function(){
+				quotaEditingName=null;
+				onOk((editing?"已更新 ":"已添加 ")+"NewAPI 账号: "+account);
+			})
+			.catch(function(){fail((editing?"更新":"添加")+"失败：请检查令牌与面板地址")});
 	}else if(p==="colab"){
+		restore(); // colab has its own OAuth button with its own progress state
 		doColabLogin();
 	}else{
 		var dk=(document.getElementById("qa-key")||{}).value||"";
-		fetchQ("/deepseek-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(dk.trim())).then(function(){
-			toggleAddQuotaForm();
-			renderQuota();
-			showToast("已添加 DeepSeek 账号: "+n,"success");
-		}).catch(function(){showToast("添加失败","danger")});
+		fetchQ("/deepseek-quota?action=addaccount&account="+encodeURIComponent(n)+"&api_key="+encodeURIComponent(dk.trim()))
+			.then(function(){onOk("已添加 DeepSeek 账号: "+n)})
+			.catch(function(){fail("添加失败")});
 	}
 }
 
@@ -3362,12 +3424,22 @@ function refreshQuota(provider,name,btn){
 	});
 }
 
-function removeQuota(provider,name){
+function removeQuota(provider,name,btn){
+	// Removing an account also deletes its stored credentials, so ask first and
+	// keep the button busy until the server answers — repeated clicks used to
+	// fire several deletes at once.
+	if(!window.confirm("确定移除账号「"+name+"」？\n\n该账号的凭据会一并删除，需要重新添加才能监控。"))return;
+	var restore=withBusy(btn,"移除中…");
+	if(restore===null)return;
 	var path=quotaPath(provider);
 	fetchQ(path+"?action=removeaccount&account="+encodeURIComponent(name)).then(function(){
 		renderQuota();
+		restore();
 		showToast("已移除账号: "+name,"success");
-	}).catch(function(){showToast("移除失败","danger")});
+	}).catch(function(){
+		restore();
+		showToast("移除失败","danger");
+	});
 }
 
 /* ─── Pricing Tab ─────────────────────────────────────────────────────────── */
@@ -3422,7 +3494,7 @@ async function renderPricing(){
 	var container=document.getElementById("pricingTableContent");
 	if(!container)return;
 
-	var formHtml='<div style="padding:16px 20px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border-soft)"><input class="text-input" type="text" id="pricing-model" placeholder="新增模型标识 (e.g. gpt-4.5)" style="width:190px"><input class="text-input" type="number" id="pricing-prompt" placeholder="Prompt $/1M" step="0.0001" style="width:110px"><input class="text-input" type="number" id="pricing-completion" placeholder="Completion $/1M" step="0.0001" style="width:120px"><input class="text-input" type="number" id="pricing-cache" placeholder="Cache $/1M" step="0.0001" style="width:110px"><button class="btn btn-primary btn-sm" onclick="addPrice()">'+icon("plus")+' 添加规则</button></div>';
+	var formHtml='<div style="padding:16px 20px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border-soft)"><input class="text-input" type="text" id="pricing-model" placeholder="新增模型标识 (e.g. gpt-4.5)" style="width:190px"><input class="text-input" type="number" id="pricing-prompt" placeholder="Prompt $/1M" step="0.0001" style="width:110px"><input class="text-input" type="number" id="pricing-completion" placeholder="Completion $/1M" step="0.0001" style="width:120px"><input class="text-input" type="number" id="pricing-cache" placeholder="Cache $/1M" step="0.0001" style="width:110px"><button class="btn btn-primary btn-sm" onclick="addPrice(this)">'+icon("plus")+' 添加规则</button></div>';
 
 	if(entries.length===0){
 		container.innerHTML=formHtml+emptyState("tag",q?'未找到匹配 "'+q+'" 的定价规则':"暂无定价规则配置","可在此处手动添加模型单价，或点击右上角从云端一键同步");
@@ -3452,7 +3524,7 @@ async function renderPricing(){
 			var model=pair[0],price=pair[1];
 			var syncTag=price.auto_synced?'<span class="badge badge-accent">自动同步</span>':'<span class="badge badge-neutral">手动维护</span>';
 
-			html+='<tr class="pricing-item"><td class="num-col" style="font-weight:600">'+esc(model)+'</td><td class="num-col">$'+Number(price.prompt||0).toFixed(4)+'</td><td class="num-col">$'+Number(price.completion||0).toFixed(4)+'</td><td class="num-col">$'+Number(price.cache||0).toFixed(4)+'</td><td>'+syncTag+'</td><td style="text-align:right"><button class="btn btn-ghost btn-xs" onclick="openPricingModal('+JSON.stringify(model)+','+price.prompt+','+price.completion+','+(price.cache||0)+')">编辑</button><button class="btn btn-danger btn-xs" onclick="deletePrice('+JSON.stringify(model)+')" style="margin-left:4px">'+icon("x")+'</button></td></tr>';
+			html+='<tr class="pricing-item"><td class="num-col" style="font-weight:600">'+esc(model)+'</td><td class="num-col">$'+Number(price.prompt||0).toFixed(4)+'</td><td class="num-col">$'+Number(price.completion||0).toFixed(4)+'</td><td class="num-col">$'+Number(price.cache||0).toFixed(4)+'</td><td>'+syncTag+'</td><td style="text-align:right"><button class="btn btn-ghost btn-xs" onclick="openPricingModal('+JSON.stringify(model)+','+price.prompt+','+price.completion+','+(price.cache||0)+')">编辑</button><button class="btn btn-danger btn-xs" onclick="deletePrice('+JSON.stringify(model)+',this)" style="margin-left:4px">'+icon("x")+'</button></td></tr>';
 		});
 		html+='</tbody>';
 	});
@@ -3460,25 +3532,32 @@ async function renderPricing(){
 	container.innerHTML=html;
 }
 
-async function addPrice(){
+async function addPrice(btn){
+	var restore=withBusy(btn,"添加中…");
+	if(restore===null)return;
 	var m=(document.getElementById("pricing-model")||{}).value||"";
 	m=m.trim();
 	var p=parseFloat((document.getElementById("pricing-prompt")||{}).value)||0;
 	var c=parseFloat((document.getElementById("pricing-completion")||{}).value)||0;
 	var ca=parseFloat((document.getElementById("pricing-cache")||{}).value)||0;
-	if(!m){showToast("请输入模型标识","danger");return;}
+	if(!m){restore();showToast("请输入模型标识","danger");return;}
 
 	try{
 		await fetch(API_BASE+"/prices?action=set&model="+encodeURIComponent(m)+"&prompt="+p+"&completion="+c+"&cache="+ca);
 		lastPricesData=null;
 		await renderPricing();
+		restore("已添加");
 		showToast("已添加模型定价: "+m,"success");
 	}catch(e){
+		restore();
 		showToast("添加定价失败","danger");
 	}
 }
 
-async function deletePrice(model){
+async function deletePrice(model,btn){
+	if(!window.confirm("确定删除「"+model+"」的定价规则？\n\n删除后该模型将回退到云端同步价格或显示 $0。"))return;
+	var restore=withBusy(btn);
+	if(restore===null)return;
 	try{
 		await fetch(API_BASE+"/prices?action=delete&model="+encodeURIComponent(model));
 		lastPricesData=null;
@@ -3486,6 +3565,8 @@ async function deletePrice(model){
 		showToast("已删除 "+model,"success");
 	}catch(e){
 		showToast("删除失败","danger");
+	}finally{
+		restore();
 	}
 }
 
@@ -3543,21 +3624,26 @@ function closePricingModal(){
 	}
 }
 
-async function savePricingModal(){
+async function savePricingModal(btn){
+	btn=btn||document.getElementById("btn-save-price");
+	var restore=withBusy(btn,"保存中…");
+	if(restore===null)return;
 	var m=(document.getElementById("input-price-model")||{}).value||"";
 	m=m.trim();
 	var p=parseFloat((document.getElementById("input-price-prompt")||{}).value)||0;
 	var c=parseFloat((document.getElementById("input-price-completion")||{}).value)||0;
 	var ca=parseFloat((document.getElementById("input-price-cache")||{}).value)||0;
-	if(!m){showToast("模型标识不可为空","danger");return;}
+	if(!m){restore();showToast("模型标识不可为空","danger");return;}
 
 	try{
 		await fetch(API_BASE+"/prices?action=set&model="+encodeURIComponent(m)+"&prompt="+p+"&completion="+c+"&cache="+ca);
 		lastPricesData=null;
+		restore();
 		closePricingModal();
 		await renderPricing();
 		showToast("已保存 "+m+" 的计费规则","success");
 	}catch(e){
+		restore();
 		showToast("保存失败","danger");
 	}
 }
@@ -3906,7 +3992,10 @@ function exportReceiptPNG(){
 }
 
 /* ─── Refresh All & Auto Refresh ──────────────────────────────────────────── */
-async function refreshAll(){
+async function refreshAll(btn){
+	btn=btn||document.getElementById("btn-refresh");
+	var restore=withBusy(btn);
+	if(restore===null)return;
 	lastSummaryData=null;
 	lastModelsData=null;
 	lastEventsData=null;
@@ -3931,6 +4020,7 @@ async function refreshAll(){
 		console.error("refresh failed",e);
 	}finally{
 		if(badge)badge.innerHTML='<span class="status-dot pulse" style="color:var(--success)"></span><span>正常运行</span>';
+		if(restore&&restore!==null)restore();
 	}
 }
 
@@ -3968,7 +4058,7 @@ if(refreshIntervalMs>0){
           <p class="card-subtitle" id="newapi-keys-subtitle">仅展示名称与用量，密钥明文永不读取</p>
         </div>
         <span style="display:flex;align-items:center;gap:6px">
-          <button class="btn btn-secondary btn-xs" id="btn-refresh-keys" onclick="refreshNewAPIKeys()">刷新</button>
+          <button class="btn btn-secondary btn-xs" id="btn-refresh-keys" onclick="refreshNewAPIKeys(this)">刷新</button>
           <button class="btn btn-ghost btn-icon-only" onclick="closeNewAPIKeys()" aria-label="关闭">X</button>
         </span>
       </div>
