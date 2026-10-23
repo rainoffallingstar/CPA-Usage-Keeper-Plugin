@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.12.5 (2026-10-23)
+
+### Design
+- **仪表盘视觉重构（award-tier pass）**：以 Editorial data product 为方向重做视觉系统，逐项对照排版 / 留白 / 层级 / 色彩 / 动效 / 微交互 / 响应式 / 原创性八个维度。
+  - **令牌层**：重建颜色语义（`--surface-sunken`、`--hairline`、`--tint-accent`）、四级阴影 `--elev-1..3`、字阶（含 `--text-display` 流体标题）、字距（`--tracking-*`）、弹簧曲线 `--ease-spring` / `--ease-out-expo`、8pt 间距刻度。浅色背景改为 `#fbfbfc` 以让白色卡片浮起；深色改 `#0a0a0c` 分层。
+  - **排版**：新增 eyebrow + page-title + lede 的编辑式页头，`text-wrap:balance/pretty` 避免孤行；表格数字统一 tabular-nums 与负字距；KPI 数值用 clamp 流体字号并收紧字距。
+  - **层级**：KPI 由「四张独立卡」改为**一体化卡槽**（1px 分隔线共享边框），数字成为页面最强视觉锚点；主内容区留白从 24px 提升到 48px；区块间加入 section rule 与序号化 eyebrow。
+  - **导航**：药丸选中态改为**下划线滑入**（`tabUnderline`），图标统一 1.8 描边；窄屏加右缘渐隐提示可滚动。
+  - **动效**：卡片分组 `reveal` 错峰入场（60–240ms），切 Tab 重新播放；KPI 数字 620ms 缓动计数；进度条改用 `ease-out-expo` 慢出。
+  - **微交互**：按钮按下 `scale(0.965)` + 弹簧回弹，主按钮带柔和投影；卡片 hover 抬升 2px 并叠加极淡径向高光；焦点环统一为 3px 半透明 accent。
+  - **响应式**：≤700px 时 KPI 改为「标题 / 数值 + 右侧迷你图 / 副标题」三区网格，单卡高度减少约 35%；头部精简并隐藏冗余状态胶囊；状态条改为上下两段。
+  - **健康页**：把孤立的「系统运行状态: OK」内联标题换成 status strip（状态 + Uptime/队列/写入/未定价四项 meta），移除两条无阈值的伪进度条。
+
+### Fixes
+- **模板裸 `%` 导致整页脚本失效**：新增的 `linear-gradient(… 72%)` 未转义，`fmt.Sprintf` 把它编译成 `%!)(…)`，浏览器抛 `SyntaxError: Unexpected token '%'`，整个仪表盘白屏。已修正，并新增 `TestRenderDashboardHasNoFormatArtifacts`——把模板真正过一遍 `fmt.Sprintf`，用 `%!x(` 模式精确识别 fmt 产物（不会误伤 CSS 的 `100%!important`），同时断言两个 `%d` 已被替换。该测试同时挖出 3 处历史遗留的裸 `%`。
+- **导航脱离吸顶并压住标题**：重构时误将 `.nav-tabs-wrapper` 从 `sticky` 改为 `relative`，导航随文档流滚动并覆盖页头。已恢复 `sticky` 并使其 `top` 与 57px 头高对齐；用 CDP 实测 header 0–57 / nav 57–105 / 内容 161 起，无重叠。
+- **双重下划线指示器**：新旧 `.nav-tab-btn.active` 同时生效（后者依赖源码顺序），旧规则仍在加背景与投影。已合并为单条规则。
+- **KPI 徽标大写破坏单位**：`text-transform:uppercase` 把 `12.8s` 显示成 `12.8S`，已移除。
+- **走势图 Y 轴被裁切**：左侧 gutter 50px 装不下等宽 `$297.70`，`$` 被切掉；加宽至 64px。
+
+### Tests
+- `TestRenderDashboardHasNoFormatArtifacts`（Go，真实 fmt 渲染）。
+- dashboard 冒烟断言更新：健康页文案改为「运行正常」，其余 41 项全通过。
+
 ## v0.11.45 (2026-10-23)
 
 ### Fixes

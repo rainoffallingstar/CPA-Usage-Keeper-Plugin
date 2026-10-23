@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1383,5 +1384,35 @@ func TestClearErrorsByCodeDropsMatchingEntries(t *testing.T) {
 	got := recentErrors()
 	if len(got) != 1 || got[0].Code != "storage_write_error" {
 		t.Fatalf("after clearErrorsByCode, log = %+v, want only the storage_write_error entry", got)
+	}
+}
+
+// TestRenderDashboardHasNoFormatArtifacts feeds the embedded template through the
+// same fmt.Sprintf renderDashboard uses and rejects the %!…(MISSING) markers fmt
+// emits for a stray verb. A single unescaped '%' silently breaks the whole
+// dashboard script, and the JS tests cannot catch it because they substitute
+// template markers themselves.
+func TestRenderDashboardHasNoFormatArtifacts(t *testing.T) {
+	activeConfig.Store(defaultConfig())
+	html := renderDashboard()
+	// fmt emits "%!d(MISSING)" for a missing verb and "%!?(int= 0)" for a bad
+	// one. Match those shapes: a literal "%!" is legitimate in CSS
+	// (max-width:100%!important).
+	artifact := regexp.MustCompile(`%![a-zA-Z]?\(`)
+	if loc := artifact.FindStringIndex(html); loc != nil {
+		idx := loc[0]
+		start := idx - 120
+		if start < 0 {
+			start = 0
+		}
+		end := idx + 80
+		if end > len(html) {
+			end = len(html)
+		}
+		t.Fatalf("dashboard render contains a fmt artifact (stray %% in template) near: %q", html[start:end])
+	}
+	// The two intended verbs must be substituted, not left behind.
+	if strings.Contains(html, "refreshIntervalMs=%d") || strings.Contains(html, "数据保留 %d 天") {
+		t.Fatal("template placeholders were not substituted")
 	}
 }

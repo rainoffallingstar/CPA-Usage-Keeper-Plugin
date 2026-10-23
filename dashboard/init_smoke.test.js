@@ -555,7 +555,7 @@ test('every tab renders content with no template artefacts', async () => {
     ['events', 'renderEvents', 'gpt-5.6-terra'],
     ['quota', 'renderQuota', null],
     ['pricing', 'renderPricing', 'gpt-5.6-terra'],
-    ['health', 'renderHealth', '系统运行状态'],
+    ['health', 'renderHealth', '运行正常'],
   ];
 
   for (const [tab, fn, expect] of tabs) {

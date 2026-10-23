@@ -7,16 +7,19 @@
 <style>
 /* ─── Apple Design System Tokens ─────────────────────────────────────────── */
 :root, [data-theme="light"] {
-	--bg: #ffffff;
-	--surface: #f5f5f7;
-	--surface-warm: #fbfbfd;
+	--bg: #fbfbfc;
+	--surface: #f4f4f6;
+	--surface-warm: #fafafb;
 	--surface-card: #ffffff;
-	--fg: #1d1d1f;
-	--fg-2: #424245;
-	--muted: #6e6e73;
-	--meta: #86868b;
-	--border: #d2d2d7;
-	--border-soft: #e8e8ed;
+	--surface-sunken: #f6f6f8;
+	--fg: #141416;
+	--fg-2: #3c3c40;
+	--muted: #66666e;
+	--meta: #8a8a92;
+	--border: #dedee3;
+	--border-soft: #ededf1;
+	--hairline: rgba(20,20,22,0.08);
+	--tint-accent: rgba(0,113,227,0.045);
 	--accent: #0071e3;
 	--accent-on: #ffffff;
 	--accent-hover: #0077ed;
@@ -32,22 +35,38 @@
 	--font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
 	--font-body: "SF Pro Text", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
 	--font-mono: "SF Mono", ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
-	--text-xs: 12px;
-	--text-sm: 14px;
-	--text-base: 15px;
-	--text-lg: 19px;
-	--radius-sm: 8px;
-	--radius-md: 12px;
-	--radius-lg: 18px;
+	--text-2xs: 10px;
+	--text-xs: 11.5px;
+	--text-sm: 13.5px;
+	--text-base: 14.5px;
+	--text-lg: 18px;
+	--text-xl: 22px;
+	--text-2xl: 28px;
+	--text-display: clamp(34px, 3.1vw, 46px);
+	--tracking-tight: -0.032em;
+	--tracking-display: -0.04em;
+	--tracking-wide: 0.08em;
+	--radius-sm: 9px;
+	--radius-md: 13px;
+	--radius-lg: 20px;
+	--radius-xl: 26px;
 	--radius-pill: 980px;
-	--elev-raised: 0 10px 30px rgba(0, 0, 0, 0.06);
-	--elev-floating: 0 20px 40px rgba(0, 0, 0, 0.12);
-	--focus-ring: 0 0 0 4px rgba(0, 113, 227, 0.35);
-	--motion-fast: 150ms;
-	--motion-base: 220ms;
-	--ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
-	--container-max: 1280px;
-	--container-gutter: 24px;
+	--elev-1: 0 1px 2px rgba(16,16,20,0.04), 0 1px 1px rgba(16,16,20,0.03);
+	--elev-2: 0 2px 4px rgba(16,16,20,0.04), 0 8px 20px -6px rgba(16,16,20,0.08);
+	--elev-3: 0 4px 8px rgba(16,16,20,0.05), 0 24px 48px -12px rgba(16,16,20,0.16);
+	--elev-raised: var(--elev-2);
+	--elev-floating: var(--elev-3);
+	--focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 30%%, transparent);
+	--motion-fast: 140ms;
+	--motion-base: 240ms;
+	--motion-slow: 460ms;
+	--ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
+	--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+	--container-max: 1300px;
+	--container-gutter: 32px;
+	--space-1: 4px; --space-2: 8px; --space-3: 12px;
+	--space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
 	--chart-1: #0071e3;
 	--chart-2: #5856d6;
 	--chart-3: #34c759;
@@ -57,23 +76,29 @@
 	--chart-teal: #10a37f;
 }
 [data-theme="dark"] {
-	--bg: #000000;
-	--surface: #141416;
-	--surface-warm: #1c1c1e;
-	--surface-card: #1c1c1e;
-	--fg: #f5f5f7;
-	--fg-2: #d2d2d7;
-	--muted: #86868b;
-	--meta: #6e6e73;
-	--border: #333336;
-	--border-soft: #242426;
+	--bg: #0a0a0c;
+	--surface: #17171a;
+	--surface-warm: #111113;
+	--surface-card: #151518;
+	--surface-sunken: #0e0e10;
+	--fg: #f7f7f9;
+	--fg-2: #d6d6db;
+	--muted: #8c8c95;
+	--meta: #6a6a73;
+	--border: #2c2c31;
+	--border-soft: #212126;
+	--hairline: rgba(255,255,255,0.07);
+	--tint-accent: rgba(41,151,255,0.06);
 	--accent: #2997ff;
 	--accent-on: #000000;
 	--accent-hover: #47a7ff;
 	--accent-active: #0071e3;
 	--accent-subtle: rgba(41, 151, 255, 0.12);
-	--elev-raised: 0 12px 32px rgba(0, 0, 0, 0.45);
-	--elev-floating: 0 24px 48px rgba(0, 0, 0, 0.6);
+	--elev-1: 0 1px 2px rgba(0,0,0,0.5);
+	--elev-2: 0 2px 4px rgba(0,0,0,0.4), 0 10px 24px -8px rgba(0,0,0,0.6);
+	--elev-3: 0 8px 16px rgba(0,0,0,0.4), 0 28px 56px -16px rgba(0,0,0,0.75);
+	--elev-raised: var(--elev-2);
+	--elev-floating: var(--elev-3);
 	--success: #30d158;
 	--success-bg: rgba(48, 209, 88, 0.15);
 	--warn: #ffd60a;
@@ -478,7 +503,7 @@ body{min-height:100%%;background:var(--bg);color:var(--fg);font-family:var(--fon
 .nav-tabs-inner::-webkit-scrollbar{display:none}
 .nav-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:var(--text-sm);font-weight:500;color:var(--muted);border-radius:var(--radius-pill);background:transparent;border:none;cursor:pointer;white-space:nowrap;transition:all var(--motion-fast) var(--ease-standard);font-family:var(--font-body)}
 .nav-tab-btn:hover{color:var(--fg);background:var(--surface)}
-.nav-tab-btn.active{color:var(--fg);background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,0.08);font-weight:600}
+.nav-tab-btn.active{color:var(--fg);font-weight:600}
 .nav-tab-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* ─── Main Content ───────────────────────────────────────────────────────── */
@@ -627,7 +652,7 @@ tr:hover .filter-link{opacity:1}
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media(max-width:1024px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.grid-row-2,.grid-row-equal,.grid-row-3{grid-template-columns:1fr}}
-@media(max-width:860px){.brand-status-pill span:not(.status-dot){display:none}.brand-status-pill{padding:3px 6px;margin-left:2px}}
+@media(max-width:860px){.brand-status-pill{display:none}}
 @media(max-width:720px){#auto-refresh-select{display:none}.header-divider{display:none}}
 @media(max-width:640px){.kpi-grid{grid-template-columns:1fr}.header-actions{gap:4px}#btn-export-receipt .btn-text{display:none}#btn-export-receipt{width:28px;height:28px;padding:0;border-radius:var(--radius-pill);justify-content:center}.search-input,.search-input:focus{width:100%%}#drawer-panel{width:100vw}.quota-grid{grid-template-columns:1fr}.key-value-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important;scroll-behavior:auto!important}#drawer-panel.dragging{transition:none}}
@@ -675,6 +700,214 @@ tr:hover .filter-link{opacity:1}
   #receipt-print-clone::after{display:none!important}
   @page{margin:0}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REFINED VISUAL SYSTEM
+   Editorial data product: precise type scale, generous negative space,
+   restrained motion with spring physics, one accent used sparingly.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Page shell & scroll behaviour ─────────────────────────────────────── */
+html{scroll-behavior:smooth;text-rendering:optimizeLegibility}
+body{font-feature-settings:"kern" 1,"liga" 1,"calt" 1;letter-spacing:-0.011em}
+::selection{background:color-mix(in srgb,var(--accent) 22%%,transparent);color:var(--fg)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--meta) 40%%,transparent);border-radius:99px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--meta) 65%%,transparent);background-clip:content-box}
+
+/* ─── Header: slimmer, more precise, real glass ──────────────────────────── */
+.header-bar{background:color-mix(in srgb,var(--bg) 72%%,transparent);backdrop-filter:blur(28px) saturate(200%%);-webkit-backdrop-filter:blur(28px) saturate(200%%);border-bottom:1px solid var(--hairline)}
+.header-inner{height:56px}
+.brand-title{font-size:15px;font-weight:640;letter-spacing:var(--tracking-tight)}
+.brand-title::after{content:"";}
+.brand-mark{width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(150deg,var(--accent),color-mix(in srgb,var(--accent) 55%%,var(--chart-2)));color:#fff;flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,0.16),inset 0 1px 0 rgba(255,255,255,0.35)}
+.brand-mark svg{width:12px;height:12px}
+.brand-group{gap:10px}
+.brand-status-pill{background:transparent;border-color:var(--hairline);font-size:11px;letter-spacing:0.01em}
+
+/* ─── Navigation: underline rail instead of pill soup ───────────────────── */
+.nav-tabs-wrapper{position:sticky;top:57px;background:color-mix(in srgb,var(--bg) 88%%,transparent);backdrop-filter:blur(20px) saturate(180%%);-webkit-backdrop-filter:blur(20px) saturate(180%%);border-bottom:1px solid var(--hairline);z-index:90}
+.nav-tabs-inner{gap:2px;padding:0;position:relative}
+@media(max-width:820px){
+  .nav-tabs-wrapper::after{content:"";position:absolute;right:0;top:0;bottom:0;width:36px;pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg) 72%%)}
+}
+.nav-tab-btn{position:relative;padding:15px 15px 13px;border-radius:0;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:-0.005em;transition:color var(--motion-fast) var(--ease-standard)}
+.nav-tab-btn:hover{color:var(--fg);background:transparent}
+.nav-tab-btn.active{color:var(--fg);background:transparent;box-shadow:none;font-weight:600}
+.nav-tab-btn.active:hover{background:transparent}
+.nav-tabs-inner{background:transparent}
+.nav-tab-btn.active::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;border-radius:2px;background:var(--fg);animation:tabUnderline var(--motion-base) var(--ease-out-expo)}
+@keyframes tabUnderline{from{transform:scaleX(0.3);opacity:0}to{transform:scaleX(1);opacity:1}}
+.nav-tab-btn svg{width:13px;height:13px;opacity:0.72;transition:opacity var(--motion-fast) var(--ease-standard)}
+.nav-tab-btn.active svg{opacity:1}
+
+/* ─── Main canvas: breathe ──────────────────────────────────────────────── */
+.main-content{padding:calc(var(--space-7) + 8px) 0 96px;scroll-margin-top:120px}
+.tab-panel{scroll-margin-top:120px}
+.tab-panel.active{animation:panelIn var(--motion-slow) var(--ease-out-expo)}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ─── Editorial page heading ─────────────────────────────────────────────── */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:var(--space-6);flex-wrap:wrap}
+.page-head-titles{display:flex;flex-direction:column;gap:10px;min-width:0}
+.eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:var(--text-2xs);font-weight:600;letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--meta)}
+.eyebrow::before{content:"";width:16px;height:1px;background:currentColor;opacity:0.6}
+.page-title{font-family:var(--font-display);font-size:var(--text-2xl);font-weight:640;letter-spacing:var(--tracking-display);line-height:1.15;color:var(--fg);text-wrap:balance}
+.page-lede{font-size:var(--text-base);color:var(--muted);max-width:52ch;line-height:1.7;text-wrap:pretty}
+.page-head-meta{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-bottom:4px}
+.meta-stat{display:flex;flex-direction:column;gap:3px}
+.meta-stat-label{font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);color:var(--meta);font-weight:600}
+.meta-stat-value{font-family:var(--font-mono);font-size:var(--text-base);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
+
+/* ─── KPI cards: quiet surface, loud number ──────────────────────────────── */
+.kpi-grid{grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border-soft);border:1px solid var(--border-soft);border-radius:var(--radius-xl);overflow:hidden;margin-bottom:var(--space-7);box-shadow:var(--elev-1)}
+.kpi-card{background:var(--surface-card);border:none;border-radius:0;box-shadow:none;padding:24px 24px 20px;transition:background-color var(--motion-base) var(--ease-standard)}
+.kpi-card:hover{transform:none;background:var(--surface-warm)}
+.kpi-card::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(120%% 100%% at 50%% 0%%,var(--tint-accent),transparent 70%%);opacity:0;transition:opacity var(--motion-slow) var(--ease-standard)}
+.kpi-card:hover::after{opacity:1}
+.kpi-header{margin-bottom:18px;align-items:center}
+.kpi-title{font-size:var(--text-xs);font-weight:600;color:var(--meta);letter-spacing:0.02em;text-transform:uppercase}
+.kpi-value-row{margin-bottom:14px;gap:10px;flex-direction:column;align-items:flex-start}
+.kpi-value{font-size:var(--text-display);font-weight:620;letter-spacing:var(--tracking-display);line-height:0.98;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:var(--text-xs);color:var(--meta);letter-spacing:-0.005em}
+.kpi-chart-slot{height:40px;margin-top:auto}
+.kpi-grid .badge{font-size:var(--text-2xs);letter-spacing:0.02em;font-weight:600;padding:2px 7px}
+
+/* ─── Content cards: hairline borders, real depth ───────────────────────── */
+.content-card{border-radius:var(--radius-xl);border:1px solid var(--border-soft);box-shadow:var(--elev-1);transition:box-shadow var(--motion-base) var(--ease-standard),border-color var(--motion-base) var(--ease-standard)}
+.content-card:hover{box-shadow:var(--elev-2);border-color:var(--border)}
+.card-header{padding:22px 26px 6px;align-items:flex-start}
+.card-title{font-size:var(--text-lg);font-weight:620;letter-spacing:var(--tracking-tight);line-height:1.25;text-wrap:balance}
+.card-subtitle{font-size:var(--text-xs);color:var(--meta);letter-spacing:-0.003em;margin-top:3px}
+.card-body{padding:14px 26px 26px}
+.grid-row-2{gap:24px;margin-bottom:var(--space-6);grid-template-columns:minmax(0,1.9fr) minmax(0,1fr)}
+.grid-row-equal{gap:24px;margin-bottom:var(--space-6)}
+.grid-row-3{gap:24px;margin-bottom:var(--space-6)}
+
+/* ─── Health status strip ───────────────────────────────────────────────── */
+.status-strip{display:grid;grid-template-columns:minmax(160px,auto) 1fr;align-items:center;gap:24px;padding:16px 24px;margin-bottom:22px;background:var(--surface-card);border:1px solid var(--border-soft);border-radius:var(--radius-lg);box-shadow:var(--elev-1)}
+.status-strip-main{display:flex;align-items:center;gap:10px;min-width:0;padding-right:24px;border-right:1px solid var(--border-soft);align-self:stretch}
+.status-strip-label{font-size:14px;font-weight:600;letter-spacing:var(--tracking-tight);color:var(--fg);white-space:nowrap}
+.status-strip-stats{display:flex;align-items:center;justify-content:flex-start;gap:40px;flex-wrap:wrap}
+.status-strip-stats .meta-stat-value{font-size:13px}
+.status-strip .status-dot{width:8px;height:8px}
+
+/* ─── Section rule between blocks ───────────────────────────────────────── */
+.section-rule{display:flex;align-items:center;gap:14px;margin:var(--space-7) 0 var(--space-5)}
+.section-rule::after{content:"";flex:1;height:1px;background:var(--border-soft)}
+.section-rule-text{font-size:var(--text-2xs);font-weight:600;letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--meta);white-space:nowrap}
+
+/* ─── Buttons: tighter, springier ────────────────────────────────────────── */
+.btn{height:30px;padding:0 13px;font-size:12.5px;font-weight:500;letter-spacing:-0.004em;transition:background-color var(--motion-fast) var(--ease-standard),color var(--motion-fast) var(--ease-standard),border-color var(--motion-fast) var(--ease-standard),transform var(--motion-fast) var(--ease-spring),box-shadow var(--motion-fast) var(--ease-standard)}
+.btn:active{transform:scale(0.965)}
+.btn-primary{box-shadow:0 1px 2px color-mix(in srgb,var(--accent) 30%%,transparent)}
+.btn-primary:hover{box-shadow:0 2px 8px -2px color-mix(in srgb,var(--accent) 45%%,transparent)}
+.btn-sm{height:27px;padding:0 11px;font-size:12px}
+.btn-xs{height:23px;padding:0 9px;font-size:11px}
+.btn-icon-only{width:30px;height:30px;padding:0}
+.select-control{height:30px;font-size:12.5px}
+.search-input{height:32px}
+.btn svg{width:12.5px;height:12.5px}
+
+/* ─── Tables: typographic, not boxy ─────────────────────────────────────── */
+.data-table th{background:transparent;border-bottom:1px solid var(--border);padding:0 14px 11px;font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);color:var(--meta);font-weight:600}
+.data-table td{padding:12px 14px;border-bottom:1px solid var(--border-soft);font-size:13.5px}
+.data-table tbody tr{transition:background-color var(--motion-fast) var(--ease-standard)}
+.data-table tbody tr:hover{background:var(--surface-warm)}
+.table-wrapper{margin-top:4px}
+.num-col{letter-spacing:-0.015em}
+
+/* ─── Quota cards: match the new surface language ────────────────────────── */
+.quota-card{border-radius:var(--radius-xl);border:1px solid var(--border-soft);box-shadow:var(--elev-1);padding:22px;gap:16px;transition:box-shadow var(--motion-base) var(--ease-standard),transform var(--motion-base) var(--ease-spring),border-color var(--motion-base) var(--ease-standard)}
+.quota-card:hover{transform:translateY(-2px);box-shadow:var(--elev-2);border-color:var(--border)}
+.quota-card-header h3{letter-spacing:var(--tracking-tight)}
+.quota-grid{gap:20px}
+.progress-bar-bg{height:5px;background:var(--surface-sunken)}
+.progress-bar-fill{transition:width var(--motion-slow) var(--ease-out-expo)}
+
+/* ─── Badges: flatter, more legible ─────────────────────────────────────── */
+.badge{padding:3px 9px;font-size:var(--text-2xs);font-weight:600;letter-spacing:0.02em}
+.badge-neutral{border-color:var(--hairline);background:transparent}
+.badge-success{background:var(--success-bg)}
+.badge-danger{background:var(--danger-bg)}
+
+/* ─── Inputs ─────────────────────────────────────────────────────────────── */
+.text-input{border-radius:var(--radius-sm);border-color:var(--border);background:var(--surface-card);font-size:13.5px}
+.text-input:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
+.form-label{font-size:var(--text-2xs);letter-spacing:0.03em;text-transform:uppercase;color:var(--meta)}
+
+/* ─── Modal / drawer polish ─────────────────────────────────────────────── */
+.modal-card{border-radius:var(--radius-xl);padding:26px;box-shadow:var(--elev-3);transform:scale(0.97) translateY(6px)}
+.modal-overlay.active .modal-card{transform:scale(1) translateY(0);transition:transform var(--motion-base) var(--ease-spring)}
+.receipt-modal{border-radius:var(--radius-xl)}
+#drawer-panel{box-shadow:-24px 0 64px -24px rgba(0,0,0,0.28)}
+.drawer-header h3,.drawer-header div[style*="font-weight"]{letter-spacing:var(--tracking-tight)}
+
+/* ─── Empty & error states: composed, not apologetic ───────────────────── */
+.empty-state-box{border-style:solid;border-color:var(--border-soft);background:var(--surface-warm);border-radius:var(--radius-lg);padding:56px 24px}
+.empty-state-icon{width:44px;height:44px;border-radius:50%%;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;margin-bottom:6px}
+.empty-state-title{font-size:15px;font-weight:600;letter-spacing:var(--tracking-tight)}
+.empty-state-desc{font-size:12.5px}
+
+/* ─── Motion: staggered reveal for cards ─────────────────────────────────── */
+@keyframes riseIn{from{opacity:0;transform:translateY(14px) scale(0.995)}to{opacity:1;transform:translateY(0) scale(1)}}
+.reveal{animation:riseIn var(--motion-slow) var(--ease-out-expo) both}
+.reveal[data-delay="1"]{animation-delay:60ms}
+.reveal[data-delay="2"]{animation-delay:120ms}
+.reveal[data-delay="3"]{animation-delay:180ms}
+.reveal[data-delay="4"]{animation-delay:240ms}
+
+/* ─── Focus visibility: consistent, never removed ────────────────────────── */
+a:focus-visible,button:focus-visible,[tabindex]:focus-visible{outline:none;box-shadow:var(--focus-ring);border-radius:var(--radius-sm)}
+
+/* ─── Responsive refinement ─────────────────────────────────────────────── */
+@media(max-width:1180px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:1024px){
+  .grid-row-2,.grid-row-equal,.grid-row-3{grid-template-columns:minmax(0,1fr)}
+  .page-head{margin-bottom:var(--space-5)}
+}
+@media(max-width:820px){
+  :root{--container-gutter:20px}
+  .main-content{padding:var(--space-6) 0 72px}
+  .page-title{font-size:var(--text-xl)}
+  .kpi-card{padding:20px 18px 16px}
+  .card-header{padding:20px 18px 4px}
+  .card-body{padding:12px 18px 20px}
+}
+@media(max-width:700px){
+  .kpi-grid{grid-template-columns:1fr;border-radius:var(--radius-lg)}
+  .nav-tab-btn{padding:13px 10px 11px;font-size:12.5px;gap:5px}
+  .page-head-meta{gap:18px;padding-bottom:0}
+  .main-content{padding:var(--space-6) 0 64px}
+  /* Compact KPI: the sparkline is decorative here, so shrink it rather than
+     letting a 1-column grid turn each card into a tall block. */
+  .kpi-card{padding:18px 18px 14px;display:grid;grid-template-columns:1fr auto;grid-template-areas:"head head" "value chart" "sub chart";align-items:end;column-gap:14px}
+  .kpi-header{grid-area:head;margin-bottom:10px}
+  .kpi-value-row{grid-area:value;margin-bottom:0}
+  .kpi-value{font-size:clamp(30px,9vw,40px)}
+  .kpi-chart-slot{grid-area:chart;width:96px;height:44px;margin:0;opacity:0.9}
+  .kpi-sub{grid-area:sub;margin-top:4px}
+  /* Header: keep the essentials, drop the rest into the tab rail. */
+  .brand-title{font-size:14px}
+  .header-inner{height:53px;gap:8px}
+  .nav-tabs-wrapper{top:53px}
+  .nav-tabs-inner{-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;position:relative}
+  .nav-tab-btn{scroll-snap-align:start}
+  .header-actions{gap:5px}
+  #time-range-select{max-width:104px;font-size:12px;padding-left:9px;padding-right:20px}
+  .page-title{font-size:var(--text-xl)}
+  .page-lede{font-size:13.5px;line-height:1.6}
+  .status-strip{grid-template-columns:1fr;gap:14px;padding:16px 18px}
+  .status-strip-main{padding-right:0;border-right:none;padding-bottom:12px;border-bottom:1px solid var(--border-soft)}
+  .status-strip-stats{justify-content:space-between;gap:12px 18px}
+  .grid-row-2,.grid-row-equal,.grid-row-3{gap:16px}
+  .card-header{padding:18px 18px 4px}
+  .card-body{padding:10px 18px 18px}
+}
+
 </style>
 </head>
 <body>
@@ -765,8 +998,25 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 1. OVERVIEW TAB ───────────────────────────────────────────────── -->
       <div class="tab-panel active" id="panel-overview" role="tabpanel">
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Overview</span>
+            <h2 class="page-title">用量与成本全景</h2>
+            <p class="page-lede">汇总代理链路上的每一次调用：花费构成、Token 吞吐、缓存效率与渠道分布，全部来自真实事件流。</p>
+          </div>
+          <div class="page-head-meta">
+            <div class="meta-stat">
+              <span class="meta-stat-label">统计区间</span>
+              <span class="meta-stat-value" id="meta-range">过去 30 天</span>
+            </div>
+            <div class="meta-stat">
+              <span class="meta-stat-label">数据保留</span>
+              <span class="meta-stat-value" id="meta-retention">90 天</span>
+            </div>
+          </div>
+        </div>
         <!-- KPI Summary Cards -->
-        <div class="kpi-grid" id="overview-kpi-grid">
+        <div class="kpi-grid reveal" id="overview-kpi-grid" data-delay="1">
           <!-- Cost Card -->
           <div class="kpi-card">
             <div class="kpi-header">
@@ -817,8 +1067,9 @@ tr:hover .filter-link{opacity:1}
           </div>
         </div>
 
+        <div class="section-rule reveal" data-delay="2"><span class="section-rule-text">趋势与分布</span></div>
         <!-- Main Analytics Grid: Timeline + Provider Donut -->
-        <div class="grid-row-2">
+        <div class="grid-row-2 reveal" data-delay="2">
           <!-- Timeline Chart -->
           <div class="content-card">
             <div class="card-header">
@@ -850,8 +1101,9 @@ tr:hover .filter-link{opacity:1}
           </div>
         </div>
 
+        <div class="section-rule reveal" data-delay="3"><span class="section-rule-text">明细洞察</span></div>
         <!-- Second Row: Top Models + Insights -->
-        <div class="grid-row-equal">
+        <div class="grid-row-equal reveal" data-delay="3">
           <!-- Top Models by Cost -->
           <div class="content-card">
             <div class="card-header">
@@ -884,6 +1136,13 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 2. BY MODEL TAB ───────────────────────────────────────────────── -->
       <div class="tab-panel" id="panel-models" role="tabpanel">
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Models</span>
+            <h2 class="page-title">模型用量与成本明细</h2>
+            <p class="page-lede">Token 吞吐、输入 / 输出比例与累计成本，按模型与渠道聚合。</p>
+          </div>
+        </div>
         <div class="content-card">
           <div class="card-header">
             <div class="card-header-titles">
@@ -908,6 +1167,13 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 3. ALL EVENTS TAB ─────────────────────────────────────────────── -->
       <div class="tab-panel" id="panel-events" role="tabpanel">
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Requests</span>
+            <h2 class="page-title">请求流水</h2>
+            <p class="page-lede">逐条检索代理请求：状态、耗时、Token 拆分与完整载荷。</p>
+          </div>
+        </div>
         <div class="content-card">
           <div class="card-header">
             <div class="card-header-titles">
@@ -941,7 +1207,13 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 4. QUOTA TAB (1:1 Apple Prototype Design) ────────────────────── -->
       <div class="tab-panel" id="panel-quota" role="tabpanel">
-        
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Quota</span>
+            <h2 class="page-title">订阅配额</h2>
+            <p class="page-lede">六大平台的额度、余额与重置周期，统一在一处盯住。</p>
+          </div>
+        </div>
         <!-- Provider Tabs for Quota -->
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:8px;flex-wrap:wrap" id="quota-provider-tabs">
@@ -984,6 +1256,13 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 5. PRICING TAB ────────────────────────────────────────────────── -->
       <div class="tab-panel" id="panel-pricing" role="tabpanel">
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Pricing</span>
+            <h2 class="page-title">模型定价</h2>
+            <p class="page-lede">650+ 模型的实时单价，支持手动覆盖与云端同步。</p>
+          </div>
+        </div>
         <div class="content-card">
           <div class="card-header">
             <div class="card-header-titles">
@@ -1009,6 +1288,13 @@ tr:hover .filter-link{opacity:1}
 
       <!-- ─── 6. HEALTH TAB ─────────────────────────────────────────────────── -->
       <div class="tab-panel" id="panel-health" role="tabpanel">
+        <div class="page-head reveal">
+          <div class="page-head-titles">
+            <span class="eyebrow">Health</span>
+            <h2 class="page-title">系统健康</h2>
+            <p class="page-lede">写入队列、SQLite 完整性、缓存命中与错误环。</p>
+          </div>
+        </div>
         <div id="healthCardsContent"></div>
       </div>
 
@@ -1118,6 +1404,30 @@ tr:hover .filter-link{opacity:1}
 <script>
 /* ─── Helper Functions ────────────────────────────────────────────────────── */
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+// animateNumber eases an element's text from its current numeric value to the
+// target, so a refresh reads as a change rather than a silent swap. Skipped when
+// the user prefers reduced motion.
+function animateNumber(el,to,fmt){
+	if(!el)return;
+	var from=parseFloat(String(el.textContent||"").replace(/[^0-9.\-]/g,""));
+	if(!isFinite(from)||from===to||!isFinite(to)){
+		el.textContent=fmt(to);
+		return;
+	}
+	var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	if(reduce){el.textContent=fmt(to);return;}
+	var perf=window.performance||{now:function(){return Date.now()}};
+	var raf=window.requestAnimationFrame||function(fn){return setTimeout(function(){fn(perf.now())},16)};
+	var start=perf.now(),dur=620;
+	function step(now){
+		var t=Math.min(1,(now-start)/dur);
+		var eased=1-Math.pow(1-t,3);
+		el.textContent=fmt(from+(to-from)*eased);
+		if(t<1)raf(step);
+	}
+	raf(step);
+}
+
 function formatNum(n){var v=Number(n);if(isNaN(v))return"0";if(v>=1e9)return(v/1e9).toFixed(1)+"B";if(v>=1e6)return(v/1e6).toFixed(1)+"M";if(v>=1e3)return(v/1e3).toFixed(1)+"K";return String(Math.round(v))}
 function formatTokens(v){return formatNum(v)}
 function formatMs(ms){var v=Number(ms);if(isNaN(v)||v<=0)return"0ms";if(v>=60000)return(v/60000).toFixed(1)+"m";if(v>=1000)return(v/1000).toFixed(1)+"s";return Math.round(v)+"ms"}
@@ -1431,7 +1741,15 @@ var currentEventsList=[];
 
 /* ─── API Fetch with ETag ─────────────────────────────────────────────────── */
 function rangeValue(){return document.getElementById("time-range-select").value}
-function handleRangeChange(){refreshAll()}
+var RANGE_LABELS={"1h":"过去 1 小时","6h":"过去 6 小时","24h":"过去 24 小时","7d":"过去 7 天","30d":"过去 30 天"};
+
+function syncRangeLabel(){
+	var sel=document.getElementById("time-range-select");
+	var el=document.getElementById("meta-range");
+	if(el&&sel)el.textContent=RANGE_LABELS[sel.value]||sel.value;
+}
+
+function handleRangeChange(){syncRangeLabel();refreshAll()}
 
 async function fetchJSON(path,extra,rangeOverride){
 	var rng=rangeOverride||rangeValue();
@@ -1555,6 +1873,16 @@ function switchTab(name){
 	document.querySelectorAll(".tab-panel").forEach(function(p){
 		p.classList.toggle("active",p.id==="panel-"+name);
 	});
+	// Re-run the staggered entrance on every switch: the panel is a new surface,
+	// so it should arrive rather than pop in already-settled.
+	var panel=document.getElementById("panel-"+name);
+	if(panel){
+		panel.querySelectorAll(".reveal").forEach(function(el){
+			el.style.animation="none";
+			void el.offsetWidth;
+			el.style.animation="";
+		});
+	}
 	if(name==="overview")renderOverview();
 	else if(name==="models")renderModels();
 	else if(name==="events")renderEvents();
@@ -1791,11 +2119,9 @@ async function renderOverview(){
 	var avgLatency=sum.avg_latency_ms||0;
 
 	// Populate KPI values
-	var costEl=document.getElementById("kpi-val-cost");
-	if(costEl)costEl.textContent=formatCost(totalCost);
+	animateNumber(document.getElementById("kpi-val-cost"),totalCost,formatCost);
 
-	var reqsEl=document.getElementById("kpi-val-requests");
-	if(reqsEl)reqsEl.textContent=totalReqs.toLocaleString();
+	animateNumber(document.getElementById("kpi-val-requests"),totalReqs,function(v){return Math.round(v).toLocaleString()});
 
 	var successRate=totalReqs>0?(((totalReqs-failedReqs)/totalReqs)*100).toFixed(1):"100.0";
 	var reqsSub=document.getElementById("kpi-sub-requests");
@@ -1807,8 +2133,7 @@ async function renderOverview(){
 		failedBadge.className=failedReqs>0?"badge badge-warn":"badge badge-neutral";
 	}
 
-	var tokEl=document.getElementById("kpi-val-tokens");
-	if(tokEl)tokEl.textContent=formatTokens(totalTokensCount);
+	animateNumber(document.getElementById("kpi-val-tokens"),totalTokensCount,formatTokens);
 
 	var tokSub=document.getElementById("kpi-sub-tokens");
 	if(tokSub)tokSub.textContent="In: "+formatTokens(inTokens)+" | Out: "+formatTokens(outTokens);
@@ -1816,8 +2141,7 @@ async function renderOverview(){
 	var modelsCountBadge=document.getElementById("kpi-models-count");
 	if(modelsCountBadge)modelsCountBadge.textContent=(sum.unique_models||models.length)+" 个模型";
 
-	var cacheEl=document.getElementById("kpi-val-cache");
-	if(cacheEl)cacheEl.textContent=cacheRate.toFixed(1)+"%%";
+	animateNumber(document.getElementById("kpi-val-cache"),cacheRate,function(v){return v.toFixed(1)+"%%"});
 
 	var latBadge=document.getElementById("kpi-latency-badge");
 	if(latBadge)latBadge.textContent="均延 "+formatMs(avgLatency);
@@ -1881,7 +2205,8 @@ function renderMainTimeline(){
 
 	var w=container.clientWidth||600;
 	var h=260;
-	var padding={top:20,right:20,bottom:36,left:50};
+	// The y-axis labels are mono "$297.70" — 50px clipped the leading "$".
+	var padding={top:20,right:20,bottom:36,left:64};
 	var innerW=w-padding.left-padding.right;
 	var innerH=h-padding.top-padding.bottom;
 
@@ -3676,7 +4001,20 @@ async function renderHealth(){
 		var offset=circ-(queuePct/100*circ);
 		var gaugeSvg='<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="var(--border-soft)" stroke-width="'+stroke+'" /><circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+radius+'" fill="none" stroke="var(--accent)" stroke-width="'+stroke+'" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+offset.toFixed(1)+'" stroke-linecap="round" transform="rotate(-90 '+(size/2)+' '+(size/2)+')" style="transition:stroke-dashoffset 0.4s ease" /><text x="'+(size/2)+'" y="'+(size/2+6)+'" font-size="20" font-weight="700" font-family="var(--font-display)" fill="var(--fg)" text-anchor="middle">'+queuePct+'%%</text></svg>';
 
-		container.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px"><span class="status-dot pulse" style="color:'+sc+';width:10px;height:10px"></span><span style="font-size:16px;font-weight:700;font-family:var(--font-display)">系统运行状态: '+(data.status||"ok").toUpperCase()+'</span><span style="font-size:13px;color:var(--muted);margin-left:auto">Uptime: '+Math.floor((rt.uptime_seconds||0)/3600)+'h '+Math.floor(((rt.uptime_seconds||0)%%3600)/60)+'m</span></div>'+alertsHtml+errorsHtml+'<div class="grid-row-3"><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">异步落盘队列</h3><p class="card-subtitle">Async Write Queue 背压监控</p></div></div><div class="card-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 0">'+gaugeSvg+'<div style="margin-top:14px;text-align:center"><div style="font-size:18px;font-weight:700;font-family:var(--font-mono)">'+(rt.write_queue_used||0)+' / '+(rt.write_queue_size||0)+'</div><div style="font-size:12px;color:var(--muted)">待写入 SQLite 的事件队列深度（满则丢弃并计数）</div></div></div></div><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">存储与落盘性能</h3><p class="card-subtitle">SQLite 数据库运行指标</p></div></div><div class="card-body" style="display:flex;flex-direction:column;gap:16px"><div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="color:var(--muted)">数据库文件体积</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatNum(st.db_file_size||0)+' B</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:20%%;background:var(--accent)"></div></div></div><div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="color:var(--muted)">最近写入耗时</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatMs(rt.last_write_duration_ms||0)+'</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:8%%;background:var(--success)"></div></div></div><div class="health-stat-row"><span style="color:var(--muted)">写入失败错误数</span><span style="font-weight:600;font-family:var(--font-mono);color:'+((rt.storage_write_errors||0)>0?'var(--danger)':'var(--success)')+'">'+(rt.storage_write_errors||0)+' 次</span></div><div class="health-stat-row"><span style="color:var(--muted)">数据库完整性</span><span class="badge '+(st.integrity_ok===false?'badge-danger':'badge-success')+'">'+(st.integrity_ok===false?'异常':'正常')+'</span></div><div class="health-stat-row"><span style="color:var(--muted)">数据库路径</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);word-break:break-all">'+esc(st.db_path||"—")+'</span></div></div></div><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">缓存与运行时性能</h3><p class="card-subtitle">内存响应缓存命中率</p></div></div><div class="card-body" style="display:flex;flex-direction:column;gap:14px"><div class="health-stat-row"><span style="color:var(--muted)">Summary API 缓存命中</span><span class="badge badge-accent">'+(rt.summary_cache_hit_rate||0).toFixed(1)+'%%</span></div><div class="health-stat-row"><span style="color:var(--muted)">Events API 缓存命中</span><span class="badge badge-accent">'+(rt.events_cache_hit_rate||0).toFixed(1)+'%%</span></div><div class="health-stat-row"><span style="color:var(--muted)">总处理请求计数</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatNum(rt.total_requests||0)+' 次</span></div><div class="health-stat-row"><span style="color:var(--muted)">队列丢弃事件数</span><span style="font-weight:600;font-family:var(--font-mono);color:'+((rt.dropped_usage_events||0)>0?'var(--danger)':'var(--success)')+'">'+(rt.dropped_usage_events||0)+'</span></div></div></div></div>';
+		var statusWord=(data.status==="ok"?"运行正常":(data.status==="warn"?"存在告警":"服务异常"));
+		var upSec=rt.uptime_seconds||0;
+		var uptimeH=Math.floor(upSec/3600),uptimeM=Math.floor((upSec%%3600)/60);
+		var uptimeText=uptimeH>0?(uptimeH+"h "+uptimeM+"m"):(uptimeM>0?uptimeM+"m":Math.round(upSec)+"s");
+		var statusStrip='<div class="status-strip">'+
+			'<div class="status-strip-main"><span class="status-dot pulse" style="color:'+sc+'"></span>'+
+			'<span class="status-strip-label">'+statusWord+'</span></div>'+
+			'<div class="status-strip-stats">'+
+				'<div class="meta-stat"><span class="meta-stat-label">Uptime</span><span class="meta-stat-value">'+uptimeText+'</span></div>'+
+				'<div class="meta-stat"><span class="meta-stat-label">写入队列</span><span class="meta-stat-value">'+queuePct+'%%</span></div>'+
+				'<div class="meta-stat"><span class="meta-stat-label">最近写入</span><span class="meta-stat-value">'+formatMs(rt.last_write_duration_ms||0)+'</span></div>'+
+				'<div class="meta-stat"><span class="meta-stat-label">未定价模型</span><span class="meta-stat-value">'+(rt.unpriced_models||0)+'</span></div>'+
+			'</div></div>';
+		container.innerHTML=statusStrip+alertsHtml+errorsHtml+'<div class="grid-row-3"><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">异步落盘队列</h3><p class="card-subtitle">Async Write Queue 背压监控</p></div></div><div class="card-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 0">'+gaugeSvg+'<div style="margin-top:14px;text-align:center"><div style="font-size:18px;font-weight:700;font-family:var(--font-mono)">'+(rt.write_queue_used||0)+' / '+(rt.write_queue_size||0)+'</div><div style="font-size:12px;color:var(--muted)">待写入 SQLite 的事件队列深度（满则丢弃并计数）</div></div></div></div><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">存储与落盘性能</h3><p class="card-subtitle">SQLite 数据库运行指标</p></div></div><div class="card-body" style="display:flex;flex-direction:column;gap:16px"><div class="health-stat-row"><span style="color:var(--muted)">数据库文件体积</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatNum(st.db_file_size||0)+' B</span></div><div class="health-stat-row"><span style="color:var(--muted)">最近写入耗时</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatMs(rt.last_write_duration_ms||0)+'</span></div><div class="health-stat-row"><span style="color:var(--muted)">写入失败错误数</span><span style="font-weight:600;font-family:var(--font-mono);color:'+((rt.storage_write_errors||0)>0?'var(--danger)':'var(--success)')+'">'+(rt.storage_write_errors||0)+' 次</span></div><div class="health-stat-row"><span style="color:var(--muted)">数据库完整性</span><span class="badge '+(st.integrity_ok===false?'badge-danger':'badge-success')+'">'+(st.integrity_ok===false?'异常':'正常')+'</span></div><div class="health-stat-row"><span style="color:var(--muted)">数据库路径</span><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);word-break:break-all">'+esc(st.db_path||"—")+'</span></div></div></div><div class="content-card"><div class="card-header"><div class="card-header-titles"><h3 class="card-title">缓存与运行时性能</h3><p class="card-subtitle">内存响应缓存命中率</p></div></div><div class="card-body" style="display:flex;flex-direction:column;gap:14px"><div class="health-stat-row"><span style="color:var(--muted)">Summary API 缓存命中</span><span class="badge badge-accent">'+(rt.summary_cache_hit_rate||0).toFixed(1)+'%%</span></div><div class="health-stat-row"><span style="color:var(--muted)">Events API 缓存命中</span><span class="badge badge-accent">'+(rt.events_cache_hit_rate||0).toFixed(1)+'%%</span></div><div class="health-stat-row"><span style="color:var(--muted)">总处理请求计数</span><span style="font-weight:600;font-family:var(--font-mono)">'+formatNum(rt.total_requests||0)+' 次</span></div><div class="health-stat-row"><span style="color:var(--muted)">队列丢弃事件数</span><span style="font-weight:600;font-family:var(--font-mono);color:'+((rt.dropped_usage_events||0)>0?'var(--danger)':'var(--success)')+'">'+(rt.dropped_usage_events||0)+'</span></div></div></div></div>';
 	}catch(e){
 		container.innerHTML=emptyState("server","健康状态获取失败",e.message);
 	}
@@ -4034,6 +4372,16 @@ function setRefreshInterval(seconds){
 }
 
 // Initial load
+syncRangeLabel();
+(function(){
+	// Mirror the server-injected retention value into the page-head meta stat.
+	var sub=document.getElementById("kpi-sub-retention");
+	var meta=document.getElementById("meta-retention");
+	if(sub&&meta){
+		var m=String(sub.textContent||"").match(/(\d+)/);
+		if(m)meta.textContent=m[1]+" 天";
+	}
+})();
 refreshAll();
 if(refreshIntervalMs>0){
 	refreshTimer=setInterval(refreshAll,refreshIntervalMs);
