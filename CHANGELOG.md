@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.44 (2026-10-23)
+
+### Fixes
+- **配额卡片「刷新配额」没有任何反馈，用户只能反复点击**：刷新在后端是异步的（`go refresh…` 立即返回旧数据），前端拿到响应就重渲染，数字没变化、按钮也没变化，看起来像没点到。
+  - **按钮立即进入加载态**：禁用 + `aria-busy` + 旋转图标 +「同步中…」，完成后短暂显示「已更新」再复原。
+  - **轮询到真正完成**：每 900ms 读取一次该 Provider 的列表，直到后端不再报告 `refreshing` 才渲染并恢复按钮，最多约 22 秒后提示「同步超时」。
+  - 新增 `refresh_guard.go`：按 `provider|account` 去重，重复点击不会并发发起多次上游请求（此前每次点击都会起一个 goroutine，互相覆盖缓存，结果看起来随机）。并发安全由 `TestBeginRefreshIsSafeUnderConcurrency` 覆盖。
+  - 各 Provider 列表响应新增 `refreshing` 字段（NewAPI / DeepSeek / GLM / Ollama / Colab），供前端判断何时结束等待。
+  - 顶部「同步配额」按钮同样进入加载态，并等待 `renderQuota()` 完成。
+
+### Tests
+- `TestBeginRefreshDeduplicatesConcurrentClicks`、`TestBeginRefreshIsKeyedPerProviderAndAccount`、`TestBeginRefreshIsSafeUnderConcurrency`。
+- 前端：刷新按钮必须立即禁用并显示「同步中」，且轮询到后端清除 `refreshing` 后才恢复并渲染。
+
 ## v0.11.43 (2026-10-21)
 
 ### Fixes

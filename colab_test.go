@@ -50,9 +50,9 @@ func TestColabPKCE(t *testing.T) {
 func TestColabTierLabel(t *testing.T) {
 	cases := map[string]string{
 		// GAPI enum full names (what colab.pa.googleapis.com returns)
-		"SUBSCRIPTION_TIER_PRO":       "Colab Pro",
-		"SUBSCRIPTION_TIER_PRO_PLUS":  "Colab Pro+",
-		"SUBSCRIPTION_TIER_NONE":      "Colab 免费版",
+		"SUBSCRIPTION_TIER_PRO":         "Colab Pro",
+		"SUBSCRIPTION_TIER_PRO_PLUS":    "Colab Pro+",
+		"SUBSCRIPTION_TIER_NONE":        "Colab 免费版",
 		"SUBSCRIPTION_TIER_UNSPECIFIED": "Colab 免费版",
 		// Colab backend short names
 		"PRO":      "Colab Pro",
@@ -60,10 +60,10 @@ func TestColabTierLabel(t *testing.T) {
 		"VERY_PRO": "Colab Pro+",
 		"NONE":     "Colab 免费版",
 		// Numeric backend values
-		"1": "Colab Pro",
-		"2": "Colab Pro+",
-		"0": "Colab 免费版",
-		"":  "Colab 免费版",
+		"1":             "Colab Pro",
+		"2":             "Colab Pro+",
+		"0":             "Colab 免费版",
+		"":              "Colab 免费版",
 		"unknown-value": "Colab 免费版",
 	}
 	for in, want := range cases {
@@ -75,11 +75,11 @@ func TestColabTierLabel(t *testing.T) {
 
 func TestColabParseTokenCount(t *testing.T) {
 	cases := map[string]int64{
-		"":           0,
-		"12345":      12345,
-		"0":          0,
-		"1500000":    1500000,
-		" 42 ":       42,
+		"":        0,
+		"12345":   12345,
+		"0":       0,
+		"1500000": 1500000,
+		" 42 ":    42,
 	}
 	for in, want := range cases {
 		if got := parseTokenCount(in); got != want {

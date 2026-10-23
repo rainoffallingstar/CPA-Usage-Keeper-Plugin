@@ -318,6 +318,55 @@ test('models tab shows a real error instead of an empty state on query failure',
   assert.ok(!html.includes('当前时间段暂无模型用量记录'), 'failure rendered as an empty range');
 });
 
+test('quota refresh button shows progress and polls until the backend finishes', async () => {
+  // The backend returns immediately after queueing the fetch, so a naive
+  // re-render shows stale numbers and the button looks dead — users click again.
+  sandbox.currentQuotaProvider = 'newapi';
+  // The harness stubs timers to keep the process alive-free; polling needs real
+  // ones, so borrow them for this test only and speed the interval up.
+  const originalSetTimeout = sandbox.setTimeout;
+  const originalPollMs = sandbox.QUOTA_POLL_MS;
+  // Run the poll interval immediately instead of on a real timer: the harness
+  // stubs timers to keep the process from staying alive, and borrowing Node's
+  // setTimeout would execute callbacks outside the vm context.
+  sandbox.QUOTA_POLL_MS = 1;
+  sandbox.setTimeout = (fn, ms) => { if (ms <= 2) fn(); return 0; };
+  let polls = 0;
+  const originalFetch = sandbox.fetch;
+  sandbox.fetch = async (url) => {
+    const p = String(url);
+    if (p.includes('action=refresh')) {
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ refreshing: true }) };
+    }
+    if (p.includes('/newapi-quota')) {
+      polls++;
+      // First poll still in flight, second reports completion.
+      const refreshing = polls < 2;
+      return {
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({
+          accounts: [{ type: 'newapi', name: 'dddai-main', success: true, updated_at: iso(0), refreshing,
+            windows: [{ label: '订阅额度', used: 1, total: 10, remaining: 9, unit: 'USD' }] }],
+        }),
+      };
+    }
+    return originalFetch(url);
+  };
+
+  const btn = sandbox.document.getElementById('quota-refresh-newapi-dddai-main');
+  const p = sandbox.refreshQuota('newapi', 'dddai-main', btn);
+  assert.ok(btn.disabled, 'button must be disabled while refreshing');
+  assert.ok(String(btn.innerHTML).includes('同步中'), 'button must show progress text');
+
+  await p;
+  sandbox.fetch = originalFetch;
+  sandbox.setTimeout = originalSetTimeout;
+  sandbox.QUOTA_POLL_MS = originalPollMs;
+  sandbox.currentQuotaProvider = 'opencode';
+  assert.ok(polls >= 2, 'should poll until the backend clears the refreshing flag');
+  assert.ok(!btn.disabled, 'button must be re-enabled after completion');
+});
+
 test('newapi key rows offer one-click reset only for limited keys', async () => {
   writes.length = 0;
   sandbox.openNewAPIKeys('dddai-main');

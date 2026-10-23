@@ -611,6 +611,7 @@ func handleOllamaQuotaGet(query map[string][]string) pluginapi.ManagementRespons
 		a.CacheMu.RUnlock()
 		acct.Name = a.Name
 		acct.Type = "ollama"
+		acct.Refreshing = refreshRunning("ollama", a.Name)
 		accounts = append(accounts, acct)
 	}
 	ollamaAcctMu.RUnlock()
@@ -716,7 +717,14 @@ func handleOllamaQuotaPost(body []byte) pluginapi.ManagementResponse {
 			target.ShowWeekly = *req.ShowWeekly
 		}
 		persistOllamaAccount(target.Name, target.SessionCookie, target.ShowSession, target.ShowWeekly)
-		go refreshOllamaQuota(target)
+		key := refreshKey("ollama", acctName)
+		if !beginRefresh(key) {
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+		}
+		go func() {
+			defer endRefresh(key)
+			refreshOllamaQuota(target)
+		}()
 		return handleOllamaQuotaGet(nil)
 	case "refresh":
 		if target.SessionCookie == "" {

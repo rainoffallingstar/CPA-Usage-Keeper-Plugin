@@ -49,13 +49,13 @@ func unmaskSecret(data []byte, key byte) string {
 }
 
 const (
-	colabAuthEndpoint      = "https://accounts.google.com/o/oauth2/v2/auth"
-	colabTokenEndpoint     = "https://oauth2.googleapis.com/token"
-	colabUserInfoEndpoint  = "https://www.googleapis.com/oauth2/v2/userinfo"
-	colabGapiDomain        = "https://colab.pa.googleapis.com"
-	colabHTTPTimeout       = 20 * time.Second
-	colabLoginTimeoutSec   = 300 // 5 minutes to complete browser authorization
-	colabAccessTokenTtl    = 20 * time.Minute
+	colabAuthEndpoint     = "https://accounts.google.com/o/oauth2/v2/auth"
+	colabTokenEndpoint    = "https://oauth2.googleapis.com/token"
+	colabUserInfoEndpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
+	colabGapiDomain       = "https://colab.pa.googleapis.com"
+	colabHTTPTimeout      = 20 * time.Second
+	colabLoginTimeoutSec  = 300 // 5 minutes to complete browser authorization
+	colabAccessTokenTtl   = 20 * time.Minute
 )
 
 // REQUIRED_SCOPES matches colab-vscode's minimum required scope set.
@@ -93,15 +93,15 @@ var (
 )
 
 type colabLoginPending struct {
-	Nonce         string
-	CodeVerifier  string
-	RedirectURI   string
-	Account       string
-	Code          string
-	CodeReceived  bool
-	StartedAt     time.Time
-	Server        *http.Server
-	ServerDone    chan struct{}
+	Nonce        string
+	CodeVerifier string
+	RedirectURI  string
+	Account      string
+	Code         string
+	CodeReceived bool
+	StartedAt    time.Time
+	Server       *http.Server
+	ServerDone   chan struct{}
 }
 
 // ---------------------------------------------------------------------------
@@ -385,15 +385,15 @@ func ensureFreshAccessToken(acct *colabAccountRuntime) error {
 // ---------------------------------------------------------------------------
 
 type colabUserInfo struct {
-	SubscriptionTier        string `json:"subscriptionTier"`
+	SubscriptionTier        string   `json:"subscriptionTier"`
 	PaidComputeUnitsBalance *float64 `json:"paidComputeUnitsBalance"`
-	ConsumptionRateHourly   float64 `json:"consumptionRateHourly"`
-	AssignmentsCount        float64 `json:"assignmentsCount"`
+	ConsumptionRateHourly   float64  `json:"consumptionRateHourly"`
+	AssignmentsCount        float64  `json:"assignmentsCount"`
 	FreeCcuQuotaInfo        *struct {
-		RemainingTokens         string  `json:"remainingTokens"`
-		NextRefillTimestampSec  float64 `json:"nextRefillTimestampSec"`
+		RemainingTokens        string  `json:"remainingTokens"`
+		NextRefillTimestampSec float64 `json:"nextRefillTimestampSec"`
 	} `json:"freeCcuQuotaInfo"`
-	EligibleAccelerators    []struct {
+	EligibleAccelerators []struct {
 		Variant string   `json:"variant"`
 		Models  []string `json:"models"`
 	} `json:"eligibleAccelerators"`
@@ -723,16 +723,16 @@ func startColabLoginServer(account string) (authURL, loginID, redirectURI string
 	}()
 
 	authURL = fmt.Sprintf("%s?%s", colabAuthEndpoint, url.Values{
-		"client_id":             {colabOAuthClientID},
-		"redirect_uri":          {redirectURI},
-		"response_type":         {"code"},
-		"scope":                 {strings.Join(colabRequiredScopes, " ")},
-		"access_type":           {"offline"},
+		"client_id":              {colabOAuthClientID},
+		"redirect_uri":           {redirectURI},
+		"response_type":          {"code"},
+		"scope":                  {strings.Join(colabRequiredScopes, " ")},
+		"access_type":            {"offline"},
 		"include_granted_scopes": {"true"},
-		"state":                 {"nonce=" + nonce},
-		"code_challenge":        {challenge},
-		"code_challenge_method": {"S256"},
-		"prompt":                {"consent"},
+		"state":                  {"nonce=" + nonce},
+		"code_challenge":         {challenge},
+		"code_challenge_method":  {"S256"},
+		"prompt":                 {"consent"},
 	}.Encode())
 
 	return authURL, loginID, redirectURI, nil
@@ -1006,7 +1006,14 @@ func handleColabQuotaGet(query map[string][]string) pluginapi.ManagementResponse
 			colabAccounts = append(colabAccounts, acct)
 			colabAcctMu.Unlock()
 			persistColabAccount(acctName, refreshToken, "")
-			go refreshColabQuota(acct)
+			key := refreshKey("colab", acct.Name)
+			if !beginRefresh(key) {
+				return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acct.Name, "started": false})
+			}
+			go func() {
+				defer endRefresh(key)
+				refreshColabQuota(acct)
+			}()
 		case "removeaccount":
 			colabAcctMu.Lock()
 			for i, a := range colabAccounts {
@@ -1047,6 +1054,7 @@ func handleColabQuotaGet(query map[string][]string) pluginapi.ManagementResponse
 		a.CacheMu.RUnlock()
 		acct.Name = a.Name
 		acct.Type = "colab"
+		acct.Refreshing = refreshRunning("colab", a.Name)
 		accounts = append(accounts, acct)
 	}
 	colabAcctMu.RUnlock()

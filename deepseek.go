@@ -65,9 +65,9 @@ func fetchDeepseekBalance(apiKey string) (*deepseekBalanceResp, error) {
 // ---------------------------------------------------------------------------
 
 type deepseekAccountRuntime struct {
-	Name   string
-	APIKey string
-	Cache  quotaAccount
+	Name    string
+	APIKey  string
+	Cache   quotaAccount
 	CacheMu sync.RWMutex
 }
 
@@ -241,7 +241,15 @@ func handleDeepseekQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 			if t.APIKey == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no API key"})
 			}
-			go refreshDeepseekBalance(t)
+			key := refreshKey("deepseek", acctName)
+			if !beginRefresh(key) {
+				return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+			}
+			go func() {
+				defer endRefresh(key)
+				refreshDeepseekBalance(t)
+			}()
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": true})
 		default:
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
 		}
@@ -255,6 +263,7 @@ func handleDeepseekQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 		a.CacheMu.RUnlock()
 		acct.Name = a.Name
 		acct.Type = "deepseek"
+		acct.Refreshing = refreshRunning("deepseek", a.Name)
 		accounts = append(accounts, acct)
 	}
 	deepseekAcctMu.RUnlock()

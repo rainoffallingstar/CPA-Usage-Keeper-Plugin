@@ -19,13 +19,13 @@ import (
 const glmCodingQuotaTimeout = 10 * time.Second
 
 type glmQuotaLimitItem struct {
-	Type          string  `json:"type"`
-	Used          float64 `json:"used"`
-	Total         float64 `json:"total"`
-	Percentage    float64 `json:"percentage"`
-	CurrentValue  float64 `json:"currentValue"`
-	TimeUsed      float64 `json:"timeUsed"`
-	TimeTotal     float64 `json:"timeTotal"`
+	Type         string  `json:"type"`
+	Used         float64 `json:"used"`
+	Total        float64 `json:"total"`
+	Percentage   float64 `json:"percentage"`
+	CurrentValue float64 `json:"currentValue"`
+	TimeUsed     float64 `json:"timeUsed"`
+	TimeTotal    float64 `json:"timeTotal"`
 }
 
 type glmQuotaLimitResp struct {
@@ -129,7 +129,9 @@ func fetchGlmQuotaLimits(url, key string) ([]glmQuotaLimitItem, error) {
 	var limits []glmQuotaLimitItem
 	for _, l := range r.Data.Limits {
 		l.Percentage = 100 - l.Percentage // API returns used%, flip to remaining%
-		if l.Percentage < 0 { l.Percentage = 0 }
+		if l.Percentage < 0 {
+			l.Percentage = 0
+		}
 		limits = append(limits, l)
 	}
 	return limits, nil
@@ -171,8 +173,8 @@ type glmCodingRuntime struct {
 }
 
 var (
-	glmAccounts  []*glmCodingRuntime
-	glmAcctMu    sync.RWMutex
+	glmAccounts []*glmCodingRuntime
+	glmAcctMu   sync.RWMutex
 )
 
 func initGlmCodingAccounts(cfgs []glmCodingAcctCfg) {
@@ -286,7 +288,10 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 			glmAcctMu.RLock()
 			var target *glmCodingRuntime
 			for _, a := range glmAccounts {
-				if a.Name == acctName { target = a; break }
+				if a.Name == acctName {
+					target = a
+					break
+				}
 			}
 			glmAcctMu.RUnlock()
 			if target == nil {
@@ -303,7 +308,10 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 			glmAcctMu.RLock()
 			var target *glmCodingRuntime
 			for _, a := range glmAccounts {
-				if a.Name == acctName { target = a; break }
+				if a.Name == acctName {
+					target = a
+					break
+				}
 			}
 			glmAcctMu.RUnlock()
 			if target == nil {
@@ -312,7 +320,15 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 			if target.APIKey == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no API key configured"})
 			}
-			go refreshGlmQuota(target)
+			key := refreshKey("glm_coding", acctName)
+			if !beginRefresh(key) {
+				return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+			}
+			go func() {
+				defer endRefresh(key)
+				refreshGlmQuota(target)
+			}()
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": true})
 		default:
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
 		}
@@ -326,6 +342,7 @@ func handleGlmCodingQuotaGet(query map[string][]string) pluginapi.ManagementResp
 		a.CacheMu.RUnlock()
 		acct.Name = a.Name
 		acct.Type = "glm_coding"
+		acct.Refreshing = refreshRunning("glm_coding", a.Name)
 		accounts = append(accounts, acct)
 	}
 	glmAcctMu.RUnlock()
@@ -346,25 +363,38 @@ func loadGlmAccountsFromDB() {
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()
-	if d == nil { return }
+	if d == nil {
+		return
+	}
 	rows, _ := d.Query("SELECT name, api_key, base_url FROM glm_coding_accounts")
-	if rows == nil { return }
+	if rows == nil {
+		return
+	}
 	defer rows.Close()
 	glmAcctMu.Lock()
 	defer glmAcctMu.Unlock()
 	for rows.Next() {
 		var name, key, base string
-		if rows.Scan(&name, &key, &base) != nil { continue }
+		if rows.Scan(&name, &key, &base) != nil {
+			continue
+		}
 		seen := false
 		for _, a := range glmAccounts {
-			if a.Name == name { seen = true; break }
+			if a.Name == name {
+				seen = true
+				break
+			}
 		}
-		if seen { continue }
+		if seen {
+			continue
+		}
 		glmAccounts = append(glmAccounts, &glmCodingRuntime{
 			Name: name, APIKey: key, BaseURL: base,
 			Cache: quotaAccount{Type: "glm_coding", Name: name, Success: false, Windows: []quotaWindow{}, Error: "not fetched yet"},
 		})
-		if key != "" { go refreshGlmQuota(glmAccounts[len(glmAccounts)-1]) }
+		if key != "" {
+			go refreshGlmQuota(glmAccounts[len(glmAccounts)-1])
+		}
 	}
 }
 
@@ -372,7 +402,9 @@ func persistGlmAccount(name, key, baseURL string) {
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()
-	if d == nil { return }
+	if d == nil {
+		return
+	}
 	d.Exec(`INSERT INTO glm_coding_accounts (name, api_key, base_url) VALUES (?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET api_key=excluded.api_key, base_url=excluded.base_url`, name, key, baseURL)
 }
@@ -381,6 +413,8 @@ func deleteGlmAccountFromDB(name string) {
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()
-	if d == nil { return }
+	if d == nil {
+		return
+	}
 	d.Exec("DELETE FROM glm_coding_accounts WHERE name = ?", name)
 }

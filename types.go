@@ -39,7 +39,7 @@ const (
 	resourceAPINewAPIQuota    = "/v0/resource/plugins/usage-keeper/api/newapi-quota"
 )
 
-var pluginVersion = "0.11.43"
+var pluginVersion = "0.11.44"
 
 type pluginConfig struct {
 	DBPath             string              `yaml:"db_path"`
@@ -257,10 +257,14 @@ type quotaAccount struct {
 	Workspaces  []workspaceEntry `json:"workspaces,omitempty"`
 	Success     bool             `json:"success"`
 	UpdatedAt   string           `json:"updated_at"`
-	Plan        string           `json:"plan,omitempty"`
-	Windows     []quotaWindow    `json:"windows"`
-	ModelUsage  []glmModelUsage  `json:"model_usage,omitempty"`
-	Error       string           `json:"error,omitempty"`
+	// Refreshing is set while a manual refresh for this account is still
+	// running in the background. The dashboard keeps its spinner up until this
+	// clears, instead of assuming the data changed because the request returned.
+	Refreshing bool            `json:"refreshing,omitempty"`
+	Plan       string          `json:"plan,omitempty"`
+	Windows    []quotaWindow   `json:"windows"`
+	ModelUsage []glmModelUsage `json:"model_usage,omitempty"`
+	Error      string          `json:"error,omitempty"`
 }
 
 type quotaResponse struct {

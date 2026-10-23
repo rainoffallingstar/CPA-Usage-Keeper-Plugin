@@ -826,9 +826,9 @@ type newAPIKey struct {
 	// No omitempty: a freshly reset key has cycle_used_usd == 0, and dropping
 	// the field made clients see "undefined" exactly when the value mattered
 	// most. Consumers gate on cycle_active instead.
-	CycleTotalUSD float64 `json:"cycle_total_usd"`
-	CycleUsedUSD  float64 `json:"cycle_used_usd"`
-	CycleResetAt  string  `json:"cycle_reset_at,omitempty"`
+	CycleTotalUSD  float64          `json:"cycle_total_usd"`
+	CycleUsedUSD   float64          `json:"cycle_used_usd"`
+	CycleResetAt   string           `json:"cycle_reset_at,omitempty"`
 	PanelUsed      string           `json:"panel_used,omitempty"`
 	PanelRemaining string           `json:"panel_remaining,omitempty"`
 	StatusText     string           `json:"status_text,omitempty"`
@@ -1243,8 +1243,15 @@ func applyNewAPIAccountAction(action, name, token, baseURL string) pluginapi.Man
 		if _, tok := target.credentials(); tok == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no access token"})
 		}
-		go newAPIRefresh(target)
-		return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": name})
+		key := refreshKey("newapi", name)
+		if !beginRefresh(key) {
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": name, "started": false})
+		}
+		go func() {
+			defer endRefresh(key)
+			newAPIRefresh(target)
+		}()
+		return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": name, "started": true})
 	default:
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
 	}
@@ -1292,6 +1299,7 @@ func handleNewAPIQuotaGet(query map[string][]string, headers map[string][]string
 		acct.Name = a.Name
 		acct.Type = "newapi"
 		acct.BaseURL = a.BaseURL
+		acct.Refreshing = refreshRunning("newapi", a.Name)
 		accounts = append(accounts, acct)
 	}
 	newAPIAcctMu.RUnlock()

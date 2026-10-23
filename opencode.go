@@ -23,12 +23,12 @@ const (
 
 var (
 	reWorkspaceEntry = regexp.MustCompile(`id\s*:\s*"(wrk_[^"]+)"[^{}]*?name\s*:\s*"([^"]*)"`)
-	reRollingPct  = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
-	reRollingRst  = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
-	reWeeklyPct   = regexp.MustCompile(`weeklyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
-	reWeeklyRst   = regexp.MustCompile(`weeklyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
-	reMonthlyPct  = regexp.MustCompile(`monthlyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
-	reMonthlyRst  = regexp.MustCompile(`monthlyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reRollingPct     = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reRollingRst     = regexp.MustCompile(`rollingUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reWeeklyPct      = regexp.MustCompile(`weeklyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reWeeklyRst      = regexp.MustCompile(`weeklyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reMonthlyPct     = regexp.MustCompile(`monthlyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
+	reMonthlyRst     = regexp.MustCompile(`monthlyUsage:\s*\$R\[\d+\]\s*=\s*\{[^}]*resetInSec\s*:\s*(-?\d+(?:\.\d+)?)[^}]*usagePercent\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}`)
 )
 
 // runtime per-account state
@@ -359,9 +359,9 @@ func fetchAndParseQuota(cookie, workspaceID string) ([]quotaWindow, error) {
 	windows := make([]quotaWindow, 0, 3)
 
 	patterns := []struct {
-		label  string
-		pctRe  *regexp.Regexp
-		rstRe  *regexp.Regexp
+		label string
+		pctRe *regexp.Regexp
+		rstRe *regexp.Regexp
 	}{
 		{"5h Rolling", reRollingPct, reRollingRst},
 		{"Weekly", reWeeklyPct, reWeeklyRst},
@@ -489,7 +489,10 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 			opencodeAcctMu.RLock()
 			var target *opencodeAccountRuntime
 			for _, a := range opencodeAccounts {
-				if a.Name == acctName { target = a; break }
+				if a.Name == acctName {
+					target = a
+					break
+				}
 			}
 			opencodeAcctMu.RUnlock()
 			if target == nil {
@@ -499,13 +502,18 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 			case "removeaccount":
 				opencodeAcctMu.Lock()
 				for i, a := range opencodeAccounts {
-					if a.Name == acctName { opencodeAccounts = append(opencodeAccounts[:i], opencodeAccounts[i+1:]...); break }
+					if a.Name == acctName {
+						opencodeAccounts = append(opencodeAccounts[:i], opencodeAccounts[i+1:]...)
+						break
+					}
 				}
 				opencodeAcctMu.Unlock()
 				deleteOpenCodeAccountFromDB(acctName)
 			case "setcookie":
 				c := strings.TrimSpace(cookie)
-				if c == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"}) }
+				if c == "" {
+					return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"})
+				}
 				target.Cookie = c
 				if workspace != "" {
 					target.WorkspaceID = workspace
@@ -513,12 +521,16 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 				persistOpenCodeAccount(target.Name, target.Cookie, target.WorkspaceID)
 				refreshSingleQuota(target)
 			case "setworkspace":
-				if workspace == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "workspace is required"}) }
+				if workspace == "" {
+					return jsonResponse(http.StatusBadRequest, map[string]string{"error": "workspace is required"})
+				}
 				target.WorkspaceID = workspace
 				persistOpenCodeAccount(target.Name, target.Cookie, target.WorkspaceID)
 				refreshSingleQuota(target)
 			case "refresh":
-				if target.Cookie == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"}) }
+				if target.Cookie == "" {
+					return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"})
+				}
 				refreshSingleQuota(target)
 			}
 		} else {

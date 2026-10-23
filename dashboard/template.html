@@ -1496,6 +1496,10 @@ function showToast(msg,type){
 	},3000);
 }
 
+function btnSpinner(){
+	return '<svg class="btn-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round"/></svg>';
+}
+
 function setBtnLoading(btn,loading,doneText){
 	if(!btn)return;
 	if(loading){
@@ -2552,6 +2556,7 @@ async function renderQuota(){
 		showFetchError("panel-quota",e.message,"renderQuota()");
 		var qc=document.getElementById("quota-cards-container");
 		if(qc&&!qc.innerHTML)qc.innerHTML=errorState("配额数据加载失败",e.message,"renderQuota()");
+		throw e;
 	}
 }
 
@@ -2641,7 +2646,7 @@ function renderQuotaCards(){
 			historyHtml='<div class="colab-history" id="colab-history-'+esc(acc.name)+'" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--fg)">用量历史</span><span style="display:flex;gap:4px"><button class="btn btn-ghost btn-xs" data-history-days="7" onclick="loadColabHistory(\''+esc(acc.name)+'\',7)">7天</button><button class="btn btn-primary btn-xs" data-history-days="30" onclick="loadColabHistory(\''+esc(acc.name)+'\',30)">30天</button><button class="btn btn-ghost btn-xs" data-history-days="90" onclick="loadColabHistory(\''+esc(acc.name)+'\',90)">90天</button></span></div><div style="font-size:11px;color:var(--meta)">正在加载…</div></div>';
 		}
 
-		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+(acc.base_url?esc(acc.base_url)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto">'+(acc.type==="newapi"?'<button class="btn btn-secondary btn-sm" onclick="openNewAPIKeys(\''+esc(acc.name)+'\')">'+icon("key")+' API Keys</button><button class="btn btn-secondary btn-sm" onclick="openNewAPIEdit(\''+esc(acc.name)+'\',\''+esc(acc.base_url||"")+'\')">'+icon("edit")+' 编辑凭据</button>':'')+'<button class="btn btn-secondary btn-sm" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("refresh")+' 刷新配额</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
+		return '<div class="quota-card"><div class="quota-card-header"><div><h3 style="font-size:16px;font-weight:600;font-family:var(--font-display)">'+esc(acc.name)+'</h3><div style="font-size:12px;color:var(--muted);margin-top:2px">'+(acc.plan?esc(acc.plan)+' · ':'')+(acc.base_url?esc(acc.base_url)+' · ':'')+'更新于 '+esc(acc.updated_at||'刚刚')+'</div></div><span class="badge '+(acc.success?'badge-success':'badge-danger')+'">'+(acc.success?'正常同步':'同步异常')+'</span></div><div>'+windowItems+generalModelUsage+'</div>'+historyHtml+errorHtml+'<div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border-soft);padding-top:12px;margin-top:auto">'+(acc.type==="newapi"?'<button class="btn btn-secondary btn-sm" onclick="openNewAPIKeys(\''+esc(acc.name)+'\')">'+icon("key")+' API Keys</button><button class="btn btn-secondary btn-sm" onclick="openNewAPIEdit(\''+esc(acc.name)+'\',\''+esc(acc.base_url||"")+'\')">'+icon("edit")+' 编辑凭据</button>':'')+'<button class="btn btn-secondary btn-sm" id="quota-refresh-'+esc(acc.type)+'-'+esc(acc.name)+'" onclick="refreshQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\',this)"'+(acc.refreshing?' disabled aria-busy="true"':'')+'>'+(acc.refreshing?btnSpinner()+icon("refresh")+' 同步中…':icon("refresh")+' 刷新配额')+'</button><button class="btn btn-danger btn-sm" onclick="removeQuota(\''+currentQuotaProvider+'\',\''+esc(acc.name)+'\')">'+icon("x")+' 移除账号</button></div></div>';
 	}).join("");
 
 	// Auto-load history charts for Colab accounts.
@@ -3131,8 +3136,26 @@ function doAddQuotaAccount(){
 }
 
 function refreshCurrentQuota(){
-	renderQuota();
-	showToast("已刷新 "+currentQuotaProvider.toUpperCase()+" 配额","success");
+	var btn=document.getElementById("btn-refresh-quota");
+	if(btn){
+		btn.disabled=true;
+		btn.setAttribute("aria-busy","true");
+		btn.innerHTML=btnSpinner()+" 刷新中…";
+	}
+	renderQuota().then(function(){
+		if(btn){
+			btn.disabled=false;
+			btn.removeAttribute("aria-busy");
+			btn.innerHTML=icon("refresh")+" 同步配额";
+		}
+		showToast("已刷新 "+currentQuotaProvider.toUpperCase()+" 配额","success");
+	}).catch(function(){
+		if(btn){
+			btn.disabled=false;
+			btn.removeAttribute("aria-busy");
+			btn.innerHTML=icon("refresh")+" 同步配额";
+		}
+	});
 }
 
 /* ─── Google Colab OAuth Login Flow ──────────────────────────────────────── */
@@ -3271,13 +3294,74 @@ function quotaPath(provider){
 	if(provider==="newapi")return"/newapi-quota";
 	return"/deepseek-quota";
 }
-function refreshQuota(provider,name){
+// Refreshes are asynchronous on the backend: the request returns as soon as the
+// fetch is queued, so re-rendering immediately shows the OLD numbers and the
+// button looks dead. Keep a spinner up and poll until the server reports the
+// account is no longer refreshing, with a hard timeout so a stuck upstream
+// cannot spin forever.
+var QUOTA_POLL_MS=900;
+var QUOTA_POLL_MAX=25; // ~22s
+
+function refreshQuota(provider,name,btn){
 	var path=quotaPath(provider);
-	fetchQ(path+"?action=refresh&account="+encodeURIComponent(name)).then(function(){
-		renderQuota();
-		showToast("已触发同步: "+name,"success");
-	}).catch(function(){showToast("同步请求失败","danger")});
+	if(btn){
+		btn.disabled=true;
+		btn.setAttribute("aria-busy","true");
+		btn.innerHTML=btnSpinner()+" 同步中…";
+	}
+	function finish(ok,msg){
+		if(btn){
+			btn.disabled=false;
+			btn.removeAttribute("aria-busy");
+			if(ok){
+				btn.innerHTML=icon("check")+" 已更新";
+				setTimeout(function(){btn.innerHTML=icon("refresh")+" 刷新配额"},1600);
+			}else{
+				btn.innerHTML=icon("refresh")+" 刷新配额";
+			}
+		}
+		showToast(msg,ok?"success":"danger");
+	}
+	return fetchQ(path+"?action=refresh&account="+encodeURIComponent(name)).then(function(){
+		// Poll until the backend clears the in-flight flag; the refresh request
+		// itself only queues the fetch and returns stale data.
+		var tries=0;
+		return new Promise(function(resolve){
+			(function poll(){
+				tries++;
+				fetchJSONFresh(path).then(function(data){
+					var accounts=(data&&data.accounts)||[];
+					quotaDataCache[provider]=accounts;
+					var target=accounts.filter(function(a){return a.name===name})[0];
+					if(target&&!target.refreshing){
+						renderQuotaCards();
+						finish(true,"已刷新 "+name);
+						resolve(true);
+						return;
+					}
+					if(tries>=QUOTA_POLL_MAX){
+						renderQuotaCards();
+						finish(false,"同步超时，稍后再试");
+						resolve(false);
+						return;
+					}
+					setTimeout(poll,QUOTA_POLL_MS);
+				}).catch(function(){
+					if(tries>=QUOTA_POLL_MAX){
+						finish(false,"同步请求失败");
+						resolve(false);
+						return;
+					}
+					setTimeout(poll,QUOTA_POLL_MS);
+				});
+			})();
+		});
+	}).catch(function(){
+		finish(false,"同步请求失败");
+		return false;
+	});
 }
+
 function removeQuota(provider,name){
 	var path=quotaPath(provider);
 	fetchQ(path+"?action=removeaccount&account="+encodeURIComponent(name)).then(function(){

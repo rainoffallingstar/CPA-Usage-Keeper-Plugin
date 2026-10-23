@@ -77,8 +77,10 @@ func handleCreateExportJob(query map[string][]string) pluginapi.ManagementRespon
 	format := "json"
 	if v, ok := query["format"]; ok && len(v) > 0 {
 		switch strings.ToLower(v[0]) {
-		case "csv": format = "csv"
-		case "jsonl": format = "jsonl"
+		case "csv":
+			format = "csv"
+		case "jsonl":
+			format = "jsonl"
 		}
 	}
 	gz := false
@@ -134,7 +136,8 @@ func runExportJob(job *exportJob) {
 	dbMu.RUnlock()
 	if d == nil {
 		exportJobsMu.Lock()
-		job.Status = jobFailed; job.Error = "database not available"
+		job.Status = jobFailed
+		job.Error = "database not available"
 		exportJobsMu.Unlock()
 		return
 	}
@@ -146,7 +149,8 @@ func runExportJob(job *exportJob) {
 	f, err := os.Create(job.FilePath)
 	if err != nil {
 		exportJobsMu.Lock()
-		job.Status = jobFailed; job.Error = err.Error()
+		job.Status = jobFailed
+		job.Error = err.Error()
 		exportJobsMu.Unlock()
 		return
 	}
@@ -162,7 +166,8 @@ func runExportJob(job *exportJob) {
 		)
 		if err != nil {
 			exportJobsMu.Lock()
-			job.Status = jobFailed; job.Error = err.Error()
+			job.Status = jobFailed
+			job.Error = err.Error()
 			exportJobsMu.Unlock()
 			return
 		}
@@ -170,11 +175,12 @@ func runExportJob(job *exportJob) {
 		batch := 0
 		if job.Format == "csv" {
 			w := csv.NewWriter(f)
-			w.Write([]string{"id","timestamp","provider","model","input_tokens","output_tokens","total_tokens","latency_ms","failed","failure_body","auth_id","executor_type"})
+			w.Write([]string{"id", "timestamp", "provider", "model", "input_tokens", "output_tokens", "total_tokens", "latency_ms", "failed", "failure_body", "auth_id", "executor_type"})
 			for rows.Next() {
-				var e usageEvent; var c int64
+				var e usageEvent
+				var c int64
 				if rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &c) == nil {
-					w.Write([]string{strconv.FormatInt(e.ID,10), e.Timestamp, e.Provider, e.Model, strconv.FormatInt(e.InputTokens,10), strconv.FormatInt(e.OutputTokens,10), strconv.FormatInt(e.TotalTokens,10), strconv.FormatInt(e.LatencyMs,10), strconv.FormatBool(e.Failed), e.FailureBody, e.AuthID, e.ExecutorType})
+					w.Write([]string{strconv.FormatInt(e.ID, 10), e.Timestamp, e.Provider, e.Model, strconv.FormatInt(e.InputTokens, 10), strconv.FormatInt(e.OutputTokens, 10), strconv.FormatInt(e.TotalTokens, 10), strconv.FormatInt(e.LatencyMs, 10), strconv.FormatBool(e.Failed), e.FailureBody, e.AuthID, e.ExecutorType})
 					batch++
 				}
 			}
@@ -182,18 +188,28 @@ func runExportJob(job *exportJob) {
 		} else if job.Format == "jsonl" {
 			enc := json.NewEncoder(f)
 			for rows.Next() {
-				var e usageEvent; var c int64
+				var e usageEvent
+				var c int64
 				if rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &c) == nil {
-					enc.Encode(e); batch++
+					enc.Encode(e)
+					batch++
 				}
 			}
 		} else {
-			if first { f.Write([]byte("{\"events\":[")) }
+			if first {
+				f.Write([]byte("{\"events\":["))
+			}
 			for rows.Next() {
-				var e usageEvent; var c int64
+				var e usageEvent
+				var c int64
 				if rows.Scan(&e.ID, &e.Timestamp, &e.Provider, &e.Model, &e.InputTokens, &e.OutputTokens, &e.TotalTokens, &e.LatencyMs, &e.Failed, &e.FailureBody, &e.AuthID, &e.ExecutorType, &c) == nil {
-					if !first { f.Write([]byte(",")) }
-					data, _ := json.Marshal(e); f.Write(data); batch++; first = false
+					if !first {
+						f.Write([]byte(","))
+					}
+					data, _ := json.Marshal(e)
+					f.Write(data)
+					batch++
+					first = false
 				}
 			}
 		}
@@ -202,15 +218,21 @@ func runExportJob(job *exportJob) {
 		exportJobsMu.Lock()
 		job.ExportedSoFar = offset
 		exportJobsMu.Unlock()
-		if batch < exportPageSize { break }
+		if batch < exportPageSize {
+			break
+		}
 	}
-	if job.Format == "json" { f.Write([]byte("]}")) }
+	if job.Format == "json" {
+		f.Write([]byte("]}"))
+	}
 
 	if job.Gzip {
 		in, _ := os.ReadFile(job.FilePath)
 		f2, _ := os.Create(job.FilePath + ".gz")
 		w := gzip.NewWriter(f2)
-		w.Write(in); w.Close(); f2.Close()
+		w.Write(in)
+		w.Close()
+		f2.Close()
 		os.Rename(job.FilePath+".gz", job.FilePath)
 	}
 
@@ -225,37 +247,58 @@ func handleGetExportJobs(query map[string][]string) pluginapi.ManagementResponse
 	defer exportJobsMu.Unlock()
 	jobs := make([]exportJob, 0)
 	for _, id := range exportJobOrder {
-		if j, ok := exportJobsMap[id]; ok { jobs = append(jobs, *j) }
+		if j, ok := exportJobsMap[id]; ok {
+			jobs = append(jobs, *j)
+		}
 	}
 	return jsonResponse(http.StatusOK, exportJobsResponse{Jobs: jobs})
 }
 
 func handleGetExportDownload(query map[string][]string) pluginapi.ManagementResponse {
 	id := ""
-	if v, ok := query["id"]; ok && len(v) > 0 { id = v[0] }
-	if id == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error":"missing id"}) }
+	if v, ok := query["id"]; ok && len(v) > 0 {
+		id = v[0]
+	}
+	if id == "" {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "missing id"})
+	}
 	exportJobsMu.Lock()
 	job, ok := exportJobsMap[id]
 	exportJobsMu.Unlock()
-	if !ok { return jsonResponse(http.StatusNotFound, map[string]string{"error":"job not found"}) }
-	if job.Status != jobCompleted { return jsonResponse(http.StatusBadRequest, map[string]string{"error":"job not completed"}) }
+	if !ok {
+		return jsonResponse(http.StatusNotFound, map[string]string{"error": "job not found"})
+	}
+	if job.Status != jobCompleted {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "job not completed"})
+	}
 	data, err := os.ReadFile(job.FilePath)
-	if err != nil { return jsonResponse(http.StatusInternalServerError, map[string]string{"error":"read failed"}) }
-	return pluginapi.ManagementResponse{StatusCode: http.StatusOK, Headers: map[string][]string{"Content-Type":{"application/octet-stream"}}, Body: data}
+	if err != nil {
+		return jsonResponse(http.StatusInternalServerError, map[string]string{"error": "read failed"})
+	}
+	return pluginapi.ManagementResponse{StatusCode: http.StatusOK, Headers: map[string][]string{"Content-Type": {"application/octet-stream"}}, Body: data}
 }
 
 func handleDeleteExportJob(query map[string][]string) pluginapi.ManagementResponse {
 	id := ""
-	if v, ok := query["id"]; ok && len(v) > 0 { id = v[0] }
-	if id == "" { return jsonResponse(http.StatusBadRequest, map[string]string{"error":"missing id"}) }
+	if v, ok := query["id"]; ok && len(v) > 0 {
+		id = v[0]
+	}
+	if id == "" {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "missing id"})
+	}
 	exportJobsMu.Lock()
 	defer exportJobsMu.Unlock()
 	job, ok := exportJobsMap[id]
-	if !ok { return jsonResponse(http.StatusNotFound, map[string]string{"error":"job not found"}) }
+	if !ok {
+		return jsonResponse(http.StatusNotFound, map[string]string{"error": "job not found"})
+	}
 	os.Remove(job.FilePath)
 	delete(exportJobsMap, id)
 	for i, oid := range exportJobOrder {
-		if oid == id { exportJobOrder = append(exportJobOrder[:i], exportJobOrder[i+1:]...); break }
+		if oid == id {
+			exportJobOrder = append(exportJobOrder[:i], exportJobOrder[i+1:]...)
+			break
+		}
 	}
-	return jsonResponse(http.StatusOK, map[string]string{"deleted":id})
+	return jsonResponse(http.StatusOK, map[string]string{"deleted": id})
 }
