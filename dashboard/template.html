@@ -3725,6 +3725,14 @@ function refreshQuota(provider,name,btn){
 	return fetchQ(path+"?action=refresh&account="+encodeURIComponent(name)).then(function(){
 		// Poll until the backend clears the in-flight flag; the refresh request
 		// itself only queues the fetch and returns stale data.
+		//
+		// The first poll is deliberately delayed: a fast provider (Ollama often
+		// answers in ~0.5s) would otherwise return already-fresh data on poll #1,
+		// so the spinner flashed for one frame and the button "did nothing". A
+		// minimum visible wait makes the interaction legible; the data is still
+		// re-rendered as soon as the flag clears.
+		var startedAt=Date.now();
+		var MIN_BUSY_MS=(typeof QUOTA_MIN_BUSY_MS!=="undefined")?QUOTA_MIN_BUSY_MS:650;
 		var tries=0;
 		return new Promise(function(resolve){
 			(function poll(){
@@ -3734,6 +3742,11 @@ function refreshQuota(provider,name,btn){
 					quotaDataCache[provider]=accounts;
 					var target=accounts.filter(function(a){return a.name===name})[0];
 					if(target&&!target.refreshing){
+						var waited=Date.now()-startedAt;
+						if(waited<MIN_BUSY_MS){
+							setTimeout(poll,MIN_BUSY_MS-waited);
+							return;
+						}
 						renderQuotaCards();
 						finish(true,"已刷新 "+name);
 						resolve(true);

@@ -597,7 +597,14 @@ func handleOllamaQuotaGet(query map[string][]string) pluginapi.ManagementRespons
 			if target.SessionCookie == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no session cookie configured"})
 			}
-			go refreshOllamaQuota(target)
+			key := refreshKey("ollama", acctName)
+			if !beginRefresh(key) {
+				return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+			}
+			go func() {
+				defer endRefresh(key)
+				refreshOllamaQuota(target)
+			}()
 		default:
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
 		}
@@ -730,7 +737,14 @@ func handleOllamaQuotaPost(body []byte) pluginapi.ManagementResponse {
 		if target.SessionCookie == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no session cookie configured for this account"})
 		}
-		go refreshOllamaQuota(target)
+		key := refreshKey("ollama", acctName)
+		if !beginRefresh(key) {
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+		}
+		go func() {
+			defer endRefresh(key)
+			refreshOllamaQuota(target)
+		}()
 		return handleOllamaQuotaGet(nil)
 	default:
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'setcookie', 'refresh', 'addaccount', or 'removeaccount'"})

@@ -531,7 +531,12 @@ func handleOpenCodeQuotaGet(query map[string][]string) pluginapi.ManagementRespo
 				if target.Cookie == "" {
 					return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured"})
 				}
+				key := refreshKey("opencode", acctName)
+				if !beginRefresh(key) {
+					return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+				}
 				refreshSingleQuota(target)
+				endRefresh(key)
 			}
 		} else {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action"})
@@ -644,7 +649,12 @@ func handleOpenCodeQuotaPost(body []byte) pluginapi.ManagementResponse {
 		if target.Cookie == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no cookie configured for this account"})
 		}
+		key := refreshKey("opencode", acctName)
+		if !beginRefresh(key) {
+			return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acctName, "started": false})
+		}
 		refreshSingleQuota(target)
+		endRefresh(key)
 		return handleOpenCodeQuotaGet(nil)
 	default:
 		return jsonResponse(http.StatusBadRequest, map[string]string{"error": "unknown action, use 'setcookie', 'refresh', 'addaccount', or 'removeaccount'"})

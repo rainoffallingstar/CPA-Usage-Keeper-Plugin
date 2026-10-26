@@ -330,6 +330,9 @@ test('quota refresh button shows progress and polls until the backend finishes',
   // stubs timers to keep the process from staying alive, and borrowing Node's
   // setTimeout would execute callbacks outside the vm context.
   sandbox.QUOTA_POLL_MS = 1;
+  // The refresh flow also enforces a minimum visible busy time; disable it here
+  // so the poll loop can finish inside the test.
+  sandbox.QUOTA_MIN_BUSY_MS = 0;
   sandbox.setTimeout = (fn, ms) => { if (ms <= 2) fn(); return 0; };
   let polls = 0;
   const originalFetch = sandbox.fetch;

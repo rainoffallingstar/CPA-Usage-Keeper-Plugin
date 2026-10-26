@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.12.11 (2026-10-26)
+
+### Fixes
+- **Ollama Cloud 刷新需要点两次才生效**：仪表盘调用的是 `GET ?action=refresh`，而 Ollama 的这条分支直接 `go refreshOllamaQuota(...)`，**没有走 `beginRefresh`**，因此列表里的 `refreshing` 永远是 `false`。前端第一次轮询就判定"已完成"并渲染旧数据；等第二次点击时后台那次抓取刚好落地，才看到新值。
+  - Ollama 的 GET / POST 两条 refresh 分支均补上 `beginRefresh` + `defer endRefresh`。
+  - 同类问题一并修复：**Colab** 的 GET refresh 分支、**OpenCode** 的 GET/POST refresh 分支（OpenCode 是同步刷新，不需要轮询，但补 guard 后可防止双击并发抓取）。
+  - 新增最小可见忙碌时间（650ms）：Ollama 抓取常在 0.5s 内完成，若不等待，spinner 只闪一帧、按钮看起来"没反应"。现在会稳定显示「同步中…」再切换为「已更新」。
+
+### Tests
+- `TestEveryProviderRefreshPathRegistersInFlight`：遍历六个 provider 中**每个 `case "refresh"` 分支**，要求分支体内出现 `beginRefresh`（允许 POST 分支委派给 GET handler）。该测试在把修复回退后能稳定复现失败，已验证其有效性。
+
+### Verified
+- 真实环境单次点击：`refreshing=true`（0.02s）→ 0.74s 后清除并带新 `updated_at`；浏览器侧按钮 200ms–1500ms 保持「同步中…」且禁用，约 2.5s 恢复，Session 数值由 21.9% 更新为 22.7%。
+
 ## v0.12.10 (2026-10-23)
 
 ### UI

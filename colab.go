@@ -1032,7 +1032,14 @@ func handleColabQuotaGet(query map[string][]string) pluginapi.ManagementResponse
 			if acct.RefreshToken == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "no credentials configured"})
 			}
-			go refreshColabQuota(acct)
+			key := refreshKey("colab", acct.Name)
+			if !beginRefresh(key) {
+				return jsonResponse(http.StatusOK, map[string]any{"refreshing": true, "account": acct.Name, "started": false})
+			}
+			go func() {
+				defer endRefresh(key)
+				refreshColabQuota(acct)
+			}()
 		case "history":
 			days := 30
 			if v, ok := getQueryParam(query, "days"); ok && v != "" {
