@@ -213,3 +213,89 @@ func TestExtractOllamaCloudUsageBlockAcceptsBothHeadingTags(t *testing.T) {
 		t.Error("expected an error when the Cloud usage heading is absent")
 	}
 }
+
+// 2026-11 incident (live ollama.com): the cookie had been relayed through a
+// Markdown-ish surface, so the stored value was
+//
+//	aid=<uuid>,\_\_Secure-session=<base64>
+//
+// — ";" became "," and "_" was escaped. looksLikeOllamaCookiePairs saw a valid
+// short name ("aid") and shipped the whole thing as ONE aid cookie, so the
+// session cookie never reached ollama.com and /settings redirected to /signin.
+// The dashboard then reported "未登录或 cookie 无效" for a perfectly valid login.
+func TestBuildOllamaCookieHeaderRepairsCommaSeparatorAndMarkdownEscape(t *testing.T) {
+	const token = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0tLS0t"
+	in := "aid=46ecb933-35bc-4c97-a651-090bfd36ea89,\\_\\_Secure-session=" + token
+	want := "aid=46ecb933-35bc-4c97-a651-090bfd36ea89; __Secure-session=" + token
+	got := buildOllamaCookieHeader(in)
+	if got != want {
+		t.Fatalf("buildOllamaCookieHeader(%q) = %q, want %q", in, got, want)
+	}
+	if !ollamaCookieHasSession(got) {
+		t.Errorf("repaired cookie should carry a session field, got %q", got)
+	}
+	if n := strings.Count(got, ";"); n != 1 {
+		t.Errorf("expected exactly one separator, got %d in %q", n, got)
+	}
+}
+
+// A comma that is not followed by a known cookie name belongs to the value and
+// must survive: base64url/JWT payloads can contain anything after a comma.
+func TestBuildOllamaCookieHeaderKeepsCommasInsideValues(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{
+			"aid=x; __Secure-session=abc,def",
+			"aid=x; __Secure-session=abc,def",
+		},
+		{
+			"__Secure-session=eyJhIjoxLCJiIjoyfQ",
+			"__Secure-session=eyJhIjoxLCJiIjoyfQ",
+		},
+	}
+	for _, tc := range cases {
+		if got := buildOllamaCookieHeader(tc.in); got != tc.want {
+			t.Errorf("buildOllamaCookieHeader(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// aid is an anonymous visitor id, always present on ollama.com. A cookie that
+// carries only aid can never authenticate, so it must be rejected up front with
+// an actionable message instead of a generic "cookie 无效".
+func TestOllamaCookieHasSession(t *testing.T) {
+	aidOnly := buildOllamaCookieHeader("aid=46ecb933-35bc-4c97-a651-090bfd36ea89")
+	if ollamaCookieHasSession(aidOnly) {
+		t.Errorf("aid-only cookie must not be treated as a session: %q", aidOnly)
+	}
+	if got := ollamaCookieNameList(aidOnly); got != "aid" {
+		t.Errorf("ollamaCookieNameList(%q) = %q, want aid", aidOnly, got)
+	}
+	for _, in := range []string{
+		"aid=x; __Secure-session=t",
+		"Cookie: __Secure-session=t",
+		"__Secure-session=t",
+		"__Host-session=t",
+	} {
+		if header := buildOllamaCookieHeader(in); !ollamaCookieHasSession(header) {
+			t.Errorf("expected a session cookie in %q → %q", in, header)
+		}
+	}
+	if ollamaCookieHasSession("aid=x; __Secure-session=") {
+		t.Error("an empty session value must not count as a session")
+	}
+}
+
+// Regression guard for the live page: the failure surfaced only after following
+// ollama.com's 303 → /signin chain. fetchOllamaQuota now stops at the first
+// redirect into the login flow, so this test pins the redirect classification.
+func TestFetchOllamaQuotaStopsAtSignInRedirect(t *testing.T) {
+	if !ollamaRedirectsToSignIn("https://ollama.com/signin") {
+		t.Error("https://ollama.com/signin should classify as a sign-in redirect")
+	}
+	if !ollamaRedirectsToSignIn("https://signin.ollama.com/?client_id=x") {
+		t.Error("signin.ollama.com should classify as a sign-in redirect")
+	}
+	if ollamaRedirectsToSignIn("https://ollama.com/settings") {
+		t.Error("the settings page must not classify as a sign-in redirect")
+	}
+}

@@ -230,16 +230,34 @@ The settings page embeds a "Cloud usage" block containing:
 func buildOllamaCookieHeader(sessionCookie string) string {
     // strips "Cookie:" prefix, wraps bare value as __Secure-session=...
     // accepts "aid=...; __Secure-session=..." or a bare session value
+    // also repairs full-width punctuation, Markdown "\_" escapes and a "," that
+    // replaced the ";" separator; rejects aid-only cookies via
+    // ollamaCookieHasSession (aid is an anonymous visitor id, not a login)
 }
 ```
 
 ### Pitfalls
 
-1. **No public API** — relies on scraping the settings page; page structure changes
-   can break parsing (guarded by "Cloud usage" block detection).
-2. **Cookie-based auth** — `aid` + `__Secure-session` cookies; expiry or missing
-   cookies yield a "sign in" page (detected and reported as "未登录或 cookie 无效").
-3. **Two windows only** — Session and Weekly (no monthly window). Each window can
+1. **No public quota API.** `/api/usage` answers `401 invalid credentials` even
+   with a valid browser cookie, so scraping `/settings` is still the only option.
+   Page-structure changes can break parsing (guarded by "Cloud usage" block
+   detection).
+2. **Cookie-based auth** — the login state lives in `__Secure-session` only;
+   `aid` is an anonymous visitor id that ollama.com re-issues on every anonymous
+   visit, so an aid-only cookie always renders the sign-in page. Both are checked
+   up front (`ollamaCookieHasSession`) to turn a misleading failure into a
+   specific one.
+3. **Cookies get mangled in transit.** Relaying the value through a chat app or a
+   Markdown-ish surface rewrites the ASCII `;` separator as `,` and escapes `_`
+   as `\_`, producing `aid=<uuid>,\_\_Secure-session=<token>`. Because the first
+   segment is still a valid short cookie name, the whole string used to be sent
+   as one aid cookie. `normalizeOllamaCookie` now undoes both mutations; the comma
+   split only fires in front of a known cookie name, so commas inside opaque
+   values survive.
+4. **Unauthenticated `/settings` redirects** — `303 → /signin → api.workos.com →
+   signin.ollama.com`. The fetcher stops at the first sign-in redirect instead of
+   following the chain, and reports that distinctly from an empty cookie.
+5. **Two windows only** — Session and Weekly (no monthly window). Each window can
    be independently hidden via `show_session` / `show_weekly` config flags.
 
 ---

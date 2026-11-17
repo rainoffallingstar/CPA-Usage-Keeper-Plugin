@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.12.12 (2026-11-17)
+
+### Fixes
+- **Ollama 显示「未登录或 cookie 无效」，实际 cookie 有效**：官网 `/settings` 需要 `__Secure-session`，但实际存进库里的值被中转环节改成了
+  `aid=<uuid>,\_\_Secure-session=<base64>` —— 分隔用的 `;` 变成了 `,`，`_` 被转义成 `\_`。
+  `looksLikeOllamaCookiePairs` 看到首段 `aid` 是合法短 cookie 名，就把整串当成**单个 aid cookie** 发出，
+  `__Secure-session` 从未送达 → 服务端 303 到 `/signin` → 面板报「未登录或 cookie 无效」。
+  - `normalizeOllamaCookie` 新增两步修复：反斜杠转义还原（`\_` → `_`）、逗号分隔符识别
+    （仅当逗号后紧跟已知 cookie 名 `__Secure-session` / `__Host-session` / `aid` / `session` / `ollama_session` 时才切分，
+    值内部的逗号原样保留）。
+  - 所有入口（YAML 配置、DB 加载、`addaccount`、`setcookie`）统一归一化；`persistOllamaAccount` 只存规范形式。
+  - **DB 自愈**：启动加载时发现旧记录不合法会就地修复并写回，不需要用户重新粘贴 cookie。
+- **`aid` 被误当成登录态**：`aid` 只是匿名访客 ID，ollama.com 每次匿名访问都会新发。新增
+  `ollamaCookieHasSession`，只有携带非空 `__Secure-session`（及历史用过的 `__Host-session` / `session` /
+  `ollama_session`）才算已登录；否则直接报「cookie 里只有 aid，缺少会话字段」，不再让它白跑一次官网请求。
+- **不再跟随登录重定向**：`/settings` 未登录时返回 `303 → /signin → api.workos.com → signin.ollama.com`，
+  原先跟随完整链路只为从落地页里正则匹配 "sign in"。现在在第一个登录重定向上停止（`http.ErrUseLastResponse`），
+  少两次跨域往返，并把「跳到登录页」与「cookie 为空」区分成不同报错（错误信息只列 cookie **名**，不泄露值）。
+
+### Verified
+- 对着**真实 ollama.com** 验证：修复后的 cookie 抓取返回 `200`，解析出 `plan=pro`、Session 与 Weekly 两个窗口
+  （含 per-model 请求数）；只带 `aid` → 明确报缺少会话字段；伪造 `__Secure-session` → 明确报「重定向到了登录页」。
+- 新增单测：逗号分隔符 + Markdown 转义修复、值内逗号不被误切、`aid`-only 判定、登录重定向分类。
+- `go test ./...` 全绿（含 `TestRenderDashboardHasNoFormatArtifacts` 与 refresh 分支守卫）。
+
 ## v0.12.11 (2026-10-26)
 
 ### Fixes

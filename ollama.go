@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -93,9 +94,13 @@ func initOllamaAccounts(cfgs []ollamaAcctCfg) {
 			continue
 		}
 		seen[name] = true
+		cookie := strings.TrimSpace(cfg.SessionCookie)
+		if normalized := buildOllamaCookieHeader(cookie); normalized != "" {
+			cookie = normalized
+		}
 		ollamaAccounts = append(ollamaAccounts, &ollamaAccountRuntime{
 			Name:          name,
-			SessionCookie: strings.TrimSpace(cfg.SessionCookie),
+			SessionCookie: cookie,
 			ShowSession:   cfg.ShowSession,
 			ShowWeekly:    cfg.ShowWeekly,
 			Cache: quotaAccount{
@@ -153,6 +158,60 @@ var ollamaCookieCleaner = strings.NewReplacer(
 	"\r", " ", "\n", " ", "\t", " ",
 )
 
+// reOllamaMarkdownEscape strips the backslash that Markdown-ish surfaces (chat
+// apps, issue trackers, note apps) insert in front of punctuation. Pasting
+// "aid=<uuid>; __Secure-session=<token>" through such a surface yields
+// "aid=<uuid>,\_\_Secure-session=<token>": the cookie name itself is escaped,
+// so ollama.com never recognises the session cookie. Cookie values are base64url
+// and never contain a literal backslash, so unescaping is lossless here.
+var reOllamaMarkdownEscape = regexp.MustCompile(`\\([_;,=."'\\*#+\-!()\[\]{}+&|%$@:<>?/~^])`)
+
+// ollamaCookieSeparatorNames are the "name=" prefixes that can follow a
+// separator. Used by splitOllamaCookiePairs to tell a mis-typed separator apart
+// from a comma that legitimately appears inside a value.
+var ollamaCookieSeparatorNames = []string{
+	"__secure-session=", "__host-session=", "aid=", "session=", "ollama_session=",
+}
+
+// splitOllamaCookiePairs cuts raw on ASCII ";" and then on a comma that is
+// immediately followed by a known cookie name. Some relay paths turn ";" into
+// "," (a Markdown/JSON-ish re-serialisation); without the second cut the whole
+// string collapses into one aid cookie and the session cookie is never sent.
+// A comma that is not followed by a known name is left untouched, so opaque
+// values (base64url, JWT) survive intact.
+func splitOllamaCookiePairs(raw string) []string {
+	out := make([]string, 0, 4)
+	for _, part := range strings.Split(raw, ";") {
+		start := 0
+		lower := strings.ToLower(part)
+		for i := 0; i < len(part); i++ {
+			if part[i] != ',' {
+				continue
+			}
+			rest := strings.TrimLeft(lower[i+1:], " \t")
+			matched := false
+			for _, name := range ollamaCookieSeparatorNames {
+				if strings.HasPrefix(rest, name) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+			if piece := strings.TrimSpace(part[start:i]); piece != "" {
+				out = append(out, piece)
+			}
+			start = i + 1
+			i = start - 1
+		}
+		if piece := strings.TrimSpace(part[start:]); piece != "" {
+			out = append(out, piece)
+		}
+	}
+	return out
+}
+
 // normalizeOllamaCookie turns any accepted user-supplied shape — a full
 // "Cookie: ..." header, a "name=value; name2=value2" string, or a bare session
 // value — into a canonical Cookie header value, repairing full-width
@@ -163,17 +222,16 @@ func normalizeOllamaCookie(raw string) string {
 		return ""
 	}
 	cookie = ollamaCookieCleaner.Replace(cookie)
+	cookie = reOllamaMarkdownEscape.ReplaceAllString(cookie, "$1")
 	if strings.HasPrefix(strings.ToLower(cookie), "cookie:") {
 		cookie = strings.TrimSpace(cookie[len("cookie:"):])
 	}
 	// Re-assemble clean "name=value" pairs; this drops duplicated separator
 	// runs, empty pairs and trailing semicolons left behind by copy-paste.
-	pairs := make([]string, 0, 4)
-	for _, part := range strings.Split(cookie, ";") {
-		if part = strings.TrimSpace(part); part != "" {
-			pairs = append(pairs, part)
-		}
-	}
+	// Commas are also honoured when a known cookie name follows them: a relay
+	// that rewrote ";" as "," would otherwise leave __Secure-session glued to
+	// the aid value, and the server would see a single, unusable aid cookie.
+	pairs := splitOllamaCookiePairs(cookie)
 	if len(pairs) == 0 {
 		return ""
 	}
@@ -209,6 +267,63 @@ func looksLikeOllamaCookiePairs(s string) bool {
 // bare session value (in which case it is wrapped as __Secure-session=...).
 func buildOllamaCookieHeader(sessionCookie string) string {
 	return normalizeOllamaCookie(sessionCookie)
+}
+
+// ollamaRedirectsToSignIn reports whether target belongs to ollama.com's login
+// flow. /settings answers an unauthenticated request with 303 → /signin, and
+// /signin bounces through api.workos.com to signin.ollama.com.
+func ollamaRedirectsToSignIn(target string) bool {
+	u, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+	path := strings.ToLower(u.Path)
+	host := strings.ToLower(u.Hostname())
+	return strings.Contains(path, "signin") || strings.Contains(path, "sign-in") ||
+		strings.HasPrefix(host, "signin.") || strings.Contains(host, "workos.com")
+}
+
+// ollamaSessionCookieNames are the cookie names ollama.com accepts as the login
+// session. Which one is present has changed over time, so all are honoured.
+var ollamaSessionCookieNames = []string{
+	"__secure-session", "__host-session", "session", "ollama_session",
+}
+
+// ollamaCookieHasSession reports whether a normalized Cookie header actually
+// carries a non-empty session cookie. ollama.com also sets "aid" (an anonymous
+// visitor id), so a header with only "aid" is syntactically valid yet always
+// renders the sign-in page — checking up front turns a misleading
+// "未登录或 cookie 无效" into an actionable "cookie 里缺少会话字段".
+func ollamaCookieHasSession(header string) bool {
+	for _, part := range strings.Split(header, ";") {
+		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		name = strings.ToLower(strings.TrimSpace(name))
+		for _, want := range ollamaSessionCookieNames {
+			if name == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ollamaCookieNameList returns just the cookie *names* in a header, for error
+// messages. Values are never logged or surfaced: the session token is a bearer
+// credential for the user's whole Ollama account.
+func ollamaCookieNameList(header string) string {
+	names := make([]string, 0, 3)
+	for _, part := range strings.Split(header, ";") {
+		if name, _, ok := strings.Cut(strings.TrimSpace(part), "="); ok && name != "" {
+			names = append(names, strings.TrimSpace(name))
+		}
+	}
+	if len(names) == 0 {
+		return "（空）"
+	}
+	return strings.Join(names, ", ")
 }
 
 // extractOllamaCloudUsageBlock returns the markup between the "Cloud usage"
@@ -449,6 +564,10 @@ func fetchOllamaQuota(sessionCookie string, showSession, showWeekly bool) (*quot
 	if cookieHeader == "" {
 		return nil, fmt.Errorf("session_cookie 无效")
 	}
+	if !ollamaCookieHasSession(cookieHeader) {
+		return nil, fmt.Errorf("cookie 里只有 %s，缺少会话字段（需要 __Secure-session）；"+
+			"aid 只是匿名访客 ID，无法登录", ollamaCookieNameList(cookieHeader))
+	}
 
 	req, err := http.NewRequest(http.MethodGet, ollamaSettingsURL, nil)
 	if err != nil {
@@ -458,14 +577,36 @@ func fetchOllamaQuota(sessionCookie string, showSession, showWeekly bool) (*quot
 	req.Header.Set("User-Agent", ollamaUserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
-	resp, err := ollamaHTTPClient.Do(req)
+	// ollama.com answers an unauthenticated /settings with 303 → /signin, and
+	// /signin bounces through api.workos.com before landing on the sign-in page.
+	// Following that chain costs two extra round trips and only tells us what we
+	// already know, so stop at the first redirect toward the login flow.
+	redirectedToSignIn := false
+	client := *ollamaHTTPClient
+	client.CheckRedirect = func(r *http.Request, _ []*http.Request) error {
+		if ollamaRedirectsToSignIn(r.URL.String()) {
+			redirectedToSignIn = true
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if redirectedToSignIn {
+		return nil, fmt.Errorf("未登录或 cookie 已过期：ollama.com 把 /settings 重定向到了登录页"+
+			"（已发送的 cookie: %s）。请重新登录后复制完整 Cookie", ollamaCookieNameList(cookieHeader))
+	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, fmt.Errorf("认证失败 (HTTP %d)，请检查 session cookie", resp.StatusCode)
+	}
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return nil, fmt.Errorf("settings 页面被重定向 (HTTP %d → %s)，无法判断登录状态",
+			resp.StatusCode, resp.Header.Get("Location"))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("settings 页面返回 HTTP %d", resp.StatusCode)
@@ -526,9 +667,13 @@ func handleOllamaQuotaGet(query map[string][]string) pluginapi.ManagementRespons
 					return jsonResponse(http.StatusConflict, map[string]string{"error": "account already exists"})
 				}
 			}
+			storedCookie := strings.TrimSpace(cookie)
+			if normalized := buildOllamaCookieHeader(storedCookie); normalized != "" {
+				storedCookie = normalized
+			}
 			r := &ollamaAccountRuntime{
 				Name:          acctName,
-				SessionCookie: strings.TrimSpace(cookie),
+				SessionCookie: storedCookie,
 				ShowSession:   parseBoolParam(showSession, true),
 				ShowWeekly:    parseBoolParam(showWeekly, true),
 				Cache: quotaAccount{
@@ -571,6 +716,9 @@ func handleOllamaQuotaGet(query map[string][]string) pluginapi.ManagementRespons
 			c := strings.TrimSpace(cookie)
 			if c == "" {
 				return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"})
+			}
+			if normalized := buildOllamaCookieHeader(c); normalized != "" {
+				c = normalized
 			}
 			target.SessionCookie = c
 			if showSession != "" {
@@ -659,6 +807,9 @@ func handleOllamaQuotaPost(body []byte) pluginapi.ManagementResponse {
 		if req.ShowWeekly != nil {
 			showWeekly = *req.ShowWeekly
 		}
+		if normalized := buildOllamaCookieHeader(cookie); normalized != "" {
+			cookie = normalized
+		}
 		r := &ollamaAccountRuntime{
 			Name:          acctName,
 			SessionCookie: cookie,
@@ -715,6 +866,9 @@ func handleOllamaQuotaPost(body []byte) pluginapi.ManagementResponse {
 		cookie := strings.TrimSpace(req.Cookie)
 		if cookie == "" {
 			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "cookie is required"})
+		}
+		if normalized := buildOllamaCookieHeader(cookie); normalized != "" {
+			cookie = normalized
 		}
 		target.SessionCookie = cookie
 		if req.ShowSession != nil {
@@ -801,6 +955,17 @@ func loadOllamaAccountsFromDB() {
 		if seen {
 			continue
 		}
+		// Repair cookies that a previous build (or a copy-paste through a
+		// Markdown-ish surface) stored in a form ollama.com cannot parse — e.g.
+		// "aid=<uuid>,\_\_Secure-session=<token>". Without this, an otherwise
+		// valid login keeps failing until the user re-pastes the cookie.
+		stored := cookie
+		if normalized := buildOllamaCookieHeader(cookie); normalized != "" {
+			cookie = normalized
+			if normalized != stored {
+				go persistOllamaAccount(name, normalized, showSession != 0, showWeekly != 0)
+			}
+		}
 		ollamaAccounts = append(ollamaAccounts, &ollamaAccountRuntime{
 			Name:          name,
 			SessionCookie: cookie,
@@ -821,6 +986,11 @@ func loadOllamaAccountsFromDB() {
 }
 
 func persistOllamaAccount(name, cookie string, showSession, showWeekly bool) {
+	// Store the canonical form so a later load never has to re-derive it, and
+	// so a repaired cookie stays repaired across restarts.
+	if normalized := buildOllamaCookieHeader(cookie); normalized != "" {
+		cookie = normalized
+	}
 	dbMu.RLock()
 	d := db
 	dbMu.RUnlock()

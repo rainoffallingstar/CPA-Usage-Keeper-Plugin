@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.11.29** — Colab 订阅登录支持**远程回投**：登录返回真实回调地址，把授权后打不开的 `http://127.0.0.1:.../?code=...&state=...` 整段粘回面板即可完成（后端用已保存的 PKCE verifier 换取）。
+**v0.12.12** — Ollama 额度抓取修复：cookie 经 Markdown 或聊天工具中转后，分隔用的 `;` 会变成 `,`、`_` 会变成 `\_`。旧逻辑把整串当成单个 `aid` cookie 发出，`__Secure-session` 从未送达，官网 303 到登录页，面板因此误报「未登录或 cookie 无效」。现在归一化能还原这两类污染，DB 加载时自动自愈，并在缺少 `__Secure-session` 时给出准确报错。
 
 ## ⚠️ Before Building — Version Checklist
 
