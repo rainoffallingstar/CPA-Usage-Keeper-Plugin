@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,16 +213,45 @@ func splitOllamaCookiePairs(raw string) []string {
 	return out
 }
 
-// normalizeOllamaCookie turns any accepted user-supplied shape — a full
-// "Cookie: ..." header, a "name=value; name2=value2" string, or a bare session
-// value — into a canonical Cookie header value, repairing full-width
-// punctuation and stray separators along the way.
+// normalizeOllamaCookie turns any accepted user-supplied shape into a canonical
+// Cookie header value. Supported inputs:
+//
+//	aid=…; __Secure-session=…                 (a plain header)
+//	Cookie: aid=…; __Secure-session=…         (with the header name)
+//	<bare session value>                      (wrapped as __Secure-session=…)
+//	{"任何外层标签": {"__Secure-session": "…", "aid": "…"}}   (JSON, any wrapper)
+//	{"__Secure-session": "…", "aid": "…"}    (JSON, flat)
+//	{"Cookie": "aid=…; __Secure-session=…"} (JSON, header string)
+//	[{"name": "__Secure-session", "value": "…"}, …]        (DevTools-style array)
+//
+// Markdown code fences around the value are stripped, and full-width
+// punctuation / stray separators are repaired along the way.
 func normalizeOllamaCookie(raw string) string {
 	cookie := strings.TrimSpace(raw)
 	if cookie == "" {
 		return ""
 	}
-	cookie = ollamaCookieCleaner.Replace(cookie)
+	// JSON is emitted as-is: its values are already unescaped by the JSON
+	// parser, so re-running them through the header splitter could cut a value
+	// that legitimately contains punctuation.
+	if header, ok := parseOllamaCookieJSON(cookie); ok {
+		return header
+	}
+	// A JSON paste that travelled through a Markdown-ish surface has its "_"
+	// escaped as "\_", which is not a legal JSON escape, so the first parse
+	// fails. Undo those escapes and try once more before falling back.
+	if unescaped := reOllamaMarkdownEscape.ReplaceAllString(cookie, "$1"); unescaped != cookie {
+		if header, ok := parseOllamaCookieJSON(unescaped); ok {
+			return header
+		}
+	}
+	return canonicalizeOllamaCookieHeader(cookie)
+}
+
+// canonicalizeOllamaCookieHeader repairs and re-joins an already string-shaped
+// cookie input. It is also the tail end of the JSON path.
+func canonicalizeOllamaCookieHeader(raw string) string {
+	cookie := ollamaCookieCleaner.Replace(strings.TrimSpace(raw))
 	cookie = reOllamaMarkdownEscape.ReplaceAllString(cookie, "$1")
 	if strings.HasPrefix(strings.ToLower(cookie), "cookie:") {
 		cookie = strings.TrimSpace(cookie[len("cookie:"):])
@@ -245,6 +275,195 @@ func normalizeOllamaCookie(raw string) string {
 		return "__Secure-session=" + joined
 	}
 	return joined
+}
+
+// parseOllamaCookieJSON recognises the JSON shapes listed on
+// normalizeOllamaCookie and returns an assembled cookie header. It reports false
+// for anything that is not JSON, so the caller keeps the plain-text path.
+func parseOllamaCookieJSON(raw string) (string, bool) {
+	body := stripOllamaCodeFence(strings.TrimSpace(raw))
+	if body == "" || (body[0] != '{' && body[0] != '[') {
+		return "", false
+	}
+	dec := json.NewDecoder(strings.NewReader(body))
+	dec.UseNumber()
+	var root any
+	if err := dec.Decode(&root); err != nil {
+		return "", false
+	}
+	pairs := make([]string, 0, 4)
+	collectOllamaCookiePairs(root, "", &pairs, 0)
+	clean := pairs[:0]
+	seen := make(map[string]bool, len(pairs))
+	for _, pair := range pairs {
+		pair = strings.TrimSpace(ollamaCookieCleaner.Replace(pair))
+		name, value, ok := strings.Cut(pair, "=")
+		if !ok || strings.TrimSpace(name) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		// The same cookie can arrive twice when the paste mixes a header string
+		// with a flat map; keep the first occurrence.
+		lowerName := strings.ToLower(strings.TrimSpace(name))
+		if seen[lowerName] {
+			continue
+		}
+		seen[lowerName] = true
+		clean = append(clean, pair)
+	}
+	if len(clean) == 0 {
+		// It decoded as JSON but held no usable cookie. Report "handled" so the
+		// caller does not fall back and wrap the whole JSON blob as a bare
+		// session token.
+		return "", true
+	}
+	return strings.Join(clean, "; "), true
+}
+
+// stripOllamaCodeFence removes a leading ```/```json fence and the closing fence.
+// Users routinely paste the value out of a chat answer, code block and all.
+func stripOllamaCodeFence(s string) string {
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) < 2 {
+		return s
+	}
+	lines = lines[1:]
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimSpace(lines[i]) == "```" {
+			lines = lines[:i]
+			break
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// isOllamaCookieHeaderKey reports keys whose string value is itself a Cookie
+// header ("Cookie", "cookie", "Cookie-Header", "request_cookie", …).
+func isOllamaCookieHeaderKey(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "cookie", "cookie-header", "cookie_header", "cookieheader",
+		"request-cookie", "request_cookie", "requestcookie", "请求 cookie", "请求cookie":
+		return true
+	}
+	return false
+}
+
+// devtoolsOllamaCookiePair recognises the {"name": …, "value": …} shape that
+// browser DevTools and many "copy as JSON" helpers emit.
+func devtoolsOllamaCookiePair(entry map[string]any) (string, string, bool) {
+	name, nameOK := entry["name"].(string)
+	value, valueOK := entry["value"].(string)
+	if !nameOK || !valueOK {
+		return "", "", false
+	}
+	// Accept "Name"/"Value" too, but only when the map holds nothing else that
+	// looks like a cookie of its own.
+	for key := range entry {
+		switch strings.ToLower(key) {
+		case "name", "value", "domain", "path", "expires", "httponly", "secure",
+			"samesite", "priority", "partitioned", "hostonly", "session",
+			"sameparty", "size", "sourcescheme", "partitionkey", "id":
+			continue
+		default:
+			return "", "", false
+		}
+	}
+	name = strings.TrimSpace(name)
+	value = strings.TrimSpace(value)
+	if name == "" || value == "" || !ollamaCookieNameOK.MatchString(name) {
+		return "", "", false
+	}
+	return name, value, true
+}
+
+// collectOllamaCookiePairs walks arbitrary JSON and collects cookie pairs. The
+// outer key is deliberately ignored: users wrap the map in anything they like
+// ("请求 Cookie/或其他字符", "cookies", a domain name, an account label).
+func collectOllamaCookiePairs(node any, parentKey string, out *[]string, depth int) {
+	if depth > 6 || node == nil {
+		return
+	}
+	switch value := node.(type) {
+	case map[string]any:
+		if name, cookieValue, ok := devtoolsOllamaCookiePair(value); ok {
+			*out = append(*out, name+"="+cookieValue)
+			return
+		}
+		keys := make([]string, 0, len(value))
+		for key := range value {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			child := value[key]
+			text, isText := child.(string)
+			if !isText {
+				collectOllamaCookiePairs(child, key, out, depth+1)
+				continue
+			}
+			trimmedKey := strings.TrimSpace(key)
+			trimmedValue := strings.TrimSpace(text)
+			if isOllamaCookieHeaderKey(trimmedKey) {
+				appendOllamaHeaderPairs(trimmedValue, out)
+				continue
+			}
+			if trimmedValue == "" {
+				continue
+			}
+			// A key that is a valid cookie name means this is one cookie; its
+			// value is opaque and must not be re-split on ";" (a base64url value
+			// may contain "=" and, in principle, other punctuation).
+			if ollamaCookieNameOK.MatchString(trimmedKey) {
+				*out = append(*out, trimmedKey+"="+trimmedValue)
+				continue
+			}
+			// An outer label such as "请求 Cookie/或其他字符" maps to a header
+			// string rather than to a single cookie value.
+			if looksLikeOllamaHeaderText(trimmedValue) {
+				appendOllamaHeaderPairs(trimmedValue, out)
+			}
+		}
+	case []any:
+		for _, item := range value {
+			if text, ok := item.(string); ok {
+				appendOllamaHeaderPairs(text, out)
+				continue
+			}
+			collectOllamaCookiePairs(item, parentKey, out, depth+1)
+		}
+	case string:
+		appendOllamaHeaderPairs(value, out)
+	}
+}
+
+// looksLikeOllamaHeaderText reports whether s is a "name=value" list rather than
+// one opaque token. Only used for values under a key that is NOT a cookie name
+// (an outer label), so a bare base64 token must not qualify: base64 padding
+// means the text after the first "=" can be empty or all "=".
+func looksLikeOllamaHeaderText(s string) bool {
+	if strings.ContainsAny(s, "; \t\n") {
+		return true
+	}
+	name, value, ok := strings.Cut(s, "=")
+	if !ok || name == "" || len(name) > 32 || !ollamaCookieNameOK.MatchString(name) {
+		return false
+	}
+	return strings.Trim(value, "= ") != ""
+}
+
+// appendOllamaHeaderPairs splits a header-ish string into clean pairs.
+func appendOllamaHeaderPairs(text string, out *[]string) {
+	header := canonicalizeOllamaCookieHeader(text)
+	if header == "" {
+		return
+	}
+	for _, part := range strings.Split(header, "; ") {
+		if part = strings.TrimSpace(part); part != "" {
+			*out = append(*out, part)
+		}
+	}
 }
 
 // ollamaCookieNameOK matches an RFC 6265 cookie-name token.

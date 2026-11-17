@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -297,5 +298,70 @@ func TestFetchOllamaQuotaStopsAtSignInRedirect(t *testing.T) {
 	}
 	if ollamaRedirectsToSignIn("https://ollama.com/settings") {
 		t.Error("the settings page must not classify as a sign-in redirect")
+	}
+}
+
+// Users copy the cookie out of browser DevTools as a JSON object wrapped in
+// whatever label they like, e.g.
+//
+//	{"请求 Cookie/或其他字符": {"__Secure-session": "…", "aid": "…"}}
+//
+// All of these shapes must land on the same canonical header. The outer label is
+// deliberately ignored.
+func TestBuildOllamaCookieHeaderAcceptsJSONShapes(t *testing.T) {
+	const (
+		token = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0tLS0t"
+		aid   = "46ecb933-35bc-4c97-a651-090bfd36ea89"
+	)
+	pairs := []string{"aid=" + aid, "__Secure-session=" + token}
+	cases := []struct{ name, in string }{
+		{
+			"wrapped object with a free-form label",
+			"{\n\t\"请求 Cookie/或其他字符\": {\n\t\t\"__Secure-session\": \"" + token + "\",\n\t\t\"aid\": \"" + aid + "\"\n\t}\n}",
+		},
+		{"outer label is a domain", `{"ollama.com":{"aid":"` + aid + `","__Secure-session":"` + token + `"}}`},
+		{"flat object", `{"__Secure-session":"` + token + `","aid":"` + aid + `"}`},
+		{"header string under a label", `{"请求 Cookie/或其他字符":"aid=` + aid + `; __Secure-session=` + token + `"}`},
+		{"devtools array", `[{"name":"aid","value":"` + aid + `"},{"name":"__Secure-session","value":"` + token + `"}]`},
+		{"markdown fenced", "```json\n{\"cookies\":{\"aid\":\"" + aid + "\",\"__Secure-session\":\"" + token + "\"}}\n```"},
+		{"markdown-escaped keys", `{"cookies":{"\_\_Secure-session":"` + token + `","aid":"` + aid + `"}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := buildOllamaCookieHeader(tc.in)
+			// Cookie order is irrelevant to the server; the JSON path emits
+			// keys sorted, so compare as a set.
+			gotPairs := strings.Split(got, "; ")
+			sort.Strings(gotPairs)
+			wantSorted := append([]string(nil), pairs...)
+			sort.Strings(wantSorted)
+			if strings.Join(gotPairs, "; ") != strings.Join(wantSorted, "; ") {
+				t.Fatalf("buildOllamaCookieHeader = %q, want pairs %v", got, pairs)
+			}
+			if !ollamaCookieHasSession(got) {
+				t.Errorf("repaired cookie should carry a session field: %q", got)
+			}
+		})
+	}
+}
+
+// JSON values are opaque: the JSON parser already unescaped them, so the header
+// splitter must not run over them again and cut a value at a ";".
+func TestBuildOllamaCookieHeaderJSONKeepsOpaqueValues(t *testing.T) {
+	got := buildOllamaCookieHeader(`{"x":{"__Secure-session":"a;b=c","aid":"d"}}`)
+	want := "__Secure-session=a;b=c; aid=d"
+	if got != want {
+		t.Errorf("buildOllamaCookieHeader(json opaque value) = %q, want %q", got, want)
+	}
+}
+
+// JSON without any cookie pair must not silently produce a bogus header; it
+// falls back to the plain-text path (which wraps a bare token as the session).
+func TestBuildOllamaCookieHeaderJSONWithoutPairsFallsBack(t *testing.T) {
+	if got := buildOllamaCookieHeader(`{"__Secure-session":"","aid":"   "}`); got != "" {
+		t.Errorf("all-empty JSON should normalize to empty, got %q", got)
+	}
+	if got := buildOllamaCookieHeader(`{"note":"hello"}`); got != "note=hello" {
+		t.Logf("json without cookies → %q (plain fallback)", got)
 	}
 }

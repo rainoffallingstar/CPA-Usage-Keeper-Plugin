@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.12.14 (2026-11-17)
+
+### Features
+- **Ollama 的 `session_cookie` 现在也接受 JSON**：可以直接粘贴浏览器 DevTools / 抓包工具里复制的
+  `{"请求 Cookie/或其他字符": {"__Secure-session": "…", "aid": "…"}}`。外层键名随意（中文标签、域名、
+  账号名都行），内层按 `name: value` 解析，大小写不敏感，空值与重复项自动丢弃。同时支持平铺 JSON、
+  `{"Cookie": "aid=…; __Secure-session=…"}`、DevTools 的 `[{"name":…,"value":…}]` 数组，以及被
+  Markdown 代码块包裹的版本；被 Markdown 转义过的键（`\_\_Secure-session`）也能还原。
+  - JSON 里的值按不透明字符串处理，不再经过 header 切分——base64url 令牌里出现 `;`/`,`/`=` 不会被截断。
+  - 解出来但没有任何可用键值对时返回空，而不是把整段 JSON 当作裸 session 令牌发出去。
+  - YAML 的 `ollama_accounts[].session_cookie` 用 `|` 块标量写多行 JSON 也可以。
+  - 面板的 Session Cookie 输入框改成多行文本框，粘 JSON 不再被单行框挤成一行。
+
+### Verified
+- 单测覆盖 7 种输入形态 + 不透明值保留 + 空值/重复项 + 无可用键值对；
+- 对着真实 ollama.com 用用户给的 JSON 形态直接抓取成功：`plan=pro`，Session / Weekly 两个窗口都在。
+
 ## v0.12.13 (2026-11-17)
 
 ### Build

@@ -236,6 +236,28 @@ func buildOllamaCookieHeader(sessionCookie string) string {
 }
 ```
 
+### Accepted cookie input shapes
+
+`session_cookie` (YAML) and the dashboard field both accept any of these; the
+outer JSON label is ignored, keys are matched case-insensitively, empty values
+and duplicates are dropped:
+
+| Shape | Example |
+|-------|---------|
+| Cookie header | `aid=…; __Secure-session=…` |
+| Header with name | `Cookie: aid=…; __Secure-session=…` |
+| Bare session value | `<__Secure-session value>` |
+| **Wrapped JSON** | `{"请求 Cookie/或其他字符": {"__Secure-session": "…", "aid": "…"}}` |
+| Flat JSON | `{"__Secure-session": "…", "aid": "…"}` |
+| Header string in JSON | `{"Cookie": "aid=…; __Secure-session=…"}` |
+| DevTools array | `[{"name": "__Secure-session", "value": "…"}, …]` |
+| Markdown-fenced | ```` ```json {…} ``` ```` |
+
+JSON values are treated as opaque (never re-split on `;`), because a base64url
+token can legitimately contain punctuation and the JSON parser has already
+unescaped it. A JSON document that decodes but holds no usable pair yields an
+empty header rather than wrapping the whole blob as a session token.
+
 ### Pitfalls
 
 1. **No public quota API.** `/api/usage` answers `401 invalid credentials` even

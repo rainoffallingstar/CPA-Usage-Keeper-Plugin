@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**v0.12.13** — 干净工作区重建（无行为改动，仅统一产物哈希）。v0.12.12 修复内容： Ollama 额度抓取修复：cookie 经 Markdown 或聊天工具中转后，分隔用的 `;` 会变成 `,`、`_` 会变成 `\_`。旧逻辑把整串当成单个 `aid` cookie 发出，`__Secure-session` 从未送达，官网 303 到登录页，面板因此误报「未登录或 cookie 无效」。现在归一化能还原这两类污染，DB 加载时自动自愈，并在缺少 `__Secure-session` 时给出准确报错。
+**v0.12.14** — Ollama 的 `session_cookie` 支持直接粘贴 JSON（如 `{"请求 Cookie": {"__Secure-session": "…", "aid": "…"}}`），外层键名随意；兼容平铺 JSON、`Cookie` 头字段、DevTools 数组与 Markdown 代码块。面板输入框改为多行。 Ollama 额度抓取修复：cookie 经 Markdown 或聊天工具中转后，分隔用的 `;` 会变成 `,`、`_` 会变成 `\_`。旧逻辑把整串当成单个 `aid` cookie 发出，`__Secure-session` 从未送达，官网 303 到登录页，面板因此误报「未登录或 cookie 无效」。现在归一化能还原这两类污染，DB 加载时自动自愈，并在缺少 `__Secure-session` 时给出准确报错。
 
 ## ⚠️ Before Building — Version Checklist
 

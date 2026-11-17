@@ -78,7 +78,15 @@ plugins:
       # 每个账号通过 session_cookie 抓取 https://ollama.com/settings 页面，
       # 解析 "Cloud usage" 区块中的 Session / Weekly 用量。
       #   name           — 展示名称
-      #   session_cookie — 登录 Cookie（"aid=...; __Secure-session=..."）
+      #   session_cookie — 登录 Cookie。以下写法都行（插件会自动归一化）：
+      #       "aid=...; __Secure-session=..."                    （Cookie 头）
+      #       "Cookie: aid=...; __Secure-session=..."            （带头的名字）
+      #       "aid=YOUR_AID; __Secure-session=YOUR_SESSION"      （YAML 里也可写成两行）
+      #       {"任意外层标签": {"__Secure-session": "...", "aid": "..."}}   （JSON，推荐）
+      #       {"__Secure-session": "...", "aid": "..."}          （JSON 平铺）
+      #       [{"name":"__Secure-session","value":"..."}, ...]  （DevTools 导出的数组）
+      #     外层 JSON 的键名随意（"请求 Cookie/或其他字符"、域名、账号名都行），
+      #     插件只读里面的 name/value，不区分大小写，并会忽略空值。
       #   show_session   — 是否显示 Session 额度（默认 true）
       #   show_weekly    — 是否显示周额度（默认 true）
       # -----------------------------------------------------------------------
@@ -87,6 +95,16 @@ plugins:
       #     session_cookie: "aid=YOUR_AID; __Secure-session=YOUR_SESSION_VALUE"
       #     show_session: true
       #     show_weekly: true
+      #
+      #   # 也可以直接贴浏览器 DevTools 里复制的 JSON（外层标签随意）：
+      #   - name: "我的 Ollama 账号 (JSON)"
+      #     session_cookie: |
+      #       {
+      #         "请求 Cookie/或其他字符": {
+      #           "__Secure-session": "YOUR_SESSION_VALUE",
+      #           "aid": "YOUR_AID"
+      #         }
+      #       }
 
       # -----------------------------------------------------------------------
       # newapi_accounts — NewAPI 兼容面板（如 dddai.dev）的钱包 + 订阅额度（可选，
